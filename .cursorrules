@@ -1,0 +1,269 @@
+# RIKMS v2 Cursor Rules
+Stack: Laravel 12 API + React / Next.js Frontend
+
+You are working on RIKMS v2, an enterprise-grade research and knowledge management system.
+
+Before implementing any feature or writing code, always read and follow:
+
+- ARCHITECTURE.md
+- FRONTEND_RULES.md
+- BACKEND_RULES.md
+
+These documents define the system architecture, engineering standards, and module conventions.
+
+Do not ignore them.
+
+---
+
+# Core Development Principles
+
+1. Maintain a strict separation between backend and frontend responsibilities.
+2. Laravel is the API and business logic layer.
+3. React / Next.js is the presentation layer.
+4. Backend must enforce validation, authorization, and workflow rules.
+5. Frontend must focus on UI, state, and API consumption.
+6. Do not mix backend business logic into frontend components.
+7. Do not create frontend logic that bypasses backend rules.
+
+---
+
+# Project Awareness
+
+The system is **RIKMS v2**, a research management platform used by institutions.
+
+Important domain areas include:
+
+- research submissions
+- publications
+- agencies
+- users
+- RBAC (roles and permissions)
+- analytics
+- notifications
+- archives
+- system settings
+- audit logs
+
+Always use domain-appropriate naming and workflows.
+
+Avoid generic dashboard naming.
+
+---
+
+# Coding Workflow
+
+When implementing any task:
+
+1. Inspect the existing codebase first.
+2. Identify reusable components or modules.
+3. Identify which files should be updated or created.
+4. Implement the solution with minimal disruption.
+5. Follow the architecture and folder structure defined in ARCHITECTURE.md.
+6. Follow frontend patterns defined in FRONTEND_RULES.md.
+7. Follow backend patterns defined in BACKEND_RULES.md.
+
+Never skip this process.
+
+---
+
+# Backend Rules
+
+All backend development must follow BACKEND_RULES.md.
+
+Important reminders:
+
+- Controllers must remain thin.
+- Validation must use Form Requests.
+- Authorization must use Policies or Gates.
+- Business logic must live in Services or Actions.
+- API responses must use Resources when appropriate.
+- Never expose internal exceptions or sensitive data.
+
+Sensitive operations include:
+
+- publishing research
+- archiving
+- restoring
+- deleting records
+- role changes
+- permission updates
+- platform configuration changes
+
+These must be protected with authorization.
+
+---
+
+# Frontend Rules
+
+All frontend development must follow FRONTEND_RULES.md.
+
+Important reminders:
+
+- Build reusable components.
+- Keep page files clean and thin.
+- Separate UI components from data logic.
+- Use service modules for API communication.
+- Handle loading, empty, and error states.
+- Keep UI consistent with the design system.
+
+Do not create giant React components.
+
+---
+
+# Design-to-Code Behavior
+
+When implementing designs from Figma:
+
+1. Treat the design as the visual source of truth.
+2. Inspect the design carefully.
+3. Translate repeated patterns into reusable components.
+4. Maintain spacing, typography, hierarchy, and layout fidelity.
+5. Ensure responsive behavior.
+6. Infer only the minimum missing behavior.
+
+Do not produce static HTML mockups.
+
+Build maintainable application code.
+
+---
+
+# File Editing Behavior
+
+Before editing or creating files:
+
+1. Check whether a similar file already exists.
+2. Prefer updating existing files when appropriate.
+3. Avoid duplicate logic or duplicate components.
+4. Avoid unnecessary refactoring unrelated to the task.
+5. Keep changes scoped to the requested feature.
+
+---
+
+# Code Quality Rules
+
+Always produce:
+
+- clean
+- readable
+- modular
+- maintainable
+- production-ready code
+
+Avoid:
+
+- large monolithic files
+- repeated code
+- vague naming
+- unnecessary abstractions
+- hardcoded sensitive values
+- poor error handling
+
+---
+
+# Naming Conventions
+
+Use clear domain naming.
+
+Examples:
+
+Good:
+ResearchController  
+AgencyService  
+PublishResearchAction  
+ResearchTable  
+AgencyForm  
+
+Avoid vague names like:
+
+data  
+item  
+value  
+temp  
+stuff  
+
+Names must describe purpose.
+
+---
+
+# Security Awareness
+
+Never:
+
+- expose secrets
+- bypass backend authorization
+- trust frontend-only validation
+- leak internal errors
+
+Always assume backend is the source of truth.
+
+---
+
+# Performance Awareness
+
+Avoid:
+
+- N+1 database queries
+- unnecessary data fetching
+- oversized API responses
+- inefficient loops over large datasets
+
+Prefer:
+
+- pagination
+- filtered queries
+- eager loading where needed
+
+---
+
+# Error Handling
+
+Backend must return structured error responses.
+
+Frontend must handle:
+
+- loading state
+- validation errors
+- API errors
+- empty states
+
+Never allow silent failures.
+
+---
+
+# Cursor Output Behavior
+
+When generating code:
+
+1. Briefly analyze the task.
+2. Mention which files will be created or modified.
+3. Implement the solution directly.
+4. Avoid unnecessary explanations.
+5. Produce real code, not pseudo-code.
+
+---
+
+# Things to Avoid
+
+- duplicate components
+- duplicate backend logic
+- giant page files
+- controllers containing heavy business logic
+- UI components calling database-like logic
+- excessive inline styles
+- unclear destructive actions
+- breaking unrelated files
+
+---
+
+# Definition of Done
+
+A feature is complete only if:
+
+- it follows system architecture
+- backend rules are respected
+- frontend rules are respected
+- the code is modular and maintainable
+- the UI is responsive
+- loading/empty/error states exist
+- authorization is enforced where required
+- the implementation integrates cleanly with existing modules
