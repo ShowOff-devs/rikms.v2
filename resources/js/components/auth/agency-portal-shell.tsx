@@ -17,19 +17,22 @@ export default function AgencyPortalShell({
     activeNav = 'login',
 }: AgencyPortalShellProps) {
     return (
-        <div className="min-h-screen bg-[#f9fafb] text-[#0f172a] [font-family:Inter,sans-serif]">
+        <div className="min-h-screen bg-[#f9fafb] text-[#0f172a]">
             <PortalNavbar activeNav={activeNav} />
 
             <main>
-                <section className="grid min-h-[880px] lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                <section className="mx-auto grid min-h-[880px] max-w-[1552px] lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
                     <div className="relative overflow-hidden bg-[#1e3a8a]">
-                        <div className="absolute inset-0 opacity-10 [background:radial-gradient(circle_at_center,rgba(255,255,255,1)_0%,rgba(255,255,255,0)_60%)]" />
-                        <div className="absolute left-6 top-[51%] size-40 rounded-full border border-[rgba(255,255,255,0.1)] sm:size-48 lg:left-7 lg:top-[51.5%] lg:size-[146px]" />
-                        <div className="absolute right-[44px] top-[130px] size-32 rounded-full border border-[rgba(255,255,255,0.1)] sm:size-40 lg:size-[120px]" />
+                        <div className="absolute inset-0 opacity-[0.07] [background:radial-gradient(circle_at_center,rgba(255,255,255,1)_0_1px,rgba(255,255,255,0)_1px_100%)]" />
+                        <div className="absolute top-[51%] left-6 size-40 rounded-full border border-[rgba(255,255,255,0.1)] sm:size-48 lg:top-[446px] lg:left-[-96px] lg:size-[256px]" />
+                        <div className="absolute top-[140px] right-[-64px] size-32 rounded-full border border-[rgba(255,255,255,0.1)] sm:size-40 lg:top-[208px] lg:size-[192px]" />
 
                         <div className="mx-auto flex h-full max-w-[512px] flex-col items-center justify-center px-8 py-16 text-center lg:px-0">
                             <div className="mb-6 flex size-16 items-center justify-center rounded-2xl bg-[rgba(255,255,255,0.15)]">
-                                <BookOpen className="size-9 text-white" strokeWidth={1.8} />
+                                <BookOpen
+                                    className="size-9 text-white"
+                                    strokeWidth={1.8}
+                                />
                             </div>
                             <h1 className="max-w-[391px] text-[32px] leading-[40px] font-bold text-white">
                                 {heroTitle}

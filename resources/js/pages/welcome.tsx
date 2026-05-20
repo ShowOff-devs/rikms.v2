@@ -1,5 +1,5 @@
 import { Head, Link, usePage } from '@inertiajs/react';
-import { dashboard, login } from '@/routes';
+import { dashboard } from '@/routes';
 
 const heroBackgroundImage =
     '/assets/figma/6ef85a09-2403-46c7-bba0-94f5422c5ac1.jpg';
@@ -270,7 +270,7 @@ export default function Welcome() {
                                 </Link>
                             ) : (
                                 <Link
-                                    href={login()}
+                                    href="/agency/login"
                                     className="rounded-[10px] bg-[#1e3a8a] px-4 py-2 text-sm text-white"
                                 >
                                     Login

@@ -15,10 +15,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
-import {
-    getAgencyOptions,
-    signInToAgencyPortal,
-} from '@/lib/auth/agency-auth';
+import { getAgencyOptions, signInToAgencyPortal } from '@/lib/auth/agency-auth';
 
 type AgencyLoginFieldErrors = Partial<
     Record<'agencyId' | 'email' | 'password', string>
@@ -32,10 +29,8 @@ type AgencyLoginFormState = {
 };
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const usepSeal =
-    'https://www.figma.com/api/mcp/asset/bfb19a55-4531-4eb6-8b4f-a4c77ca34be0';
-const dostSeal =
-    'https://www.figma.com/api/mcp/asset/3467cbd0-c02a-454e-b4f0-8cbeb2cb4b1f';
+const usepSeal = '/assets/figma/usep-seal.png';
+const dostSeal = '/assets/figma/dost-xi-logo.png';
 
 export default function AgencyLoginForm() {
     const agencies = getAgencyOptions();
@@ -49,7 +44,9 @@ export default function AgencyLoginForm() {
     const [submissionError, setSubmissionError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const selectedAgency = agencies.find((agency) => agency.id === form.agencyId);
+    const selectedAgency = agencies.find(
+        (agency) => agency.id === form.agencyId,
+    );
 
     const updateField = <K extends keyof AgencyLoginFormState>(
         field: K,
@@ -118,7 +115,7 @@ export default function AgencyLoginForm() {
                 <img
                     src={usepSeal}
                     alt="University of Southeastern Philippines"
-                    className="h-[52px] w-[52px] object-contain"
+                    className="size-[52px] rounded-full object-contain"
                 />
                 <div className="h-8 w-px bg-[#d1d5db]" />
                 <img
@@ -140,7 +137,10 @@ export default function AgencyLoginForm() {
 
             <form onSubmit={handleSubmit} className="mt-8 space-y-5">
                 {submissionError && (
-                    <AlertError errors={[submissionError]} title="Sign-in failed" />
+                    <AlertError
+                        errors={[submissionError]}
+                        title="Sign-in failed"
+                    />
                 )}
 
                 <div className="space-y-1.5">
@@ -154,7 +154,9 @@ export default function AgencyLoginForm() {
                         <Building2 className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-[#9ca3af]" />
                         <Select
                             value={form.agencyId}
-                            onValueChange={(value) => updateField('agencyId', value)}
+                            onValueChange={(value) =>
+                                updateField('agencyId', value)
+                            }
                         >
                             <SelectTrigger
                                 id="agency"
@@ -165,7 +167,10 @@ export default function AgencyLoginForm() {
                             </SelectTrigger>
                             <SelectContent className="rounded-[10px]">
                                 {agencies.map((agency) => (
-                                    <SelectItem key={agency.id} value={agency.id}>
+                                    <SelectItem
+                                        key={agency.id}
+                                        value={agency.id}
+                                    >
                                         {agency.shortName}
                                     </SelectItem>
                                 ))}
@@ -186,13 +191,16 @@ export default function AgencyLoginForm() {
                         id="email"
                         type="email"
                         value={form.email}
-                        onChange={(event) => updateField('email', event.target.value)}
+                        onChange={(event) =>
+                            updateField('email', event.target.value)
+                        }
                         aria-invalid={Boolean(errors.email)}
                         autoComplete="email"
                         autoFocus
                         className="h-[42px] rounded-[10px] border-[#e5e7eb] bg-white px-4 text-sm shadow-none placeholder:text-[rgba(10,10,10,0.5)]"
                         placeholder={
-                            selectedAgency?.adminEmailHint ?? 'admin@agency.gov.ph'
+                            selectedAgency?.adminEmailHint ??
+                            'admin@agency.gov.ph'
                         }
                     />
                     <InputError message={errors.email} />
@@ -256,18 +264,6 @@ export default function AgencyLoginForm() {
                 <p className="mx-auto max-w-[320px] text-[12px] leading-[19.5px] text-[#9ca3af]">
                     Official research management portal of the Regionwide
                     Integrated Knowledge Management System.
-                </p>
-            </div>
-
-            <div className="mt-6 space-y-1 text-center">
-                <Link
-                    href="/"
-                    className="text-sm font-medium text-[#1e3a8a] hover:underline"
-                >
-                    Back to Public Portal
-                </Link>
-                <p className="text-xs leading-[19.5px] text-[#9ca3af]">
-                    Need help? Contact System Administrator
                 </p>
             </div>
         </div>

@@ -4,10 +4,10 @@ use App\Models\User;
 use Illuminate\Support\Facades\RateLimiter;
 use Laravel\Fortify\Features;
 
-test('login screen can be rendered', function () {
+test('login route redirects to the agency login page', function () {
     $response = $this->get(route('login'));
 
-    $response->assertOk();
+    $response->assertRedirect(route('agency.login'));
 });
 
 test('users can authenticate using the login screen', function () {
