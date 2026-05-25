@@ -1,4 +1,8 @@
-export type ResearchAccessLevel = 'public' | 'restricted';
+export type ResearchAccessLevel =
+    | 'public'
+    | 'restricted'
+    | 'embargo'
+    | 'external';
 
 export type ResearchStatus = 'published' | 'archived';
 
@@ -21,6 +25,8 @@ export type ResearchRecord = {
     sdgs: string[];
     tags: ResearchTag[];
     accessLevel: ResearchAccessLevel;
+    embargoUntil?: string;
+    externalUrl?: string;
     status: ResearchStatus;
     downloads: number;
     updatedAt: string;

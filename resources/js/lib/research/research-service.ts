@@ -60,7 +60,10 @@ export function getResearchFacets(
             years.map((year) => String(year)),
             records,
         ),
-        accessLevels: countValues(['public', 'restricted'], records),
+        accessLevels: countValues(
+            ['public', 'restricted', 'embargo', 'external'],
+            records,
+        ),
         statuses: countValues(['published', 'archived'], records),
         minYear: Math.min(...years),
         maxYear: Math.max(...years),

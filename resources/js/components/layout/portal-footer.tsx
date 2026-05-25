@@ -25,18 +25,18 @@ export default function PortalFooter() {
                             >
                                 About
                             </Link>
-                            <a
-                                href="mailto:rikms-support@example.gov.ph"
+                            <Link
+                                href="/contact"
                                 className="block hover:text-white"
                             >
                                 Help
-                            </a>
-                            <a
-                                href="mailto:rikms-support@example.gov.ph"
+                            </Link>
+                            <Link
+                                href="/contact"
                                 className="block hover:text-white"
                             >
                                 Contact
-                            </a>
+                            </Link>
                         </div>
                     </div>
 
@@ -65,12 +65,30 @@ export default function PortalFooter() {
                             Legal
                         </h2>
                         <div className="mt-4 space-y-2 text-sm leading-5 text-[#bedbff]">
-                            <a href="#" className="block hover:text-white">
+                            <Link
+                                href="/privacy-policy"
+                                className="block hover:text-white"
+                            >
                                 Privacy Policy
-                            </a>
-                            <a href="#" className="block hover:text-white">
+                            </Link>
+                            <Link
+                                href="/terms-of-use"
+                                className="block hover:text-white"
+                            >
                                 Terms of Use
-                            </a>
+                            </Link>
+                            <Link
+                                href="/open-access-policy"
+                                className="block hover:text-white"
+                            >
+                                Open Access Policy
+                            </Link>
+                            <Link
+                                href="/submission-guidelines"
+                                className="block hover:text-white"
+                            >
+                                Submission Guidelines
+                            </Link>
                         </div>
                     </div>
                 </div>

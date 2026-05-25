@@ -66,6 +66,14 @@ function optionLabel(value: string) {
         return 'Restricted';
     }
 
+    if (value === 'embargo') {
+        return 'Embargoed';
+    }
+
+    if (value === 'external') {
+        return 'External Link';
+    }
+
     if (value === 'published') {
         return 'Published';
     }

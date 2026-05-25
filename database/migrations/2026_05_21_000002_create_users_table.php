@@ -13,10 +13,32 @@ return new class extends Migration
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
+
+            // RIKMS agency connection
+            $table->foreignId('agency_id')
+                ->nullable()
+                ->constrained('agencies')
+                ->nullOnDelete();
+
+            // User profile fields
+            $table->string('first_name')->nullable();
+            $table->string('last_name')->nullable();
+
+            // Default Laravel auth fields
             $table->string('name');
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
+
+            // RIKMS role and account status
+            $table->string('role')->default('agency_admin');
+            $table->string('status')->default('active');
+
+            // Laravel Fortify two-factor authentication fields
+            $table->text('two_factor_secret')->nullable();
+            $table->text('two_factor_recovery_codes')->nullable();
+            $table->timestamp('two_factor_confirmed_at')->nullable();
+
             $table->rememberToken();
             $table->timestamps();
         });
@@ -42,8 +64,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('users');
-        Schema::dropIfExists('password_reset_tokens');
         Schema::dropIfExists('sessions');
+        Schema::dropIfExists('password_reset_tokens');
+        Schema::dropIfExists('users');
     }
 };

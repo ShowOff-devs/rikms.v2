@@ -8,9 +8,28 @@ Route::inertia('/', 'welcome', [
     'canRegister' => Features::enabled(Features::registration()),
 ])->name('home');
 Route::inertia('/browse-research', 'browse-research')->name('browse-research');
-Route::inertia('/research/{research}', 'research/show')->name('research.show');
+Route::get('/browse-research/{research}', fn (string $research) => Inertia::render('research/show', [
+    'researchId' => $research,
+]))->name('research.show');
+Route::get('/research/{research}', fn (string $research) => redirect()->route('research.show', $research));
 Route::inertia('/about', 'about')->name('about');
 Route::inertia('/agencies', 'agencies')->name('agencies');
+Route::get('/agencies/{slug}', fn (string $slug) => Inertia::render('agencies/show', [
+    'agencySlug' => $slug,
+]))->name('agencies.show');
+Route::inertia('/contact', 'contact')->name('contact');
+Route::get('/privacy-policy', fn () => Inertia::render('public-policy', [
+    'pageKey' => 'privacy-policy',
+]))->name('privacy-policy');
+Route::get('/terms-of-use', fn () => Inertia::render('public-policy', [
+    'pageKey' => 'terms-of-use',
+]))->name('terms-of-use');
+Route::get('/open-access-policy', fn () => Inertia::render('public-policy', [
+    'pageKey' => 'open-access-policy',
+]))->name('open-access-policy');
+Route::get('/submission-guidelines', fn () => Inertia::render('public-policy', [
+    'pageKey' => 'submission-guidelines',
+]))->name('submission-guidelines');
 Route::get('/login', function () {
     return redirect()->route('agency.login');
 })->name('login');

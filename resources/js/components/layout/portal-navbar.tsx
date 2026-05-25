@@ -1,5 +1,5 @@
 import { Link, router } from '@inertiajs/react';
-import { BookOpen, Search } from 'lucide-react';
+import { BookOpen, Menu, Search, X } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -25,9 +25,10 @@ const navigationItems: Array<{
 ];
 
 export default function PortalNavbar({
-    activeNav = 'login',
+    activeNav,
 }: PortalNavbarProps) {
     const [query, setQuery] = useState('');
+    const [mobileOpen, setMobileOpen] = useState(false);
 
     const handleSearch = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -68,7 +69,21 @@ export default function PortalNavbar({
                     />
                 </form>
 
-                <nav className="ml-auto flex items-center gap-1">
+                <button
+                    type="button"
+                    className="ml-auto inline-flex size-10 items-center justify-center rounded-[10px] border border-[#e5e7eb] text-[#1e3a8a] md:hidden"
+                    aria-label={mobileOpen ? 'Close navigation' : 'Open navigation'}
+                    aria-expanded={mobileOpen}
+                    onClick={() => setMobileOpen((open) => !open)}
+                >
+                    {mobileOpen ? (
+                        <X className="size-5" />
+                    ) : (
+                        <Menu className="size-5" />
+                    )}
+                </button>
+
+                <nav className="ml-auto hidden items-center gap-1 md:flex">
                     {navigationItems.map((item) => {
                         const isActive = item.key === activeNav;
 
@@ -76,6 +91,7 @@ export default function PortalNavbar({
                             <Link
                                 key={item.key}
                                 href={item.href}
+                                onClick={() => setMobileOpen(false)}
                                 className={cn(
                                     'rounded-[8px] px-3 py-2 text-sm leading-5 transition-colors',
                                     isActive
@@ -88,6 +104,30 @@ export default function PortalNavbar({
                         );
                     })}
                 </nav>
+
+                {mobileOpen ? (
+                    <nav className="order-4 grid w-full gap-1 border-t border-[#e5e7eb] pt-3 md:hidden">
+                        {navigationItems.map((item) => {
+                            const isActive = item.key === activeNav;
+
+                            return (
+                                <Link
+                                    key={item.key}
+                                    href={item.href}
+                                    onClick={() => setMobileOpen(false)}
+                                    className={cn(
+                                        'rounded-[10px] px-3 py-2 text-sm leading-5 transition-colors',
+                                        isActive
+                                            ? 'bg-[#1e3a8a] text-white'
+                                            : 'text-[#6b7280] hover:bg-[#eff6ff] hover:text-[#1e3a8a]',
+                                    )}
+                                >
+                                    {item.label}
+                                </Link>
+                            );
+                        })}
+                    </nav>
+                ) : null}
             </div>
         </header>
     );

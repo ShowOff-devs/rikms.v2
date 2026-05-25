@@ -268,14 +268,30 @@ export default function BrowseResearch() {
                     facets={facets}
                     hasActiveFilters={hasActiveFilters}
                     onToggleFilter={toggleFilter}
-                    onYearRangeChange={(field, value) =>
-                        updateQuery({
-                            [field]: Math.min(
-                                Math.max(value, facets.minYear),
-                                facets.maxYear,
-                            ),
-                        })
-                    }
+                    onYearRangeChange={(field, value) => {
+                        const clampedValue = Math.min(
+                            Math.max(value, facets.minYear),
+                            facets.maxYear,
+                        );
+
+                        updateQuery(
+                            field === 'yearFrom'
+                                ? {
+                                      yearFrom: clampedValue,
+                                      yearTo: Math.max(
+                                          query.yearTo,
+                                          clampedValue,
+                                      ),
+                                  }
+                                : {
+                                      yearFrom: Math.min(
+                                          query.yearFrom,
+                                          clampedValue,
+                                      ),
+                                      yearTo: clampedValue,
+                                  },
+                        );
+                    }}
                     onClearFilters={clearFilters}
                 />
 
