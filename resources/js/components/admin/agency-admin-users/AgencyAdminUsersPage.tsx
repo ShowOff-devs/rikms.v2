@@ -144,15 +144,15 @@ export function AgencyAdminUsersPage() {
                     user.role === 'Agency Admin');
 
             return (
-                searchMatches &&
-                agencyMatches &&
-                statusMatches &&
-                roleMatches
+                searchMatches && agencyMatches && statusMatches && roleMatches
             );
         });
     }, [users, searchQuery, selectedAgency, selectedStatus, selectedRole]);
 
-    const totalPages = Math.max(1, Math.ceil(filteredUsers.length / rowsPerPage));
+    const totalPages = Math.max(
+        1,
+        Math.ceil(filteredUsers.length / rowsPerPage),
+    );
     const paginatedUsers = filteredUsers.slice(
         (currentPage - 1) * rowsPerPage,
         currentPage * rowsPerPage,
@@ -240,7 +240,9 @@ export function AgencyAdminUsersPage() {
 
         try {
             await resetAgencyAdminPassword(resetUser.id);
-            setFeedback(`Password reset instructions were sent to ${resetUser.email}.`);
+            setFeedback(
+                `Password reset instructions were sent to ${resetUser.email}.`,
+            );
             setResetUser(null);
         } finally {
             setIsSaving(false);

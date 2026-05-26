@@ -113,7 +113,9 @@ export default function AgencyDashboardPage() {
         action: 'view' | 'edit' | 'archive',
     ) => {
         if (action === 'edit' && record.repositoryId) {
-            router.visit(`/agency/research-repository/${record.repositoryId}/edit`);
+            router.visit(
+                `/agency/research-repository/${record.repositoryId}/edit`,
+            );
 
             return;
         }

@@ -117,8 +117,7 @@ export function PlatformSettingsPage() {
     const [isBackupRunning, setIsBackupRunning] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [feedback, setFeedback] = useState<string | null>(null);
-    const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] =
-        useState(false);
+    const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
 
     useEffect(() => {
         let isCurrent = true;

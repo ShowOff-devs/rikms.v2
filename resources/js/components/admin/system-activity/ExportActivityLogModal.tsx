@@ -33,7 +33,9 @@ type ExportFormState = {
     includeSecurityEvents: boolean;
 };
 
-type ExportFormErrors = Partial<Record<keyof ExportFormState | 'sections', string>>;
+type ExportFormErrors = Partial<
+    Record<keyof ExportFormState | 'sections', string>
+>;
 
 const initialExportState: ExportFormState = {
     format: 'csv',
@@ -124,8 +126,7 @@ export function ExportActivityLogModal({
         await onExport({
             format: form.format,
             dateRange: form.dateRange,
-            startDate:
-                form.dateRange === 'custom' ? form.startDate : undefined,
+            startDate: form.dateRange === 'custom' ? form.startDate : undefined,
             endDate: form.dateRange === 'custom' ? form.endDate : undefined,
             includeNotifications: form.includeNotifications,
             includeActivityLogs: form.includeActivityLogs,
@@ -155,8 +156,8 @@ export function ExportActivityLogModal({
                         Export Activity Log
                     </DialogTitle>
                     <DialogDescription className="text-[#6a7282]">
-                        Choose the export format and date range for the
-                        activity logs you want to generate.
+                        Choose the export format and date range for the activity
+                        logs you want to generate.
                     </DialogDescription>
                 </DialogHeader>
 

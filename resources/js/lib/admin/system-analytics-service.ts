@@ -52,7 +52,10 @@ function getAccessRequestTotal(record: SystemResearchAnalyticsRecord) {
 
 function filterRecords(filters: SystemAnalyticsFilters = {}) {
     return systemAnalyticsRecords.filter((record) => {
-        if (isFilterActive(filters.agency) && record.agency !== filters.agency) {
+        if (
+            isFilterActive(filters.agency) &&
+            record.agency !== filters.agency
+        ) {
             return false;
         }
 
@@ -88,7 +91,10 @@ function filterRecords(filters: SystemAnalyticsFilters = {}) {
             return false;
         }
 
-        if (isFilterActive(filters.status) && record.status !== filters.status) {
+        if (
+            isFilterActive(filters.status) &&
+            record.status !== filters.status
+        ) {
             return false;
         }
 
@@ -98,9 +104,13 @@ function filterRecords(filters: SystemAnalyticsFilters = {}) {
 
 function getFilterOptions(): SystemAnalyticsFilterOptions {
     return {
-        agencies: uniqueSorted(systemAnalyticsRecords.map((record) => record.agency)),
+        agencies: uniqueSorted(
+            systemAnalyticsRecords.map((record) => record.agency),
+        ),
         publicationYears: Array.from(
-            new Set(systemAnalyticsRecords.map((record) => String(record.year))),
+            new Set(
+                systemAnalyticsRecords.map((record) => String(record.year)),
+            ),
         ).sort((a, b) => Number(b) - Number(a)),
         researchCategories: uniqueSorted(
             systemAnalyticsRecords.map((record) => record.category),
@@ -142,7 +152,10 @@ export async function getSystemAnalyticsMetrics(
     records.forEach((record) => {
         agencyAdmins.set(
             record.agency,
-            Math.max(agencyAdmins.get(record.agency) ?? 0, record.activeAgencyAdmins),
+            Math.max(
+                agencyAdmins.get(record.agency) ?? 0,
+                record.activeAgencyAdmins,
+            ),
         );
     });
 
@@ -263,7 +276,10 @@ export async function getSDGContribution(
         });
     });
 
-    const max = Math.max(...Array.from(grouped.values()).map((item) => item.count), 0);
+    const max = Math.max(
+        ...Array.from(grouped.values()).map((item) => item.count),
+        0,
+    );
 
     return Array.from(grouped.entries())
         .map(([sdg, item]) => {
@@ -273,11 +289,16 @@ export async function getSDGContribution(
                 sdg,
                 label: item.label,
                 count: item.count,
-                percentage: max === 0 ? 0 : Math.round((item.count / max) * 100),
+                percentage:
+                    max === 0 ? 0 : Math.round((item.count / max) * 100),
                 color: sdgColors[(sdgNumber - 1) % sdgColors.length],
             };
         })
-        .sort((a, b) => Number(a.sdg.replace('SDG ', '')) - Number(b.sdg.replace('SDG ', '')));
+        .sort(
+            (a, b) =>
+                Number(a.sdg.replace('SDG ', '')) -
+                Number(b.sdg.replace('SDG ', '')),
+        );
 }
 
 export async function getMostAccessedResearch(
@@ -320,7 +341,10 @@ export async function getPlatformUsageActivity(
 
     const records = filterRecords(filters);
     const totalViews = records.reduce((sum, record) => sum + record.views, 0);
-    const totalDownloads = records.reduce((sum, record) => sum + record.downloads, 0);
+    const totalDownloads = records.reduce(
+        (sum, record) => sum + record.downloads,
+        0,
+    );
     const totalRequests = records.reduce(
         (sum, record) => sum + getAccessRequestTotal(record),
         0,

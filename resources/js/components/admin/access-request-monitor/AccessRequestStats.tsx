@@ -1,9 +1,4 @@
-import {
-    CheckCircle2,
-    ClipboardList,
-    Clock3,
-    XCircle,
-} from 'lucide-react';
+import { CheckCircle2, ClipboardList, Clock3, XCircle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { AccessRequestMonitorSummary } from '@/types/access-request-monitor';
 

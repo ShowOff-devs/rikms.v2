@@ -6,7 +6,10 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import type { ActivityLogRole, ActivityLogStatus } from '@/types/system-activity';
+import type {
+    ActivityLogRole,
+    ActivityLogStatus,
+} from '@/types/system-activity';
 
 type ActivityFiltersProps = {
     searchQuery: string;
@@ -65,10 +68,8 @@ export function ActivityFilters({
                     />
                     <input
                         value={searchQuery}
-                        onChange={(event) =>
-                            onSearchChange(event.target.value)
-                        }
-                        className="h-[42px] w-full rounded-[10px] border border-[#e5e7eb] bg-[#f9fafb] pr-4 pl-10 text-sm text-[#111827] outline-none transition placeholder:text-[#99a1af] focus:border-[#1e3a8a]/40 focus:ring-2 focus:ring-[#1e3a8a]/10"
+                        onChange={(event) => onSearchChange(event.target.value)}
+                        className="h-[42px] w-full rounded-[10px] border border-[#e5e7eb] bg-[#f9fafb] pr-4 pl-10 text-sm text-[#111827] transition outline-none placeholder:text-[#99a1af] focus:border-[#1e3a8a]/40 focus:ring-2 focus:ring-[#1e3a8a]/10"
                         placeholder="Search activity logs..."
                     />
                 </div>

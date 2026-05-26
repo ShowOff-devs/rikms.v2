@@ -1,9 +1,6 @@
 import { CheckCircle2, Clock3, DatabaseBackup, RotateCw } from 'lucide-react';
 import type { PlatformSettings } from '@/types/platform-settings';
-import {
-    Field,
-    SectionCard,
-} from './platform-settings-controls';
+import { Field, SectionCard } from './platform-settings-controls';
 
 type BackupRecoverySettingsProps = {
     settings: PlatformSettings['backup'];
@@ -86,7 +83,7 @@ export function BackupRecoverySettings({
                                     backupFrequency: event.target.value,
                                 })
                             }
-                            className="mt-2 h-[42px] w-full rounded-[14px] border border-[#e5e7eb] bg-white px-4 text-sm text-[#364153] outline-none transition focus:border-[#1e3a8a]/40 focus:ring-2 focus:ring-[#1e3a8a]/10"
+                            className="mt-2 h-[42px] w-full rounded-[14px] border border-[#e5e7eb] bg-white px-4 text-sm text-[#364153] transition outline-none focus:border-[#1e3a8a]/40 focus:ring-2 focus:ring-[#1e3a8a]/10"
                         >
                             {backupFrequencyOptions.map((frequency) => (
                                 <option key={frequency} value={frequency}>

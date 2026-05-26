@@ -1,5 +1,11 @@
 import { Link } from '@inertiajs/react';
-import { ArrowRight, Building2, Calendar, Download, ExternalLink } from 'lucide-react';
+import {
+    ArrowRight,
+    Building2,
+    Calendar,
+    Download,
+    ExternalLink,
+} from 'lucide-react';
 import type { ResearchRecord } from '@/types/research';
 
 type ResearchCardProps = {
@@ -117,8 +123,7 @@ export default function ResearchCard({ research }: ResearchCardProps) {
                         <span>Request Access</span>
                     </Link>
                 ) : null}
-                {research.accessLevel === 'external' &&
-                research.externalUrl ? (
+                {research.accessLevel === 'external' && research.externalUrl ? (
                     <a
                         href={research.externalUrl}
                         target="_blank"

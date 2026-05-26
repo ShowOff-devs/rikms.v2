@@ -198,8 +198,7 @@ export function CreateAgencyAdminModal({
                                 onValueChange={(value) =>
                                     setForm((current) => ({
                                         ...current,
-                                        status:
-                                            value as AgencyAdminUserStatus,
+                                        status: value as AgencyAdminUserStatus,
                                     }))
                                 }
                             >

@@ -64,10 +64,12 @@ export function SystemActivityPage() {
     const [selectedCategory, setSelectedCategory] =
         useState<NotificationTabValue>('all');
     const [activitySearch, setActivitySearch] = useState('');
-    const [selectedStatus, setSelectedStatus] =
-        useState<ActivityLogStatus | 'all'>('all');
-    const [selectedRole, setSelectedRole] =
-        useState<ActivityLogRole | 'all'>('all');
+    const [selectedStatus, setSelectedStatus] = useState<
+        ActivityLogStatus | 'all'
+    >('all');
+    const [selectedRole, setSelectedRole] = useState<ActivityLogRole | 'all'>(
+        'all',
+    );
     const [selectedAgency, setSelectedAgency] = useState('all');
     const [selectedAction, setSelectedAction] = useState('all');
     const [currentPage, setCurrentPage] = useState(1);
@@ -240,9 +242,7 @@ export function SystemActivityPage() {
         }
     };
 
-    const handleClearNotifications = async (
-        scope: ClearNotificationsScope,
-    ) => {
+    const handleClearNotifications = async (scope: ClearNotificationsScope) => {
         setIsClearing(true);
 
         try {

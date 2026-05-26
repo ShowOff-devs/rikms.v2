@@ -24,9 +24,7 @@ import { ExportModerationReportModal } from './ExportModerationReportModal';
 import { FlaggedResearchTable } from './FlaggedResearchTable';
 import { ModerationActivityLog } from './ModerationActivityLog';
 import type { ModerationConfirmationAction } from './ModerationConfirmationModal';
-import {
-    ModerationConfirmationModal,
-} from './ModerationConfirmationModal';
+import { ModerationConfirmationModal } from './ModerationConfirmationModal';
 import { ModerationFilters as ModerationFilterControls } from './ModerationFilters';
 import { ModerationHeader } from './ModerationHeader';
 import { ModerationSummaryCards } from './ModerationSummaryCards';
@@ -289,7 +287,11 @@ export function ResearchModerationPage() {
                 ),
             );
             setActivities((current) => [
-                createActivity('issue-resolved', 'Marked issue as resolved:', record.title),
+                createActivity(
+                    'issue-resolved',
+                    'Marked issue as resolved:',
+                    record.title,
+                ),
                 ...current,
             ]);
             setFeedback(`${record.title} was marked as resolved.`);
@@ -313,7 +315,10 @@ export function ResearchModerationPage() {
                 const exists = current.some((item) => item.id === record.id);
 
                 if (!exists) {
-                    return [{ ...record, status: 'pending-review' }, ...current];
+                    return [
+                        { ...record, status: 'pending-review' },
+                        ...current,
+                    ];
                 }
 
                 return current.map((item) =>
@@ -331,7 +336,11 @@ export function ResearchModerationPage() {
             }
 
             setActivities((current) => [
-                createActivity('revision-requested', 'Flagged for review:', record.title),
+                createActivity(
+                    'revision-requested',
+                    'Flagged for review:',
+                    record.title,
+                ),
                 ...current,
             ]);
             setFeedback(`${record.title} was flagged for review.`);
@@ -413,12 +422,18 @@ export function ResearchModerationPage() {
             current.filter((item) => item.id !== match.id),
         );
         setActivities((current) => [
-            createActivity('duplicate-resolved', 'Marked not duplicate:', match.matchingTitle),
+            createActivity(
+                'duplicate-resolved',
+                'Marked not duplicate:',
+                match.matchingTitle,
+            ),
             ...current,
         ]);
 
         setComparisonMatch(null);
-        setFeedback(`${match.matchingTitle} was removed from duplicate alerts.`);
+        setFeedback(
+            `${match.matchingTitle} was removed from duplicate alerts.`,
+        );
     };
 
     const handleExport = async (options: ModerationReportExportOptions) => {
@@ -488,7 +503,9 @@ export function ResearchModerationPage() {
                             onResolve={(record) =>
                                 openConfirmation(record, 'resolve')
                             }
-                            onFlag={(record) => openConfirmation(record, 'flag')}
+                            onFlag={(record) =>
+                                openConfirmation(record, 'flag')
+                            }
                             onArchive={(record) =>
                                 openConfirmation(record, 'archive')
                             }

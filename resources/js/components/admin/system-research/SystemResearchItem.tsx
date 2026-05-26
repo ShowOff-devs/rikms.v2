@@ -1,4 +1,11 @@
-import { Building2, CalendarDays, Eye, Folder, Tag, Upload } from 'lucide-react';
+import {
+    Building2,
+    CalendarDays,
+    Eye,
+    Folder,
+    Tag,
+    Upload,
+} from 'lucide-react';
 import { systemResearchStatusLabels } from '@/data/mock-system-research';
 import { cn } from '@/lib/utils';
 import type {

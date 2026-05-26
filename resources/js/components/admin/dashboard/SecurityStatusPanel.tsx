@@ -102,7 +102,6 @@ export function SecurityStatusPanel({
                           </div>
                       ))}
             </div>
-
         </article>
     );
 }

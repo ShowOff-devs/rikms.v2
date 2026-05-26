@@ -49,10 +49,7 @@ const timelineStyle = {
         color: 'bg-[#7c3aed]',
         icon: Building2,
     },
-} satisfies Record<
-    ActivityTimelineType,
-    { color: string; icon: LucideIcon }
->;
+} satisfies Record<ActivityTimelineType, { color: string; icon: LucideIcon }>;
 
 export function ActivityTimeline({ items, isLoading }: ActivityTimelineProps) {
     return (

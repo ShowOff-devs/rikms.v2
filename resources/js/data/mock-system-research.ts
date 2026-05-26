@@ -5,12 +5,13 @@ import type {
     SystemResearchStatus,
 } from '@/types/system-research';
 
-export const systemResearchStatusLabels: Record<SystemResearchStatus, string> = {
-    published: 'Published',
-    'under-review': 'Under Review',
-    draft: 'Draft',
-    archived: 'Archived',
-};
+export const systemResearchStatusLabels: Record<SystemResearchStatus, string> =
+    {
+        published: 'Published',
+        'under-review': 'Under Review',
+        draft: 'Draft',
+        archived: 'Archived',
+    };
 
 export const systemResearchDocumentTypeLabels: Record<
     SystemResearchDocumentType,
@@ -117,7 +118,11 @@ export const systemResearchRecords: SystemResearchRecord[] = [
     {
         id: 'sys-res-005',
         title: 'Renewable Energy Adoption in Island Communities of Davao Region',
-        authors: ['Eng. Miguel Ramos', 'Dr. Patricia Navarro', 'Prof. Luis Bautista'],
+        authors: [
+            'Eng. Miguel Ramos',
+            'Dr. Patricia Navarro',
+            'Prof. Luis Bautista',
+        ],
         agencyId: 'drieerdc',
         agencyName:
             'Davao Region Industry, Energy and Emerging Technology Research and Development Consortium',
@@ -125,7 +130,10 @@ export const systemResearchRecords: SystemResearchRecord[] = [
         year: 2024,
         status: 'published',
         category: 'Technology',
-        sdgs: ['SDG 7 Affordable and Clean Energy', 'SDG 11 Sustainable Cities'],
+        sdgs: [
+            'SDG 7 Affordable and Clean Energy',
+            'SDG 11 Sustainable Cities',
+        ],
         abstract:
             'An implementation review of renewable energy options, maintenance capacity, and community acceptance in selected island barangays.',
         documentType: 'terminal-report',
@@ -157,14 +165,21 @@ export const systemResearchRecords: SystemResearchRecord[] = [
     {
         id: 'sys-res-007',
         title: 'Economic Impact of Digital Transformation on MSMEs in Davao Region',
-        authors: ['Dr. Antonio Mendoza', 'Dr. Grace Lim', 'Prof. Ricardo Santos'],
+        authors: [
+            'Dr. Antonio Mendoza',
+            'Dr. Grace Lim',
+            'Prof. Ricardo Santos',
+        ],
         agencyId: 'dti-xi',
         agencyName: 'Department of Trade and Industry Region XI',
         agencyShortName: 'DTI XI',
         year: 2025,
         status: 'published',
         category: 'Economics',
-        sdgs: ['SDG 8 Decent Work and Economic Growth', 'SDG 9 Industry Innovation'],
+        sdgs: [
+            'SDG 8 Decent Work and Economic Growth',
+            'SDG 9 Industry Innovation',
+        ],
         abstract:
             'A monitoring study of digital tool adoption, productivity shifts, and market access outcomes among micro, small, and medium enterprises.',
         documentType: 'research-study',
@@ -198,7 +213,8 @@ export const systemResearchRecords: SystemResearchRecord[] = [
         title: 'Cybersecurity Readiness Assessment of Government ICT Infrastructure in Region XI',
         authors: ['Eng. Rafael Domingo', 'Dr. Lisa Tan'],
         agencyId: 'dict-xi',
-        agencyName: 'Department of Information and Communications Technology Region XI',
+        agencyName:
+            'Department of Information and Communications Technology Region XI',
         agencyShortName: 'DICT XI',
         year: 2025,
         status: 'published',
@@ -216,7 +232,11 @@ export const systemResearchRecords: SystemResearchRecord[] = [
     {
         id: 'sys-res-010',
         title: 'Regional Development Planning Using Geospatial Analysis in Davao Region',
-        authors: ['Dr. Teresa Mendez', 'Prof. Andrew Pascual', 'Dr. Lea Navarro'],
+        authors: [
+            'Dr. Teresa Mendez',
+            'Prof. Andrew Pascual',
+            'Dr. Lea Navarro',
+        ],
         agencyId: 'neda-xi',
         agencyName: 'National Economic and Development Authority Region XI',
         agencyShortName: 'NEDA XI',
@@ -263,7 +283,10 @@ export const systemResearchRecords: SystemResearchRecord[] = [
         year: 2023,
         status: 'published',
         category: 'Economics',
-        sdgs: ['SDG 8 Decent Work and Economic Growth', 'SDG 10 Reduced Inequalities'],
+        sdgs: [
+            'SDG 8 Decent Work and Economic Growth',
+            'SDG 10 Reduced Inequalities',
+        ],
         abstract:
             'A regional mapping of indigenous textile enterprises, value chains, market linkages, and community-based enterprise support needs.',
         documentType: 'research-study',

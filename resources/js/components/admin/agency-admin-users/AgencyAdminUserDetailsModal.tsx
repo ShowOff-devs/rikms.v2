@@ -82,7 +82,7 @@ export function AgencyAdminUserDetailsModal({
                             </div>
                             <div className="flex justify-between gap-4 border-b border-[#f3f4f6] pb-3">
                                 <dt className="text-[#6a7282]">Status</dt>
-                                <dd className="font-medium capitalize text-[#1e2939]">
+                                <dd className="font-medium text-[#1e2939] capitalize">
                                     {user.status}
                                 </dd>
                             </div>
@@ -100,4 +100,3 @@ export function AgencyAdminUserDetailsModal({
         </Dialog>
     );
 }
-

@@ -110,7 +110,7 @@ export function ActivityLogTable({
             />
 
             <div className="overflow-x-auto">
-                <table className="min-w-[1128px] w-full border-collapse text-left">
+                <table className="w-full min-w-[1128px] border-collapse text-left">
                     <thead className="bg-[#f9fafb]/80">
                         <tr className="h-10 text-xs font-semibold text-[#6a7282]">
                             <th className="w-[185px] px-6">Timestamp</th>

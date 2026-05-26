@@ -18,7 +18,7 @@ import type {
 } from '@/types/research';
 
 const perPage = 5;
-const facets = getResearchFacets();
+const fallbackFacets = getResearchFacets();
 
 const defaultFilters: ResearchFiltersType = {
     search: '',
@@ -28,8 +28,8 @@ const defaultFilters: ResearchFiltersType = {
     years: [],
     accessLevels: [],
     statuses: [],
-    yearFrom: facets.minYear,
-    yearTo: facets.maxYear,
+    yearFrom: fallbackFacets.minYear,
+    yearTo: fallbackFacets.maxYear,
 };
 
 const defaultQuery: ResearchQuery = {
@@ -68,8 +68,8 @@ function readQueryFromUrl(): ResearchQuery {
         years: numberArrayFromParam(params, 'year'),
         accessLevels: arrayFromParam(params, 'access') as ResearchAccessLevel[],
         statuses: arrayFromParam(params, 'status') as ResearchStatus[],
-        yearFrom: Number(params.get('from') ?? facets.minYear),
-        yearTo: Number(params.get('to') ?? facets.maxYear),
+        yearFrom: Number(params.get('from') ?? fallbackFacets.minYear),
+        yearTo: Number(params.get('to') ?? fallbackFacets.maxYear),
         sort: ['newest', 'oldest', 'title', 'agency'].includes(sort)
             ? sort
             : 'newest',
@@ -78,7 +78,7 @@ function readQueryFromUrl(): ResearchQuery {
     };
 }
 
-function writeQueryToUrl(query: ResearchQuery) {
+function writeQueryToUrl(query: ResearchQuery, facets = fallbackFacets) {
     if (typeof window === 'undefined') {
         return;
     }
@@ -147,6 +147,7 @@ export default function BrowseResearch() {
     const [result, setResult] = useState<ResearchSearchResult | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const facets = result?.facets ?? fallbackFacets;
 
     const hasActiveFilters = useMemo(
         () =>
@@ -161,7 +162,7 @@ export default function BrowseResearch() {
                 query.yearFrom !== facets.minYear ||
                 query.yearTo !== facets.maxYear,
             ),
-        [query],
+        [facets.maxYear, facets.minYear, query],
     );
 
     useEffect(() => {
@@ -176,6 +177,19 @@ export default function BrowseResearch() {
                 }
 
                 setResult(nextResult);
+                setQuery((current) => {
+                    const isUsingFallbackRange =
+                        current.yearFrom === fallbackFacets.minYear &&
+                        current.yearTo === fallbackFacets.maxYear;
+
+                    return isUsingFallbackRange
+                        ? {
+                              ...current,
+                              yearFrom: nextResult.facets.minYear,
+                              yearTo: nextResult.facets.maxYear,
+                          }
+                        : current;
+                });
             })
             .catch((nextError: unknown) => {
                 if (!isCurrent) {
@@ -242,7 +256,11 @@ export default function BrowseResearch() {
 
     const clearFilters = () => {
         prepareForSearch();
-        setQuery({ ...defaultQuery });
+        setQuery({
+            ...defaultQuery,
+            yearFrom: facets.minYear,
+            yearTo: facets.maxYear,
+        });
     };
 
     const items = result?.items ?? [];

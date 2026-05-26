@@ -41,9 +41,7 @@ export function ResearchByAgencyChart({
                         <div className="absolute inset-x-0 top-0 flex h-[208px] items-end justify-between gap-3 px-2">
                             {data.map((item) => {
                                 const height =
-                                    max === 0
-                                        ? 0
-                                        : (item.count / 240) * 208;
+                                    max === 0 ? 0 : (item.count / 240) * 208;
 
                                 return (
                                     <div
@@ -120,8 +118,7 @@ export function ChartTitle({
 
 export function ChartSkeleton() {
     return (
-        <div className="mt-6 h-[240px] animate-pulse rounded-[10px] bg-[#f1f5f9]">
-        </div>
+        <div className="mt-6 h-[240px] animate-pulse rounded-[10px] bg-[#f1f5f9]"></div>
     );
 }
 

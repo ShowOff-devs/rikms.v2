@@ -143,8 +143,7 @@ export function ExportAnalyticsReportModal({
         await onExport({
             format: form.format,
             dateRange: form.dateRange,
-            startDate:
-                form.dateRange === 'custom' ? form.startDate : undefined,
+            startDate: form.dateRange === 'custom' ? form.startDate : undefined,
             endDate: form.dateRange === 'custom' ? form.endDate : undefined,
             includeSummaryMetrics: form.includeSummaryMetrics,
             includeUploadTrends: form.includeUploadTrends,

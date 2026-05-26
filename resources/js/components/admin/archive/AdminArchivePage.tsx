@@ -137,7 +137,8 @@ function filterRecords(
             searchableText.includes(query),
         );
         const agencyMatches =
-            filters.agency === 'all' || getRecordAgency(record) === filters.agency;
+            filters.agency === 'all' ||
+            getRecordAgency(record) === filters.agency;
         const dateMatches = dateMatchesFilter(record.archiveDate, filters.date);
         const statusMatches =
             filters.status === 'all' || record.status === filters.status;
@@ -172,8 +173,7 @@ export function AdminArchivePage() {
     const [userRecords, setUserRecords] = useState<ArchivedUserRecord[]>([]);
     const [activities, setActivities] = useState<ArchiveActivity[]>([]);
     const [activeTab, setActiveTab] = useState<ArchiveRecordType>('research');
-    const [filters, setFilters] =
-        useState<AdminArchiveFilters>(initialFilters);
+    const [filters, setFilters] = useState<AdminArchiveFilters>(initialFilters);
     const [currentPage, setCurrentPage] = useState(1);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -364,10 +364,7 @@ export function AdminArchivePage() {
             );
             removeRecordFromState(selectedRestoreRecord);
             setActivities((current) => [
-                createArchiveActivity(
-                    'record-restored',
-                    selectedRestoreRecord,
-                ),
+                createArchiveActivity('record-restored', selectedRestoreRecord),
                 ...current,
             ]);
             setFeedback(

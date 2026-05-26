@@ -68,7 +68,8 @@ export const mockSystemNotifications: SystemNotification[] = [
         id: 'notification-failed-login-cluster',
         category: 'security-alerts',
         title: 'Multiple failed login attempts',
-        message: 'Multiple failed login attempts detected from IP 203.177.45.112',
+        message:
+            'Multiple failed login attempts detected from IP 203.177.45.112',
         actor: 'Unknown',
         agency: 'System',
         timestamp: '7 hours ago',

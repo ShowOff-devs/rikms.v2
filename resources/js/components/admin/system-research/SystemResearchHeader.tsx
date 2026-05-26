@@ -1,10 +1,6 @@
 import { Download } from 'lucide-react';
 
-export function SystemResearchHeader({
-    onExport,
-}: {
-    onExport: () => void;
-}) {
+export function SystemResearchHeader({ onExport }: { onExport: () => void }) {
     return (
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
             <div>

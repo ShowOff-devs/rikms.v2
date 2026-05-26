@@ -1,4 +1,16 @@
+import { fetchApi } from '@/lib/api-client';
 import type { AgencyNotification } from '@/types/notifications';
+
+type NotificationApiRecord = {
+    id: number;
+    type: string;
+    title: string;
+    message: string;
+    status: string;
+    read_at?: string | null;
+    action_url?: string | null;
+    created_at?: string | null;
+};
 
 const notificationsStorageKey = 'rikms.agency.notifications.v1';
 
@@ -109,11 +121,29 @@ function writeStoredNotifications(notifications: AgencyNotification[]) {
 }
 
 export async function getAgencyNotifications() {
-    await mockNetworkDelay();
+    try {
+        const { data } = await fetchApi<NotificationApiRecord[]>(
+            '/api/agency/notifications?per_page=50',
+        );
 
-    return (readStoredNotifications() ?? seedNotifications).map(
-        cloneNotification,
-    );
+        return data.map((notification) => ({
+            id: String(notification.id),
+            type: mapNotificationType(notification.type),
+            title: notification.title,
+            message: notification.message,
+            createdAt: notification.created_at ?? new Date().toISOString(),
+            isRead:
+                Boolean(notification.read_at) || notification.status === 'read',
+            actionHref: notification.action_url ?? undefined,
+            actionLabel: notification.action_url ? 'Open' : undefined,
+        }));
+    } catch {
+        await mockNetworkDelay();
+
+        return (readStoredNotifications() ?? seedNotifications).map(
+            cloneNotification,
+        );
+    }
 }
 
 export async function updateAgencyNotificationReadState(
@@ -122,11 +152,12 @@ export async function updateAgencyNotificationReadState(
 ) {
     await mockNetworkDelay(80);
 
-    const nextNotifications = (readStoredNotifications() ?? seedNotifications).map(
-        (notification) =>
-            notification.id === notificationId
-                ? { ...notification, isRead }
-                : notification,
+    const nextNotifications = (
+        readStoredNotifications() ?? seedNotifications
+    ).map((notification) =>
+        notification.id === notificationId
+            ? { ...notification, isRead }
+            : notification,
     );
 
     writeStoredNotifications(nextNotifications);
@@ -137,14 +168,28 @@ export async function updateAgencyNotificationReadState(
 export async function markAllAgencyNotificationsRead() {
     await mockNetworkDelay(120);
 
-    const nextNotifications = (readStoredNotifications() ?? seedNotifications).map(
-        (notification) => ({
-            ...notification,
-            isRead: true,
-        }),
-    );
+    const nextNotifications = (
+        readStoredNotifications() ?? seedNotifications
+    ).map((notification) => ({
+        ...notification,
+        isRead: true,
+    }));
 
     writeStoredNotifications(nextNotifications);
 
     return nextNotifications.map(cloneNotification);
+}
+
+function mapNotificationType(type: string): AgencyNotification['type'] {
+    if (
+        type === 'upload' ||
+        type === 'access-request' ||
+        type === 'archive' ||
+        type === 'analytics' ||
+        type === 'settings'
+    ) {
+        return type;
+    }
+
+    return 'settings';
 }

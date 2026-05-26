@@ -117,8 +117,7 @@ export function AgencyAdminUsersTable({
                                         <span
                                             className={`flex size-10 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${
                                                 avatarColors[
-                                                    index %
-                                                        avatarColors.length
+                                                    index % avatarColors.length
                                                 ]
                                             }`}
                                         >
@@ -201,4 +200,3 @@ export function AgencyAdminUsersTable({
         </div>
     );
 }
-

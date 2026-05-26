@@ -41,7 +41,12 @@ export type AccessRequestMonitorFilters = {
     search: string;
     agency: string;
     status: AccessRequestStatus | 'all';
-    dateRange: 'all' | 'last-7-days' | 'last-30-days' | 'this-month' | 'this-year';
+    dateRange:
+        | 'all'
+        | 'last-7-days'
+        | 'last-30-days'
+        | 'this-month'
+        | 'this-year';
     organization: string;
 };
 

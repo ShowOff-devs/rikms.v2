@@ -2,6 +2,7 @@ import {
     mockAdminAgencies,
     mockAgencyAdminOptions,
 } from '@/data/mock-admin-agencies';
+import { fetchApi } from '@/lib/api-client';
 import type {
     AgencyAdminAssignment,
     AgencyAdminOption,
@@ -9,6 +10,34 @@ import type {
     ManagedAgency,
     UpdateAgencyPayload,
 } from '@/types/admin-agencies';
+
+type AdminAgencyApiRecord = {
+    id: number;
+    name: string;
+    short_name?: string | null;
+    type?: string | null;
+    description?: string | null;
+    website?: string | null;
+    email?: string | null;
+    address?: string | null;
+    total_research: number;
+    status: string;
+    agency_admins?: Array<{
+        id: number;
+        name: string;
+        email: string;
+    }>;
+    created_at?: string | null;
+    updated_at?: string | null;
+};
+
+type AdminUserApiRecord = {
+    id: number;
+    name: string;
+    email: string;
+    agency_id?: number | null;
+    status: string;
+};
 
 const mockNetworkDelay = (duration = 180) =>
     new Promise<void>((resolve) => {
@@ -75,23 +104,52 @@ function setAssignedAgency(adminUserId: string | undefined, agencyId: string) {
 }
 
 export async function getAgencies() {
-    await mockNetworkDelay();
+    try {
+        const { data } =
+            await fetchApi<AdminAgencyApiRecord[]>('/api/admin/agencies');
 
-    return cloneAgencies();
+        return data.map(mapAgencyFromApi);
+    } catch {
+        await mockNetworkDelay();
+
+        return cloneAgencies();
+    }
 }
 
 export async function getAgencyById(id: string) {
-    await mockNetworkDelay();
+    try {
+        const { data } = await fetchApi<AdminAgencyApiRecord>(
+            `/api/admin/agencies/${id}`,
+        );
 
-    const agency = agencies.find((item) => item.id === id);
+        return mapAgencyFromApi(data);
+    } catch {
+        await mockNetworkDelay();
 
-    return agency ? cloneAgency(agency) : null;
+        const agency = agencies.find((item) => item.id === id);
+
+        return agency ? cloneAgency(agency) : null;
+    }
 }
 
 export async function getAgencyAdminOptions(): Promise<AgencyAdminOption[]> {
-    await mockNetworkDelay();
+    try {
+        const { data } = await fetchApi<AdminUserApiRecord[]>(
+            '/api/admin/users?role=agency_admin&per_page=100',
+        );
 
-    return agencyAdmins.map((admin) => ({ ...admin }));
+        return data.map((admin) => ({
+            id: String(admin.id),
+            fullName: admin.name,
+            email: admin.email,
+            status: admin.status === 'active' ? 'active' : 'inactive',
+            assignedAgencyId: admin.agency_id ? String(admin.agency_id) : undefined,
+        }));
+    } catch {
+        await mockNetworkDelay();
+
+        return agencyAdmins.map((admin) => ({ ...admin }));
+    }
 }
 
 export async function createAgency(
@@ -239,4 +297,53 @@ export async function archiveAgency(id: string) {
         id,
         archivedAt: new Date().toISOString(),
     };
+}
+
+function mapAgencyFromApi(agency: AdminAgencyApiRecord): ManagedAgency {
+    const agencyAdmin = agency.agency_admins?.[0];
+
+    return {
+        id: String(agency.id),
+        name: agency.name,
+        shortName: agency.short_name ?? agency.name,
+        type: mapAgencyType(agency.type),
+        description: agency.description ?? undefined,
+        website: agency.website ?? undefined,
+        contactEmail: agency.email ?? undefined,
+        officeAddress: agency.address ?? undefined,
+        agencyAdmin: agencyAdmin
+            ? {
+                  id: String(agencyAdmin.id),
+                  fullName: agencyAdmin.name,
+                  email: agencyAdmin.email,
+              }
+            : undefined,
+        totalResearch: agency.total_research,
+        status: agency.status === 'active' ? 'active' : 'inactive',
+        lastUpdated: agency.updated_at ?? agency.created_at ?? new Date().toISOString(),
+        createdAt: agency.created_at ?? new Date().toISOString(),
+        updatedAt: agency.updated_at ?? undefined,
+    };
+}
+
+function mapAgencyType(type?: string | null): ManagedAgency['type'] {
+    const normalized = (type ?? '').toLowerCase();
+
+    if (normalized.includes('higher')) {
+        return 'higher-education-institution';
+    }
+
+    if (normalized.includes('consortium')) {
+        return 'research-consortium';
+    }
+
+    if (normalized.includes('industry')) {
+        return 'industry-partner';
+    }
+
+    if (normalized.includes('government')) {
+        return 'government-agency';
+    }
+
+    return 'other';
 }

@@ -164,8 +164,7 @@ export const flaggedResearchRecords: FlaggedResearchRecord[] = [
             'Measures the impact of digital transformation programs on productivity and market access among MSMEs.',
         issueDescription:
             'Duplicate scan matched an earlier preprint. Moderator confirmed this record is the final approved version.',
-        recommendedAction:
-            'Retain final version and keep preprint archived.',
+        recommendedAction: 'Retain final version and keep preprint archived.',
     },
     {
         id: 'mod-009',
@@ -293,7 +292,8 @@ export const moderationActivities: ModerationActivity[] = [
         id: 'act-002',
         actor: 'System Admin',
         action: 'Requested revision:',
-        researchTitle: 'Public Health Framework for Disease Surveillance in Region XI',
+        researchTitle:
+            'Public Health Framework for Disease Surveillance in Region XI',
         timestamp: '2026-03-02T10:30:00.000Z',
         type: 'revision-requested',
     },
@@ -301,7 +301,8 @@ export const moderationActivities: ModerationActivity[] = [
         id: 'act-003',
         actor: 'System Admin',
         action: 'Resolved duplicate flag:',
-        researchTitle: 'Higher Education Quality Assurance Metrics in Region XI',
+        researchTitle:
+            'Higher Education Quality Assurance Metrics in Region XI',
         timestamp: '2026-03-01T16:45:00.000Z',
         type: 'duplicate-resolved',
     },

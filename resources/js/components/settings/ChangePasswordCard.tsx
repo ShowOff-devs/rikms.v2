@@ -5,7 +5,10 @@ import type { PasswordChangePayload } from '@/types/settings';
 type ChangePasswordCardProps = {
     password: PasswordChangePayload;
     errors: Record<string, string>;
-    onPasswordChange: (field: keyof PasswordChangePayload, value: string) => void;
+    onPasswordChange: (
+        field: keyof PasswordChangePayload,
+        value: string,
+    ) => void;
 };
 
 const inputClass =

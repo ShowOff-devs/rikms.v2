@@ -63,7 +63,10 @@ export function AccessRequestActionsMenu({
                                 variant="destructive"
                                 onSelect={() => onOverrideDeny(record)}
                             >
-                                <ShieldX className="size-4" aria-hidden="true" />
+                                <ShieldX
+                                    className="size-4"
+                                    aria-hidden="true"
+                                />
                                 Override - Deny
                             </DropdownMenuItem>
                         </>

@@ -128,7 +128,9 @@ export function ResearchByCategoryChart({
                                 const percentage =
                                     total === 0
                                         ? 0
-                                        : Math.round((item.count / total) * 100);
+                                        : Math.round(
+                                              (item.count / total) * 100,
+                                          );
 
                                 return (
                                     <div

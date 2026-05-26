@@ -117,7 +117,11 @@ export async function getModerationActivityLog(): Promise<
 export async function markResearchIssueResolved(
     id: string,
     payload: ModerationActionPayload = {},
-): Promise<{ id: string; status: 'resolved'; payload: ModerationActionPayload }> {
+): Promise<{
+    id: string;
+    status: 'resolved';
+    payload: ModerationActionPayload;
+}> {
     await mockNetworkDelay(360);
 
     return { id, status: 'resolved', payload };

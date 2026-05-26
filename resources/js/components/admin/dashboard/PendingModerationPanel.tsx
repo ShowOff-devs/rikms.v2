@@ -23,10 +23,7 @@ export function PendingModerationPanel({
             <div className="flex h-[65px] items-center justify-between gap-4 border-b border-[#f3f4f6] px-6">
                 <div className="flex items-center gap-2.5">
                     <span className="flex size-8 items-center justify-center rounded-[10px] bg-[#fef3c7] text-[#f59e0b]">
-                        <AlertTriangle
-                            className="size-4"
-                            aria-hidden="true"
-                        />
+                        <AlertTriangle className="size-4" aria-hidden="true" />
                     </span>
                     <h2 className="text-sm leading-5 font-bold text-[#0f172a]">
                         Pending Moderation

@@ -1,13 +1,13 @@
 import { Head, Link } from '@inertiajs/react';
 import { ArrowRight, Building2, Search } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import PortalFooter from '@/components/layout/portal-footer';
 import PortalNavbar from '@/components/layout/portal-navbar';
 import {
     getPublicAgencyTypes,
     searchPublicAgencies,
 } from '@/lib/public/agency-service';
-import type { PublicAgencyKind } from '@/types/public-agency';
+import type { PublicAgency, PublicAgencyKind } from '@/types/public-agency';
 
 const categoryMeta: Record<
     PublicAgencyKind,
@@ -39,9 +39,54 @@ type TypeFilter = PublicAgencyKind | 'all';
 export default function Agencies() {
     const [search, setSearch] = useState('');
     const [type, setType] = useState<TypeFilter>('all');
-    const types = getPublicAgencyTypes();
+    const [types, setTypes] = useState<PublicAgencyKind[]>([]);
+    const [agencies, setAgencies] = useState<PublicAgency[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
-    const agencies = searchPublicAgencies({ search, type });
+    useEffect(() => {
+        let isCurrent = true;
+
+        getPublicAgencyTypes()
+            .then((nextTypes) => {
+                if (isCurrent) {
+                    setTypes(nextTypes);
+                }
+            })
+            .catch(() => {
+                if (isCurrent) {
+                    setTypes([]);
+                }
+            });
+
+        return () => {
+            isCurrent = false;
+        };
+    }, []);
+
+    useEffect(() => {
+        let isCurrent = true;
+
+        searchPublicAgencies({ search, type })
+            .then((nextAgencies) => {
+                if (isCurrent) {
+                    setAgencies(nextAgencies);
+                }
+            })
+            .catch(() => {
+                if (isCurrent) {
+                    setAgencies([]);
+                }
+            })
+            .finally(() => {
+                if (isCurrent) {
+                    setIsLoading(false);
+                }
+            });
+
+        return () => {
+            isCurrent = false;
+        };
+    }, [search, type]);
 
     return (
         <>
@@ -57,9 +102,9 @@ export default function Agencies() {
                         </h1>
                         <p className="mt-2 max-w-[768px] text-base leading-6 text-[#6b7280]">
                             Explore government agencies, research institutions,
-                            and regional R&amp;D consortia contributing
-                            research to the Regionwide Integrated Knowledge
-                            Management System.
+                            and regional R&amp;D consortia contributing research
+                            to the Regionwide Integrated Knowledge Management
+                            System.
                         </p>
                     </section>
 
@@ -90,9 +135,7 @@ export default function Agencies() {
                                                 : 'rounded-full bg-[#f3f4f6] px-3 py-1.5 text-sm leading-5 font-medium text-[#6b7280] hover:bg-[#eff6ff] hover:text-[#1e3a8a]'
                                         }
                                     >
-                                        {nextType === 'all'
-                                            ? 'All'
-                                            : nextType}
+                                        {nextType === 'all' ? 'All' : nextType}
                                     </button>
                                 ),
                             )}
@@ -100,7 +143,8 @@ export default function Agencies() {
                     </section>
 
                     <p className="mt-8 text-sm leading-5 text-[#6b7280]">
-                        Showing {agencies.length} agenc
+                        {isLoading ? 'Loading agencies' : 'Showing'}{' '}
+                        {agencies.length} agenc
                         {agencies.length === 1 ? 'y' : 'ies'}
                     </p>
 

@@ -4,16 +4,13 @@ import { accessRequestStatusLabels } from '@/data/mock-access-request-monitor';
 import { cn } from '@/lib/utils';
 import type { AccessRequestStatus } from '@/types/access-request-monitor';
 
-export const accessRequestDateTimeFormatter = new Intl.DateTimeFormat(
-    'en-US',
-    {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-    },
-);
+export const accessRequestDateTimeFormatter = new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+});
 
 export const accessRequestShortDateFormatter = new Intl.DateTimeFormat(
     'en-US',

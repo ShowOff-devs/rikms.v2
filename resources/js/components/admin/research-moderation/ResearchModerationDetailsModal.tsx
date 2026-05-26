@@ -20,7 +20,13 @@ type ResearchModerationDetailsModalProps = {
     onReview: (record: FlaggedResearchRecord) => void;
 };
 
-function DetailRow({ label, value }: { label: string; value?: string | number }) {
+function DetailRow({
+    label,
+    value,
+}: {
+    label: string;
+    value?: string | number;
+}) {
     return (
         <div>
             <dt className="text-[11px] leading-4 font-semibold tracking-wide text-[#99a1af] uppercase">

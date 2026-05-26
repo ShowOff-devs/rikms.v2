@@ -1,8 +1,10 @@
 import { Head, Link } from '@inertiajs/react';
 import { BookOpen, Database, ShieldCheck, Users } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import PortalFooter from '@/components/layout/portal-footer';
 import PortalNavbar from '@/components/layout/portal-navbar';
 import { getPublicAgencies } from '@/lib/public/agency-service';
+import type { PublicAgency } from '@/types/public-agency';
 
 const objectives = [
     {
@@ -32,7 +34,27 @@ const objectives = [
 ];
 
 export default function About() {
-    const agencies = getPublicAgencies();
+    const [agencies, setAgencies] = useState<PublicAgency[]>([]);
+
+    useEffect(() => {
+        let isCurrent = true;
+
+        getPublicAgencies()
+            .then((nextAgencies) => {
+                if (isCurrent) {
+                    setAgencies(nextAgencies);
+                }
+            })
+            .catch(() => {
+                if (isCurrent) {
+                    setAgencies([]);
+                }
+            });
+
+        return () => {
+            isCurrent = false;
+        };
+    }, []);
 
     return (
         <>
@@ -71,9 +93,9 @@ export default function About() {
                             <p className="mt-4 text-base leading-[26px] text-[#374151]">
                                 The platform improves research visibility,
                                 supports evidence-based decision-making, and
-                                helps stakeholders find public metadata,
-                                agency profiles, and access instructions from a
-                                single trusted portal.
+                                helps stakeholders find public metadata, agency
+                                profiles, and access instructions from a single
+                                trusted portal.
                             </p>
                         </div>
                         <article className="rounded-[14px] border border-[#f3f4f6] bg-white px-8 py-10 text-center shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_0px_rgba(0,0,0,0.1)]">

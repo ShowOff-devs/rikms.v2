@@ -119,7 +119,10 @@ export function SystemResearchPage() {
     );
 
     const filteredRecords = useMemo(() => {
-        const filteredByControls = filterSystemResearchRecords(records, filters);
+        const filteredByControls = filterSystemResearchRecords(
+            records,
+            filters,
+        );
 
         if (!topbarSearch.trim()) {
             return filteredByControls;

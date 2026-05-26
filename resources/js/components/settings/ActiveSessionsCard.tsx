@@ -46,7 +46,9 @@ export function ActiveSessionsCard({ sessions }: ActiveSessionsCardProps) {
                             {session.isCurrent ? (
                                 <CheckCircle2 className="size-3.5" />
                             ) : null}
-                            {session.isCurrent ? 'Current Session' : session.status}
+                            {session.isCurrent
+                                ? 'Current Session'
+                                : session.status}
                         </span>
                     </article>
                 ))}

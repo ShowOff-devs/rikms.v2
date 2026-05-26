@@ -30,7 +30,10 @@ export function RequestsByStatusChart({
     summary,
     isLoading,
 }: RequestsByStatusChartProps) {
-    const total = Math.max(summary.approved + summary.pending + summary.denied, 0);
+    const total = Math.max(
+        summary.approved + summary.pending + summary.denied,
+        0,
+    );
     let cursor = 0;
     const gradientStops = statusSegments
         .map((segment) => {

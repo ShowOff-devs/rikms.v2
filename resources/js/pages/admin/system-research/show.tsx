@@ -135,10 +135,14 @@ export default function SystemResearchDetailRoute({
                                         className="size-4"
                                         aria-hidden="true"
                                     />
-                                    {numberFormatter.format(record.downloads)} downloads
+                                    {numberFormatter.format(record.downloads)}{' '}
+                                    downloads
                                 </span>
                                 <span className="inline-flex items-center gap-1">
-                                    <Eye className="size-4" aria-hidden="true" />
+                                    <Eye
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
                                     {numberFormatter.format(record.views)} views
                                 </span>
                                 <span className="inline-flex items-center gap-1">

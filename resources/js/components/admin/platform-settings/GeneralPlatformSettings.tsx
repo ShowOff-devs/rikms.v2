@@ -17,11 +17,7 @@ type GeneralPlatformSettingsProps = {
 
 const languageOptions = ['English', 'Filipino', 'Cebuano'];
 
-const timezoneOptions = [
-    'Asia/Manila (UTC+8)',
-    'Asia/Shanghai (UTC+8)',
-    'UTC',
-];
+const timezoneOptions = ['Asia/Manila (UTC+8)', 'Asia/Shanghai (UTC+8)', 'UTC'];
 
 export function GeneralPlatformSettings({
     settings,
@@ -90,10 +86,7 @@ export function GeneralPlatformSettings({
                                 onClick={() => fileInputRef.current?.click()}
                                 className="inline-flex h-[42px] items-center justify-center gap-2 rounded-[14px] border border-[#e5e7eb] bg-white px-4 text-sm font-medium text-[#364153] transition hover:bg-[#f9fafb]"
                             >
-                                <Upload
-                                    className="size-4"
-                                    aria-hidden="true"
-                                />
+                                <Upload className="size-4" aria-hidden="true" />
                                 Upload Logo
                             </button>
                             <span className="text-xs leading-4 text-[#99a1af]">

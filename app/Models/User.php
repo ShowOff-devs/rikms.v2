@@ -29,6 +29,11 @@ class User extends Authenticatable
         'password',
         'role',
         'status',
+        'archived_at',
+        'archived_by',
+        'archive_reason',
+        'restored_at',
+        'restored_by',
     ];
 
     /**
@@ -54,6 +59,8 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
+            'archived_at' => 'datetime',
+            'restored_at' => 'datetime',
         ];
     }
 
@@ -87,18 +94,131 @@ class User extends Authenticatable
         return $this->hasMany(ResearchApproval::class, 'reviewed_by');
     }
 
+    public function roles()
+    {
+        return $this->belongsToMany(Role::class)
+            ->withPivot(['assigned_by', 'assigned_at'])
+            ->withTimestamps();
+    }
+
+    public function directPermissions()
+    {
+        return $this->belongsToMany(Permission::class, 'permission_user')
+            ->withPivot(['granted_by', 'granted_at', 'expires_at'])
+            ->withTimestamps();
+    }
+
+    public function researchFiles()
+    {
+        return $this->hasMany(ResearchFile::class, 'uploaded_by');
+    }
+
+    public function notifications()
+    {
+        return $this->hasMany(Notification::class);
+    }
+
+    public function auditLogs()
+    {
+        return $this->hasMany(AuditLog::class);
+    }
+
+    public function securityEvents()
+    {
+        return $this->hasMany(SecurityEvent::class);
+    }
+
+    public function archivedRecords()
+    {
+        return $this->hasMany(ArchiveRecord::class, 'archived_by');
+    }
+
+    public function restoredRecords()
+    {
+        return $this->hasMany(ArchiveRecord::class, 'restored_by');
+    }
+
     public function isSuperAdmin(): bool
     {
-        return $this->role === 'super_admin';
+        return $this->hasRole('super_admin');
     }
 
     public function isAgencyAdmin(): bool
     {
-        return $this->role === 'agency_admin';
+        return $this->hasRole('agency_admin');
     }
 
     public function isActive(): bool
     {
         return $this->status === 'active';
+    }
+
+    public function hasRole(string $role): bool
+    {
+        $normalizedRole = str($role)->lower()->replace(' ', '_')->toString();
+
+        if ($this->role === $normalizedRole) {
+            return true;
+        }
+
+        $roles = $this->relationLoaded('roles')
+            ? $this->roles
+            : $this->roles()->get(['roles.id', 'roles.slug', 'roles.name']);
+
+        return $roles->contains(function (Role $assignedRole) use ($normalizedRole): bool {
+            return $assignedRole->slug === $normalizedRole
+                || str($assignedRole->name)->lower()->replace(' ', '_')->toString() === $normalizedRole;
+        });
+    }
+
+    /**
+     * @param  array<int, string>  $roles
+     */
+    public function hasAnyRole(array $roles): bool
+    {
+        return collect($roles)->contains(fn (string $role): bool => $this->hasRole($role));
+    }
+
+    public function hasPermission(string $permission): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        $normalizedPermission = str($permission)->lower()->replace(' ', '_')->toString();
+
+        $directPermissions = $this->relationLoaded('directPermissions')
+            ? $this->directPermissions
+            : $this->directPermissions()->get(['permissions.id', 'permissions.slug', 'permissions.name']);
+
+        if ($directPermissions->contains(fn (Permission $directPermission): bool => $this->permissionMatches($directPermission, $normalizedPermission))) {
+            return true;
+        }
+
+        $roles = $this->relationLoaded('roles')
+            ? $this->roles
+            : $this->roles()->with('permissions:id,slug,name')->get(['roles.id', 'roles.slug', 'roles.name']);
+
+        return $roles->contains(function (Role $role) use ($normalizedPermission): bool {
+            $permissions = $role->relationLoaded('permissions')
+                ? $role->permissions
+                : $role->permissions()->get(['permissions.id', 'permissions.slug', 'permissions.name']);
+
+            return $permissions->contains(fn (Permission $permission): bool => $this->permissionMatches($permission, $normalizedPermission));
+        });
+    }
+
+    /**
+     * @param  array<int, string>  $permissions
+     */
+    public function hasAnyPermission(array $permissions): bool
+    {
+        return collect($permissions)->contains(fn (string $permission): bool => $this->hasPermission($permission));
+    }
+
+    private function permissionMatches(Permission $permission, string $normalizedPermission): bool
+    {
+        return $permission->slug === $normalizedPermission
+            || str($permission->name)->lower()->replace(' ', '_')->toString() === $normalizedPermission;
     }
 }

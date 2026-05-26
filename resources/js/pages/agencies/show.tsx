@@ -1,11 +1,6 @@
 import { Head, Link } from '@inertiajs/react';
-import {
-    ArrowLeft,
-    Building2,
-    ExternalLink,
-    Mail,
-    MapPin,
-} from 'lucide-react';
+import { ArrowLeft, Building2, ExternalLink, Mail, MapPin } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import PortalFooter from '@/components/layout/portal-footer';
 import PortalNavbar from '@/components/layout/portal-navbar';
 import ResearchCard from '@/components/research/ResearchCard';
@@ -14,6 +9,8 @@ import {
     findPublicAgency,
     getResearchForAgency,
 } from '@/lib/public/agency-service';
+import type { PublicAgency } from '@/types/public-agency';
+import type { ResearchRecord } from '@/types/research';
 
 type AgencyProfilePageProps = {
     agencySlug?: string;
@@ -31,12 +28,44 @@ export default function AgencyProfilePage({
     agencySlug,
 }: AgencyProfilePageProps) {
     const slug = agencySlug ?? getAgencySlugFromPath();
-    const agency = findPublicAgency(slug);
-    const research = agency ? getResearchForAgency(agency.name) : [];
+    const [agency, setAgency] = useState<PublicAgency | null>(null);
+    const [research, setResearch] = useState<ResearchRecord[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        let isCurrent = true;
+
+        Promise.all([findPublicAgency(slug), getResearchForAgency(slug)])
+            .then(([nextAgency, nextResearch]) => {
+                if (!isCurrent) {
+                    return;
+                }
+
+                setAgency(nextAgency);
+                setResearch(nextResearch);
+            })
+            .catch(() => {
+                if (isCurrent) {
+                    setAgency(null);
+                    setResearch([]);
+                }
+            })
+            .finally(() => {
+                if (isCurrent) {
+                    setIsLoading(false);
+                }
+            });
+
+        return () => {
+            isCurrent = false;
+        };
+    }, [slug]);
 
     return (
         <>
-            <Head title={agency ? `${agency.name} Profile` : 'Agency Profile'} />
+            <Head
+                title={agency ? `${agency.name} Profile` : 'Agency Profile'}
+            />
 
             <div className="min-h-screen bg-[#f3f4f6] text-[#0f172a]">
                 <PortalNavbar activeNav="agencies" />
@@ -50,7 +79,11 @@ export default function AgencyProfilePage({
                         Back to Agencies
                     </Link>
 
-                    {!agency ? (
+                    {isLoading ? (
+                        <div className="mt-6 h-[260px] animate-pulse rounded-[14px] border border-[#f3f4f6] bg-white shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_0px_rgba(0,0,0,0.1)]" />
+                    ) : null}
+
+                    {!isLoading && !agency ? (
                         <div className="mt-6">
                             <ResearchEmptyState
                                 title="Agency profile not found"
@@ -61,7 +94,9 @@ export default function AgencyProfilePage({
                                 }}
                             />
                         </div>
-                    ) : (
+                    ) : null}
+
+                    {!isLoading && agency ? (
                         <>
                             <section className="mt-6 rounded-[14px] border border-[#f3f4f6] bg-white px-6 py-6 shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_0px_rgba(0,0,0,0.1)]">
                                 <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
@@ -177,7 +212,7 @@ export default function AgencyProfilePage({
                                 </div>
                             </section>
                         </>
-                    )}
+                    ) : null}
                 </main>
 
                 <PortalFooter />

@@ -137,8 +137,7 @@ export function ExportArchiveReportModal({
         await onExport({
             format: form.format,
             dateRange: form.dateRange,
-            startDate:
-                form.dateRange === 'custom' ? form.startDate : undefined,
+            startDate: form.dateRange === 'custom' ? form.startDate : undefined,
             endDate: form.dateRange === 'custom' ? form.endDate : undefined,
             includeResearch: form.includeResearch,
             includeAgencies: form.includeAgencies,
@@ -324,9 +323,7 @@ export function ExportArchiveReportModal({
                                     className="flex items-center gap-2 text-sm text-[#4a5565]"
                                 >
                                     <Checkbox
-                                        checked={
-                                            form[option.key] as boolean
-                                        }
+                                        checked={form[option.key] as boolean}
                                         onCheckedChange={(checked) =>
                                             updateForm(
                                                 option.key,

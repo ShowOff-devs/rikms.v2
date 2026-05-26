@@ -39,7 +39,7 @@ export function MostAccessedResearchTable({
                 </div>
             ) : (
                 <div className="overflow-x-auto">
-                    <table className="min-w-[900px] w-full border-collapse">
+                    <table className="w-full min-w-[900px] border-collapse">
                         <thead className="bg-[#f9fafb]/80">
                             <tr className="h-10 text-left text-xs font-semibold text-[#6a7282]">
                                 <th className="w-[60px] px-6">#</th>

@@ -56,7 +56,7 @@ export function ModerationFilters({
                     onChange={(event) =>
                         updateFilter('search', event.target.value)
                     }
-                    className="h-10 w-full rounded-[10px] border border-[#e5e7eb] bg-white pr-3 pl-9 text-sm text-[#1e2939] outline-none transition placeholder:text-[#99a1af] focus:border-[#1e3a8a]/40 focus:ring-2 focus:ring-[#1e3a8a]/10"
+                    className="h-10 w-full rounded-[10px] border border-[#e5e7eb] bg-white pr-3 pl-9 text-sm text-[#1e2939] transition outline-none placeholder:text-[#99a1af] focus:border-[#1e3a8a]/40 focus:ring-2 focus:ring-[#1e3a8a]/10"
                     placeholder="Search research records..."
                 />
             </div>

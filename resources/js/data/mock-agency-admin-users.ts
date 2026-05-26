@@ -94,7 +94,8 @@ export const mockAgencyAdminUsers: AgencyAdminUser[] = [
         fullName: 'Eduardo Velasco',
         email: 'eduardo.velasco@dict11.gov.ph',
         agencyId: 'dict-xi',
-        agencyName: 'Department of Information and Communications Technology XI',
+        agencyName:
+            'Department of Information and Communications Technology XI',
         agencyShortName: 'DICT XI',
         role: 'Agency Admin',
         status: 'active',
@@ -208,4 +209,3 @@ export const mockAgencyAdminUsers: AgencyAdminUser[] = [
         createdAt: '2026-01-08T12:35:00+08:00',
     },
 ];
-

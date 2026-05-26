@@ -1,5 +1,8 @@
 import { Database } from 'lucide-react';
-import type { PlatformSettings, ResearchStatus } from '@/types/platform-settings';
+import type {
+    PlatformSettings,
+    ResearchStatus,
+} from '@/types/platform-settings';
 import {
     Field,
     SectionCard,

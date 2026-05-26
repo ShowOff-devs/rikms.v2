@@ -98,7 +98,9 @@ function IssueBadge({ issueType }: { issueType: ModerationIssueType }) {
             )}
         >
             <Icon className="size-3 shrink-0" aria-hidden="true" />
-            <span className="line-clamp-2">{moderationIssueTypeLabels[issueType]}</span>
+            <span className="line-clamp-2">
+                {moderationIssueTypeLabels[issueType]}
+            </span>
         </span>
     );
 }
@@ -113,8 +115,12 @@ function StatusBadge({ status }: { status: ModerationStatus }) {
                 styles.badge,
             )}
         >
-            <span className={cn('size-1.5 shrink-0 rounded-full', styles.dot)} />
-            <span className="line-clamp-2">{moderationStatusLabels[status]}</span>
+            <span
+                className={cn('size-1.5 shrink-0 rounded-full', styles.dot)}
+            />
+            <span className="line-clamp-2">
+                {moderationStatusLabels[status]}
+            </span>
         </span>
     );
 }

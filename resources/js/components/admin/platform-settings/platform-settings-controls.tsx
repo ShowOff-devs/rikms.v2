@@ -159,12 +159,7 @@ type UnitInputProps = {
     disabled?: boolean;
 };
 
-export function UnitInput({
-    value,
-    onChange,
-    unit,
-    disabled,
-}: UnitInputProps) {
+export function UnitInput({ value, onChange, unit, disabled }: UnitInputProps) {
     return (
         <div className="relative">
             <input

@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AdminLayout } from '@/components/admin/layout/AdminLayout';
-import {
-    accessRequestAgencyOptions,
-} from '@/data/mock-access-request-monitor';
+import { accessRequestAgencyOptions } from '@/data/mock-access-request-monitor';
 import {
     auditAccessDecision,
     buildAccessRequestMonitorSummary,
@@ -38,12 +36,15 @@ const initialFilters: AccessRequestMonitorFilters = {
 };
 
 function buildAgencyChartData(records: AccessRequestMonitorRecord[]) {
-    const counts = records.reduce<Record<string, number>>((accumulator, record) => {
-        accumulator[record.agencyShortName] =
-            (accumulator[record.agencyShortName] ?? 0) + 1;
+    const counts = records.reduce<Record<string, number>>(
+        (accumulator, record) => {
+            accumulator[record.agencyShortName] =
+                (accumulator[record.agencyShortName] ?? 0) + 1;
 
-        return accumulator;
-    }, {});
+            return accumulator;
+        },
+        {},
+    );
 
     const agencies = Array.from(
         new Set([...accessRequestAgencyOptions, ...Object.keys(counts)]),
@@ -127,12 +128,7 @@ export function AccessRequestMonitorPage() {
     );
 
     const filteredRecords = useMemo(
-        () =>
-            filterAccessRequestMonitorRecords(
-                records,
-                filters,
-                topbarSearch,
-            ),
+        () => filterAccessRequestMonitorRecords(records, filters, topbarSearch),
         [filters, records, topbarSearch],
     );
 

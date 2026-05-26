@@ -36,7 +36,8 @@ export default function AgencyForgotPasswordForm() {
         const nextErrors: ForgotPasswordErrors = {};
 
         if (!agencyId) {
-            nextErrors.agencyId = 'Please choose the agency account you need help with.';
+            nextErrors.agencyId =
+                'Please choose the agency account you need help with.';
         }
 
         if (!email.trim()) {
@@ -86,14 +87,17 @@ export default function AgencyForgotPasswordForm() {
                     Reset Agency Password
                 </h1>
                 <p className="mt-2 text-sm leading-5 text-[#6b7280]">
-                    Enter your agency account details and we&apos;ll send password
-                    reset instructions.
+                    Enter your agency account details and we&apos;ll send
+                    password reset instructions.
                 </p>
             </div>
 
             <form onSubmit={handleSubmit} className="mt-8 space-y-5">
                 {requestError && (
-                    <AlertError errors={[requestError]} title="Reset request failed" />
+                    <AlertError
+                        errors={[requestError]}
+                        title="Reset request failed"
+                    />
                 )}
 
                 {statusMessage && (
@@ -175,7 +179,10 @@ export default function AgencyForgotPasswordForm() {
             </form>
 
             <div className="mt-6 text-center text-sm text-[#6b7280]">
-                <Link href="/agency/login" className="font-medium text-[#1e3a8a] hover:underline">
+                <Link
+                    href="/agency/login"
+                    className="font-medium text-[#1e3a8a] hover:underline"
+                >
                     Back to Agency Login
                 </Link>
             </div>

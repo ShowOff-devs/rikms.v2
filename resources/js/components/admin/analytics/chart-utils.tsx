@@ -63,7 +63,8 @@ export function chartPoints(
     paddingY = 22,
 ) {
     const max = Math.max(...values, 1);
-    const step = values.length > 1 ? (width - paddingX * 2) / (values.length - 1) : 0;
+    const step =
+        values.length > 1 ? (width - paddingX * 2) / (values.length - 1) : 0;
 
     return values.map((value, index) => {
         const x = paddingX + step * index;
@@ -76,7 +77,10 @@ export function chartPoints(
 
 export function buildPath(points: Array<{ x: number; y: number }>) {
     return points
-        .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
+        .map(
+            (point, index) =>
+                `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`,
+        )
         .join(' ');
 }
 

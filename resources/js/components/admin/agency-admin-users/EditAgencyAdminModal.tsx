@@ -79,8 +79,7 @@ function EditAgencyAdminForm({
     isEmailTaken,
     onOpenChange,
     onSubmit,
-}: { user: AgencyAdminUser } &
-    Omit<EditAgencyAdminModalProps, 'user'>) {
+}: { user: AgencyAdminUser } & Omit<EditAgencyAdminModalProps, 'user'>) {
     const [fullName, setFullName] = useState(user.fullName);
     const [email, setEmail] = useState(user.email);
     const [agencyId, setAgencyId] = useState(user.agencyId);

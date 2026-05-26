@@ -1,7 +1,10 @@
 import { Clock3 } from 'lucide-react';
 import { archiveRecordTypeLabels } from '@/data/mock-admin-archive';
 import { cn } from '@/lib/utils';
-import type { ArchiveActivity, ArchiveActivityType } from '@/types/admin-archive';
+import type {
+    ArchiveActivity,
+    ArchiveActivityType,
+} from '@/types/admin-archive';
 
 type ArchiveActivityTimelineProps = {
     activities: ArchiveActivity[];

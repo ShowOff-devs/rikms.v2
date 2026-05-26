@@ -36,7 +36,9 @@ export function AccessRequestStatusChart({
 }) {
     const total = data.approved + data.pending + data.denied;
     const segments = statusItems.reduce<
-        Array<(typeof statusItems)[number] & { offset: number; percent: number }>
+        Array<
+            (typeof statusItems)[number] & { offset: number; percent: number }
+        >
     >((items, item) => {
         const previous = items[items.length - 1];
         const value = data[item.key];

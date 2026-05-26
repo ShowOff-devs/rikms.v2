@@ -18,8 +18,9 @@ export default function ContactPage() {
                         </h1>
                         <p className="mt-2 max-w-[720px] text-sm leading-6 text-[#6b7280]">
                             For public research questions, metadata corrections,
-                            or access request concerns, contact the RIKMS support
-                            desk or the agency listed on the research record.
+                            or access request concerns, contact the RIKMS
+                            support desk or the agency listed on the research
+                            record.
                         </p>
 
                         <div className="mt-8 grid gap-4 md:grid-cols-3">

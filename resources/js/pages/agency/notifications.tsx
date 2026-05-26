@@ -208,14 +208,16 @@ export default function AgencyNotificationsPage() {
                         </section>
 
                         <section className="mt-5 grid gap-3 sm:grid-cols-3">
-                            <MetricCard label="Total" value={notifications.length} />
+                            <MetricCard
+                                label="Total"
+                                value={notifications.length}
+                            />
                             <MetricCard label="Unread" value={unreadCount} />
                             <MetricCard
                                 label="Actionable"
                                 value={
-                                    notifications.filter(
-                                        (notification) =>
-                                            Boolean(notification.actionHref),
+                                    notifications.filter((notification) =>
+                                        Boolean(notification.actionHref),
                                     ).length
                                 }
                             />

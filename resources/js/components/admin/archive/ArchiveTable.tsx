@@ -32,10 +32,7 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
 });
 
-const statusClasses: Record<
-    ArchiveStatus,
-    { badge: string; dot: string }
-> = {
+const statusClasses: Record<ArchiveStatus, { badge: string; dot: string }> = {
     archived: {
         badge: 'border-[#e5e7eb] bg-[#f3f4f6] text-[#4a5565]',
         dot: 'bg-[#6a7282]',

@@ -1,4 +1,10 @@
-import { Archive, CheckCircle2, Flag, Loader2, SearchCheck } from 'lucide-react';
+import {
+    Archive,
+    CheckCircle2,
+    Flag,
+    Loader2,
+    SearchCheck,
+} from 'lucide-react';
 import { useState } from 'react';
 import {
     Dialog,
@@ -119,7 +125,11 @@ export function ReviewResearchRecordModal({
                                     Issue Type
                                 </dt>
                                 <dd className="mt-1 font-medium text-[#1e2939]">
-                                    {moderationIssueTypeLabels[record.issueType]}
+                                    {
+                                        moderationIssueTypeLabels[
+                                            record.issueType
+                                        ]
+                                    }
                                 </dd>
                             </div>
                             <div>
@@ -147,7 +157,7 @@ export function ReviewResearchRecordModal({
                                 setNote(event.target.value);
                                 setError(null);
                             }}
-                            className="mt-2 min-h-28 w-full resize-y rounded-[12px] border border-[#e5e7eb] bg-white px-3 py-2 text-sm leading-6 text-[#1e2939] outline-none transition placeholder:text-[#99a1af] focus:border-[#1e3a8a]/40 focus:ring-2 focus:ring-[#1e3a8a]/10"
+                            className="mt-2 min-h-28 w-full resize-y rounded-[12px] border border-[#e5e7eb] bg-white px-3 py-2 text-sm leading-6 text-[#1e2939] transition outline-none placeholder:text-[#99a1af] focus:border-[#1e3a8a]/40 focus:ring-2 focus:ring-[#1e3a8a]/10"
                             placeholder="Document the moderation decision, required follow-up, or compliance rationale."
                         />
                         {error ? (

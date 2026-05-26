@@ -49,7 +49,7 @@ export function NotificationItem({
                 'group grid min-h-[72px] grid-cols-[36px_minmax(0,1fr)_auto] items-center gap-3 border-b px-6 py-3 transition',
                 notification.isRead
                     ? 'border-[#f9fafb] bg-white'
-                    : 'border-[#1e3a8a] border-l-[3px] bg-[#eff6ff]/30 pl-[21px]',
+                    : 'border-l-[3px] border-[#1e3a8a] bg-[#eff6ff]/30 pl-[21px]',
             )}
         >
             <span
@@ -95,7 +95,7 @@ export function NotificationItem({
                         <button
                             type="button"
                             onClick={() => onMarkAsRead(notification.id)}
-                            className="hidden text-xs font-medium text-[#1e3a8a] transition hover:text-[#172554] group-hover:inline"
+                            className="hidden text-xs font-medium text-[#1e3a8a] transition group-hover:inline hover:text-[#172554]"
                         >
                             Mark as read
                         </button>

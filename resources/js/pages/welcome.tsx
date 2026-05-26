@@ -9,30 +9,61 @@ import {
     Search,
     Users,
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import PortalFooter from '@/components/layout/portal-footer';
 import PortalNavbar from '@/components/layout/portal-navbar';
-import { mockResearchRecords, sdgColors } from '@/data/mock-research';
 import { getPublicAgencies } from '@/lib/public/agency-service';
+import {
+    getPublicPortalSummary,
+    sdgColors,
+} from '@/lib/research/research-service';
+import type { PublicPortalSummary } from '@/lib/research/research-service';
+import type { PublicAgency } from '@/types/public-agency';
 
 const heroBackgroundImage =
     '/assets/figma/6ef85a09-2403-46c7-bba0-94f5422c5ac1.jpg';
 
-const sdgCards = Array.from({ length: 17 }, (_, index) => {
-    const label = `SDG ${index + 1}`;
-
-    return {
-        number: String(index + 1),
-        label,
-        color: sdgColors[label],
-        count: mockResearchRecords.filter((record) =>
-            record.sdgs.includes(label),
-        ).length,
-    };
-});
-
 export default function Welcome() {
-    const featuredResearch = mockResearchRecords.slice(0, 6);
-    const agencies = getPublicAgencies();
+    const [summary, setSummary] = useState<PublicPortalSummary>({
+        researchCount: 0,
+        agencyCount: 0,
+        latestPublicationCount: 0,
+        sdgCards: Array.from({ length: 17 }, (_, index) => {
+            const label = `SDG ${index + 1}`;
+
+            return {
+                number: String(index + 1),
+                label,
+                color: sdgColors[label],
+                count: 0,
+            };
+        }),
+        featuredResearch: [],
+    });
+    const [agencies, setAgencies] = useState<PublicAgency[]>([]);
+
+    useEffect(() => {
+        let isCurrent = true;
+
+        Promise.all([getPublicPortalSummary(), getPublicAgencies()])
+            .then(([nextSummary, nextAgencies]) => {
+                if (!isCurrent) {
+                    return;
+                }
+
+                setSummary(nextSummary);
+                setAgencies(nextAgencies);
+            })
+            .catch(() => {
+                if (isCurrent) {
+                    setAgencies([]);
+                }
+            });
+
+        return () => {
+            isCurrent = false;
+        };
+    }, []);
 
     return (
         <>
@@ -83,16 +114,16 @@ export default function Welcome() {
                     </div>
                 </section>
 
-                <section className="relative z-10 -mt-8 mx-auto w-full max-w-[1200px] px-4 sm:px-6">
+                <section className="relative z-10 mx-auto -mt-8 w-full max-w-[1200px] px-4 sm:px-6">
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                         {[
                             {
-                                value: mockResearchRecords.length,
+                                value: summary.researchCount,
                                 label: 'Public Research Records',
                                 icon: FileText,
                             },
                             {
-                                value: agencies.length,
+                                value: summary.agencyCount || agencies.length,
                                 label: 'Participating Agencies',
                                 icon: Users,
                             },
@@ -102,10 +133,7 @@ export default function Welcome() {
                                 icon: Database,
                             },
                             {
-                                value: mockResearchRecords.filter(
-                                    (record) =>
-                                        record.publicationYear >= 2025,
-                                ).length,
+                                value: summary.latestPublicationCount,
                                 label: 'Latest Publications',
                                 icon: Calendar,
                             },
@@ -146,7 +174,7 @@ export default function Welcome() {
                     </div>
 
                     <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-                        {sdgCards.map((card) => (
+                        {summary.sdgCards.map((card) => (
                             <Link
                                 key={card.number}
                                 href={`/browse-research?sdg=${encodeURIComponent(card.label)}`}
@@ -192,7 +220,7 @@ export default function Welcome() {
                         </div>
 
                         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-                            {featuredResearch.map((item) => (
+                            {summary.featuredResearch.map((item) => (
                                 <article
                                     key={item.id}
                                     className="flex min-h-[304px] flex-col rounded-[14px] border border-[#f3f4f6] bg-white p-6 shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_0px_rgba(0,0,0,0.1)]"

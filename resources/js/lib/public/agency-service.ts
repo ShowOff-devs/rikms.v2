@@ -1,5 +1,3 @@
-import { mockPublicAgencies } from '@/data/mock-public-agencies';
-import { mockResearchRecords } from '@/data/mock-research';
 import type { PublicAgency, PublicAgencyKind } from '@/types/public-agency';
 import type { ResearchRecord } from '@/types/research';
 
@@ -8,41 +6,76 @@ export type AgencyDirectoryQuery = {
     type: PublicAgencyKind | 'all';
 };
 
-export function getPublicAgencies(): PublicAgency[] {
-    return mockPublicAgencies;
-}
-
-export function findPublicAgency(slug: string): PublicAgency | null {
-    return (
-        mockPublicAgencies.find((agency) => agency.slug === slug) ?? null
-    );
-}
-
-export function searchPublicAgencies(query: AgencyDirectoryQuery) {
-    const normalizedSearch = query.search.trim().toLowerCase();
-
-    return mockPublicAgencies.filter((agency) => {
-        const matchesType = query.type === 'all' || agency.type === query.type;
-        const matchesSearch =
-            !normalizedSearch ||
-            [
-                agency.name,
-                agency.fullName,
-                agency.description,
-                agency.type,
-            ]
-                .join(' ')
-                .toLowerCase()
-                .includes(normalizedSearch);
-
-        return matchesType && matchesSearch;
+async function fetchJson<T>(url: string): Promise<T> {
+    const response = await fetch(url, {
+        headers: {
+            Accept: 'application/json',
+        },
     });
+
+    if (!response.ok) {
+        throw new Error('Unable to load agency records. Please try again.');
+    }
+
+    return response.json() as Promise<T>;
 }
 
-export function getPublicAgencyTypes() {
-    return Array.from(new Set(mockPublicAgencies.map((agency) => agency.type)));
+export async function getPublicAgencies(): Promise<PublicAgency[]> {
+    const response = await fetchJson<{ data: PublicAgency[] }>(
+        '/api/public/agencies',
+    );
+
+    return response.data;
 }
 
-export function getResearchForAgency(agencyName: string): ResearchRecord[] {
-    return mockResearchRecords.filter((record) => record.agency === agencyName);
+export async function findPublicAgency(
+    slug: string,
+): Promise<PublicAgency | null> {
+    try {
+        const response = await fetchJson<{ data: PublicAgency }>(
+            `/api/public/agencies/${encodeURIComponent(slug)}`,
+        );
+
+        return response.data;
+    } catch {
+        return null;
+    }
+}
+
+export async function searchPublicAgencies(
+    query: AgencyDirectoryQuery,
+): Promise<PublicAgency[]> {
+    const params = new URLSearchParams();
+
+    if (query.search.trim()) {
+        params.set('search', query.search.trim());
+    }
+
+    if (query.type !== 'all') {
+        params.set('type', query.type);
+    }
+
+    const response = await fetchJson<{ data: PublicAgency[] }>(
+        `/api/public/agencies?${params.toString()}`,
+    );
+
+    return response.data;
+}
+
+export async function getPublicAgencyTypes(): Promise<PublicAgencyKind[]> {
+    const response = await fetchJson<{ data: PublicAgencyKind[] }>(
+        '/api/public/agencies/types',
+    );
+
+    return response.data;
+}
+
+export async function getResearchForAgency(
+    agencySlug: string,
+): Promise<ResearchRecord[]> {
+    const response = await fetchJson<{ data: ResearchRecord[] }>(
+        `/api/public/agencies/${encodeURIComponent(agencySlug)}/research`,
+    );
+
+    return response.data;
 }

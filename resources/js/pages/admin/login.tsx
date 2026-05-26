@@ -6,7 +6,7 @@ import {
     KeyRound,
     LockKeyhole,
 } from 'lucide-react';
-import type { FormEvent} from 'react';
+import type { FormEvent } from 'react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';

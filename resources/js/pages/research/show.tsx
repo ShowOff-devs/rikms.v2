@@ -296,8 +296,7 @@ export default function ResearchDetailPage({
                         {requestSubmitted ? (
                             <div className="mt-6 rounded-[12px] bg-[#ecfdf5] p-4 text-sm leading-6 text-[#047857]">
                                 Your request was submitted for agency review.
-                                A confirmation has been prepared using the mock
-                                public access service.
+                                Your request is ready for agency review.
                             </div>
                         ) : (
                             <form
@@ -322,15 +321,12 @@ export default function ResearchDetailPage({
                                                     : 'text'
                                             }
                                             value={
-                                                form[
-                                                    field as keyof typeof form
-                                                ]
+                                                form[field as keyof typeof form]
                                             }
                                             onChange={(event) =>
                                                 setForm((current) => ({
                                                     ...current,
-                                                    [field]:
-                                                        event.target.value,
+                                                    [field]: event.target.value,
                                                 }))
                                             }
                                             className="mt-1 h-10 w-full rounded-[10px] border border-[#e5e7eb] px-3 text-sm outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10"

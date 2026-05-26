@@ -45,7 +45,8 @@ export function ResearchByAgencyChart({
                     >
                         {ticks.map((tick, index) => {
                             const y =
-                                chartTop + (chartHeight / (ticks.length - 1)) * index;
+                                chartTop +
+                                (chartHeight / (ticks.length - 1)) * index;
 
                             return (
                                 <g key={tick}>
@@ -71,7 +72,9 @@ export function ResearchByAgencyChart({
                         {data.map((item, index) => {
                             const x = 72 + step * index;
                             const barHeight =
-                                max === 0 ? 0 : (item.count / max) * chartHeight;
+                                max === 0
+                                    ? 0
+                                    : (item.count / max) * chartHeight;
                             const y = chartBottom - barHeight;
 
                             return (

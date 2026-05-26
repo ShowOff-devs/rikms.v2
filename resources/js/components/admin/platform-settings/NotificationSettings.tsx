@@ -1,9 +1,6 @@
 import { Bell, Mail, ShieldCheck } from 'lucide-react';
 import type { PlatformSettings } from '@/types/platform-settings';
-import {
-    SectionCard,
-    ToggleRow,
-} from './platform-settings-controls';
+import { SectionCard, ToggleRow } from './platform-settings-controls';
 
 type NotificationSettingsProps = {
     settings: PlatformSettings['notifications'];

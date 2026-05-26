@@ -83,10 +83,7 @@ export type GeneratedActivityExport = {
     status: 'ready';
 };
 
-export type ClearNotificationsScope =
-    | 'all'
-    | 'read'
-    | 'current-category';
+export type ClearNotificationsScope = 'all' | 'read' | 'current-category';
 
 export type ActivityLogFilters = {
     query?: string;

@@ -24,9 +24,7 @@ const navigationItems: Array<{
     { key: 'login', label: 'Login', href: '/agency/login' },
 ];
 
-export default function PortalNavbar({
-    activeNav,
-}: PortalNavbarProps) {
+export default function PortalNavbar({ activeNav }: PortalNavbarProps) {
     const [query, setQuery] = useState('');
     const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -72,7 +70,9 @@ export default function PortalNavbar({
                 <button
                     type="button"
                     className="ml-auto inline-flex size-10 items-center justify-center rounded-[10px] border border-[#e5e7eb] text-[#1e3a8a] md:hidden"
-                    aria-label={mobileOpen ? 'Close navigation' : 'Open navigation'}
+                    aria-label={
+                        mobileOpen ? 'Close navigation' : 'Open navigation'
+                    }
                     aria-expanded={mobileOpen}
                     onClick={() => setMobileOpen((open) => !open)}
                 >

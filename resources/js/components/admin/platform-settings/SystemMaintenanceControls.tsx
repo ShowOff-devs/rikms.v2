@@ -38,7 +38,8 @@ export function SystemMaintenanceControls({
                                 Maintenance Mode
                             </div>
                             <p className="text-xs leading-4 text-[#6a7282]">
-                                When enabled, only Super Admins can access the platform
+                                When enabled, only Super Admins can access the
+                                platform
                             </p>
                         </div>
                     </div>

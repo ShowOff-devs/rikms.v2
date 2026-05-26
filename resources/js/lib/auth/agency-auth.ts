@@ -36,7 +36,8 @@ export const agencyOptions: AgencyOption[] = [
     {
         id: 'dict-xi',
         shortName: 'DICT XI',
-        fullName: 'Department of Information and Communications Technology - Region XI',
+        fullName:
+            'Department of Information and Communications Technology - Region XI',
         adminEmailHint: 'admin@dictxi.gov.ph',
     },
     {
@@ -48,13 +49,15 @@ export const agencyOptions: AgencyOption[] = [
     {
         id: 'drieerdc',
         shortName: 'DRIEERDC',
-        fullName: 'Davao Region Industry Energy and Emerging Technology Research and Development Consortium',
+        fullName:
+            'Davao Region Industry Energy and Emerging Technology Research and Development Consortium',
         adminEmailHint: 'admin@drieerdc.org.ph',
     },
     {
         id: 'smaarrdec',
         shortName: 'SMAARRDEC',
-        fullName: 'Southern Mindanao Agriculture Aquatic and Natural Resources Research and Development Consortium',
+        fullName:
+            'Southern Mindanao Agriculture Aquatic and Natural Resources Research and Development Consortium',
         adminEmailHint: 'admin@smaarrdec.org.ph',
     },
     {

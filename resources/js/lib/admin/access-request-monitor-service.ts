@@ -218,7 +218,10 @@ export async function exportAccessRequestReport(
     return {
         fileName: `access-request-report-${new Date()
             .toISOString()
-            .slice(0, 10)}.${options.format === 'excel' ? 'xlsx' : options.format}`,
+            .slice(
+                0,
+                10,
+            )}.${options.format === 'excel' ? 'xlsx' : options.format}`,
         queuedAt: new Date().toISOString(),
         options,
     };

@@ -39,4 +39,3 @@ export type UpdateAgencyAdminUserPayload = {
     agencyId: string;
     status: AgencyAdminUserStatus;
 };
-

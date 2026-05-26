@@ -27,4 +27,9 @@ class ResearchApproval extends Model
     {
         return $this->belongsTo(User::class, 'reviewed_by');
     }
+
+    public function approver()
+    {
+        return $this->belongsTo(User::class, 'reviewed_by');
+    }
 }

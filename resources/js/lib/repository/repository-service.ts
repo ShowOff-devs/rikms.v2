@@ -7,6 +7,7 @@ import {
     repositorySdgColors,
     repositoryStatusLabels,
 } from '@/data/mock-repository';
+import { fetchApi } from '@/lib/api-client';
 import type {
     RepositoryAccessType,
     RepositoryAnalytics,
@@ -21,6 +22,25 @@ import type {
     RepositoryStatus,
     RepositoryUpdatePayload,
 } from '@/types/repository';
+
+type AgencyResearchApiRecord = {
+    id: number;
+    title: string;
+    abstract?: string | null;
+    authors: string[] | string;
+    agency?: { short_name?: string | null; name?: string | null };
+    publication_year?: number | null;
+    status: string;
+    access_level?: string | null;
+    sdgs?: string[];
+    category?: string | null;
+    keywords?: string[];
+    downloads: number;
+    embargo_until?: string | null;
+    external_url?: string | null;
+    created_at?: string | null;
+    updated_at?: string | null;
+};
 
 const repositoryStorageKey = 'rikms.repository.items.v1';
 
@@ -111,11 +131,17 @@ export function getRepositoryItemsSnapshot() {
 }
 
 export async function getRepositoryItems(): Promise<RepositoryItem[]> {
-    await mockNetworkDelay();
+    try {
+        const records = await getApiRepositoryItems();
 
-    return getRepositoryItemsSnapshot().filter(
-        (item) => item.status !== 'archived',
-    );
+        return records.filter((item) => item.status !== 'archived');
+    } catch {
+        await mockNetworkDelay();
+
+        return getRepositoryItemsSnapshot().filter(
+            (item) => item.status !== 'archived',
+        );
+    }
 }
 
 export async function getArchivedRepositoryItems(): Promise<RepositoryItem[]> {
@@ -329,42 +355,76 @@ export function getRepositoryAnalytics(
 export async function searchRepository(
     query: RepositoryQuery,
 ): Promise<RepositorySearchResult> {
-    await mockNetworkDelay();
+    try {
+        const records = await getRepositoryItems();
+        const filteredItems = sortRepositoryItems(
+            filterRepositoryItems(records, query),
+            query,
+        );
+        const totalPages = Math.max(
+            1,
+            Math.ceil(filteredItems.length / query.perPage),
+        );
+        const page = Math.min(Math.max(query.page, 1), totalPages);
+        const start = (page - 1) * query.perPage;
 
-    const records = (await getRepositoryItems()).filter(
-        (item) => item.status !== 'archived',
-    );
-    const filteredItems = sortRepositoryItems(
-        filterRepositoryItems(records, query),
-        query,
-    );
-    const totalPages = Math.max(
-        1,
-        Math.ceil(filteredItems.length / query.perPage),
-    );
-    const page = Math.min(Math.max(query.page, 1), totalPages);
-    const start = (page - 1) * query.perPage;
+        return {
+            items: filteredItems.slice(start, start + query.perPage),
+            filteredItems,
+            total: filteredItems.length,
+            page,
+            perPage: query.perPage,
+            totalPages,
+            facets: getRepositoryFacets(records),
+            analytics: getRepositoryAnalytics(filteredItems),
+        };
+    } catch {
+        await mockNetworkDelay();
 
-    return {
-        items: filteredItems.slice(start, start + query.perPage),
-        filteredItems,
-        total: filteredItems.length,
-        page,
-        perPage: query.perPage,
-        totalPages,
-        facets: getRepositoryFacets(records),
-        analytics: getRepositoryAnalytics(filteredItems),
-    };
+        const records = getRepositoryItemsSnapshot().filter(
+            (item) => item.status !== 'archived',
+        );
+        const filteredItems = sortRepositoryItems(
+            filterRepositoryItems(records, query),
+            query,
+        );
+        const totalPages = Math.max(
+            1,
+            Math.ceil(filteredItems.length / query.perPage),
+        );
+        const page = Math.min(Math.max(query.page, 1), totalPages);
+        const start = (page - 1) * query.perPage;
+
+        return {
+            items: filteredItems.slice(start, start + query.perPage),
+            filteredItems,
+            total: filteredItems.length,
+            page,
+            perPage: query.perPage,
+            totalPages,
+            facets: getRepositoryFacets(records),
+            analytics: getRepositoryAnalytics(filteredItems),
+        };
+    }
 }
 
 export async function getRepositoryItemById(
     id: string,
 ): Promise<RepositoryItem | null> {
-    await mockNetworkDelay(160);
+    try {
+        const { data } = await fetchApi<AgencyResearchApiRecord>(
+            `/api/agency/research/${id}`,
+        );
 
-    return (
-        getRepositoryItemsSnapshot().find((record) => record.id === id) ?? null
-    );
+        return mapRepositoryItemFromApi(data);
+    } catch {
+        await mockNetworkDelay(160);
+
+        return (
+            getRepositoryItemsSnapshot().find((record) => record.id === id) ??
+            null
+        );
+    }
 }
 
 export async function updateRepositoryItem(
@@ -467,4 +527,83 @@ export async function replaceRepositoryFile(
             uploadedAt: new Date().toISOString(),
         },
     });
+}
+
+async function getApiRepositoryItems() {
+    const { data } = await fetchApi<AgencyResearchApiRecord[]>(
+        '/api/agency/research?per_page=100',
+    );
+
+    return data.map(mapRepositoryItemFromApi);
+}
+
+function mapRepositoryItemFromApi(record: AgencyResearchApiRecord): RepositoryItem {
+    const authors = Array.isArray(record.authors)
+        ? record.authors
+        : record.authors
+              .split(',')
+              .map((author) => author.trim())
+              .filter(Boolean);
+
+    return {
+        id: String(record.id),
+        title: record.title,
+        abstract: record.abstract ?? '',
+        authors: authors.map((name) => ({ name, email: '' })),
+        agency: record.agency?.short_name ?? record.agency?.name ?? '',
+        documentType: 'research-study',
+        year: record.publication_year ?? new Date().getFullYear(),
+        status: mapRepositoryStatus(record.status),
+        accessType: mapRepositoryAccessType(record.access_level),
+        sdgs: record.sdgs ?? [],
+        category: record.category ?? 'Uncategorized',
+        keywords: record.keywords ?? [],
+        metadataCompletion: 85,
+        digitalLibraryScore: Math.min(100, 70 + Math.min(record.downloads, 30)),
+        isAiTagged: false,
+        publisher: record.agency?.name ?? '',
+        externalLink: record.external_url ?? undefined,
+        embargoUntil: record.embargo_until ?? undefined,
+        file: {
+            name: `${record.title}.pdf`,
+            size: 'Pending metadata',
+            uploadedAt: record.created_at ?? new Date().toISOString(),
+            type: 'PDF',
+            pages: 0,
+        },
+        versions: [
+            {
+                id: `${record.id}-current`,
+                label: 'Current relational record',
+                actor: 'RIKMS',
+                timestamp: record.updated_at ?? new Date().toISOString(),
+            },
+        ],
+        createdAt: record.created_at ?? new Date().toISOString(),
+        updatedAt: record.updated_at ?? new Date().toISOString(),
+    };
+}
+
+function mapRepositoryStatus(status: string): RepositoryStatus {
+    if (status === 'draft' || status === 'published' || status === 'archived') {
+        return status;
+    }
+
+    if (status === 'submitted' || status === 'under_review') {
+        return 'pending';
+    }
+
+    return 'restricted';
+}
+
+function mapRepositoryAccessType(accessLevel?: string | null): RepositoryAccessType {
+    if (accessLevel === 'public' || accessLevel === 'restricted' || accessLevel === 'embargo') {
+        return accessLevel;
+    }
+
+    if (accessLevel === 'external') {
+        return 'external-link';
+    }
+
+    return 'request-access';
 }

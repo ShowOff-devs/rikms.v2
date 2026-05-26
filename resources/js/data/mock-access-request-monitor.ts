@@ -143,7 +143,8 @@ export const mockAccessRequestMonitorRecords: AccessRequestMonitorRecord[] = [
         requesterName: 'Rafael Domingo',
         requesterEmail: 'rafael.domingo@pldt.com.ph',
         organization: 'PLDT Enterprise',
-        researchTitle: 'Higher Education Quality Assurance Metrics in Region XI',
+        researchTitle:
+            'Higher Education Quality Assurance Metrics in Region XI',
         researchId: 'RS-2026-004',
         agencyId: 'ched-xi',
         agencyShortName: 'CHED XI',
@@ -368,12 +369,14 @@ export const mockAccessRequestMonitorRecords: AccessRequestMonitorRecord[] = [
         id: 'ar-1010',
         requesterName: 'Noel Lim',
         requesterEmail: 'noel.lim@dict.gov.ph',
-        organization: 'Department of Information and Communications Technology XI',
+        organization:
+            'Department of Information and Communications Technology XI',
         researchTitle: 'Open Data Infrastructure for Regional Research Systems',
         researchId: 'RS-2026-010',
         agencyId: 'dict-xi',
         agencyShortName: 'DICT XI',
-        agencyName: 'Department of Information and Communications Technology XI',
+        agencyName:
+            'Department of Information and Communications Technology XI',
         requestDate: '2026-03-04T08:05:00+08:00',
         status: 'pending',
         requestMessage:
@@ -395,7 +398,8 @@ export const mockAccessRequestMonitorRecords: AccessRequestMonitorRecord[] = [
         requesterName: 'Helena Cruz',
         requesterEmail: 'helena.cruz@drieerdc.ph',
         organization: 'DRIEERDC',
-        researchTitle: 'Disaster Resilience Planning for Coastal Municipalities',
+        researchTitle:
+            'Disaster Resilience Planning for Coastal Municipalities',
         researchId: 'RS-2026-011',
         agencyId: 'drieerdc',
         agencyShortName: 'DRIEERDC',
@@ -434,7 +438,8 @@ export const mockAccessRequestMonitorRecords: AccessRequestMonitorRecord[] = [
         requesterName: 'Patrick Uy',
         requesterEmail: 'patrick.uy@usep.edu.ph',
         organization: 'University of Southeastern Philippines',
-        researchTitle: 'Research Data Governance Practices in State Universities',
+        researchTitle:
+            'Research Data Governance Practices in State Universities',
         researchId: 'RS-2026-012',
         agencyId: 'usep',
         agencyShortName: 'USEP',
@@ -471,7 +476,8 @@ export const mockAccessRequestMonitorRecords: AccessRequestMonitorRecord[] = [
         requesterName: 'Mariel Santos',
         requesterEmail: 'mariel.santos@neda.gov.ph',
         organization: 'National Economic and Development Authority',
-        researchTitle: 'Regional Innovation Investment Patterns in Davao Region',
+        researchTitle:
+            'Regional Innovation Investment Patterns in Davao Region',
         researchId: 'RS-2026-013',
         agencyId: 'neda-xi',
         agencyShortName: 'NEDA XI',
@@ -480,8 +486,7 @@ export const mockAccessRequestMonitorRecords: AccessRequestMonitorRecord[] = [
         status: 'denied',
         reviewedBy: 'Agency Admin - NEDA XI',
         reviewedAt: '2026-03-06T15:08:00+08:00',
-        requestMessage:
-            'For inclusion in an unpublished consultancy report.',
+        requestMessage: 'For inclusion in an unpublished consultancy report.',
         requestedAccessType: 'Full PDF download',
         researchAccessPolicy: 'Restricted until publication clearance',
         decisionReason:
@@ -551,7 +556,8 @@ export const mockAccessRequestMonitorRecords: AccessRequestMonitorRecord[] = [
         researchId: 'RS-2026-015',
         agencyId: 'dict-xi',
         agencyShortName: 'DICT XI',
-        agencyName: 'Department of Information and Communications Technology XI',
+        agencyName:
+            'Department of Information and Communications Technology XI',
         requestDate: '2026-03-07T14:05:00+08:00',
         status: 'pending',
         requestMessage:

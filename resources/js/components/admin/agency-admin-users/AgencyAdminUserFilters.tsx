@@ -46,7 +46,7 @@ export function AgencyAdminUserFilters({
                 <input
                     value={searchQuery}
                     onChange={(event) => onSearchChange(event.target.value)}
-                    className="h-9 w-full rounded-[8px] border border-[#e5e7eb] bg-white pr-3 pl-9 text-sm text-[#111827] outline-none transition placeholder:text-[#99a1af] focus:border-[#1e3a8a]/40 focus:ring-2 focus:ring-[#1e3a8a]/10"
+                    className="h-9 w-full rounded-[8px] border border-[#e5e7eb] bg-white pr-3 pl-9 text-sm text-[#111827] transition outline-none placeholder:text-[#99a1af] focus:border-[#1e3a8a]/40 focus:ring-2 focus:ring-[#1e3a8a]/10"
                     placeholder="Search users by name or email..."
                 />
             </div>
@@ -98,4 +98,3 @@ export function AgencyAdminUserFilters({
         </div>
     );
 }
-

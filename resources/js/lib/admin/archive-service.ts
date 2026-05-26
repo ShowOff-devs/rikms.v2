@@ -98,9 +98,7 @@ export async function getArchivedUserRecords(): Promise<ArchivedUserRecord[]> {
     return mockArchivedUserRecords.map(cloneUserRecord);
 }
 
-export async function getArchiveActivityTimeline(): Promise<
-    ArchiveActivity[]
-> {
+export async function getArchiveActivityTimeline(): Promise<ArchiveActivity[]> {
     await mockNetworkDelay();
 
     return mockArchiveActivityTimeline.map(cloneActivity);

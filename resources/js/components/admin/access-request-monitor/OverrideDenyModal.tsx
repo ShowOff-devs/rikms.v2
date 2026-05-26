@@ -149,14 +149,12 @@ export function OverrideDenyModal({
                             setReason(event.target.value);
                             setError(null);
                         }}
-                        className="mt-2 min-h-28 w-full resize-y rounded-[12px] border border-[#fecaca] bg-white px-3 py-2 text-sm leading-6 text-[#1e2939] outline-none transition placeholder:text-[#99a1af] focus:border-[#c10007]/50 focus:ring-2 focus:ring-[#c10007]/10"
+                        className="mt-2 min-h-28 w-full resize-y rounded-[12px] border border-[#fecaca] bg-white px-3 py-2 text-sm leading-6 text-[#1e2939] transition outline-none placeholder:text-[#99a1af] focus:border-[#c10007]/50 focus:ring-2 focus:ring-[#c10007]/10"
                         placeholder="Document the policy, compliance, or security reason for this override."
                         disabled={isSaving}
                     />
                     {error ? (
-                        <p className="mt-2 text-xs text-[#dc2626]">
-                            {error}
-                        </p>
+                        <p className="mt-2 text-xs text-[#dc2626]">{error}</p>
                     ) : null}
                 </div>
 

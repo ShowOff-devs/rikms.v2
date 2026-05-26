@@ -8,7 +8,10 @@ type AccountSettingsPanelProps = {
     profilePhotoPreviewUrl?: string;
     errors: Record<string, string>;
     onAccountChange: (field: keyof AccountSettings, value: string) => void;
-    onPasswordChange: (field: keyof PasswordChangePayload, value: string) => void;
+    onPasswordChange: (
+        field: keyof PasswordChangePayload,
+        value: string,
+    ) => void;
     onPhotoSelected: (file: File) => void;
 };
 
