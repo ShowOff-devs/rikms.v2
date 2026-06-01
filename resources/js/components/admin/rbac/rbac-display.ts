@@ -1,4 +1,3 @@
-import { permissionModuleLabels } from '@/data/mock-rbac';
 import type {
     Permission,
     PermissionModule,
@@ -13,16 +12,38 @@ export const roleChangeTypeLabels: Record<RoleChangeType, string> = {
 };
 
 export const permissionModuleOrder: PermissionModule[] = [
+    'dashboard',
     'research',
-    'upload-research',
-    'agency',
+    'uploads',
+    'agencies',
     'users',
     'access-requests',
+    'approvals',
     'analytics',
+    'reports',
+    'notifications',
     'security',
     'archive',
+    'audit-logs',
     'platform-settings',
 ];
+
+export const permissionModuleLabels: Record<PermissionModule, string> = {
+    dashboard: 'Dashboard',
+    research: 'Research Repository',
+    uploads: 'Uploads',
+    agencies: 'Agency Management',
+    users: 'User Management',
+    'access-requests': 'Access Requests',
+    approvals: 'Approvals',
+    analytics: 'Analytics',
+    reports: 'Reports',
+    notifications: 'Notifications',
+    security: 'Security Center',
+    archive: 'Archive',
+    'audit-logs': 'Audit Logs',
+    'platform-settings': 'Platform Settings',
+};
 
 export function formatRbacDate(value: string) {
     return new Intl.DateTimeFormat('en', {

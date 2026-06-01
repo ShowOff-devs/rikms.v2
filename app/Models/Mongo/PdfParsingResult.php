@@ -12,7 +12,9 @@ class PdfParsingResult extends Model
 
     protected $fillable = [
         'research_id',
+        'file_id',
         'agency_id',
+        'uploaded_by_user_id',
         'file_name',
         'file_path',
         'file_mime_type',
@@ -30,7 +32,9 @@ class PdfParsingResult extends Model
 
     protected $casts = [
         'research_id' => 'integer',
+        'file_id' => 'integer',
         'agency_id' => 'integer',
+        'uploaded_by_user_id' => 'integer',
         'file_size' => 'integer',
         'page_count' => 'integer',
         'sections' => 'array',

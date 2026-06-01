@@ -150,6 +150,34 @@ export async function updateAgencyNotificationReadState(
     notificationId: string,
     isRead: boolean,
 ) {
+    if (isRead) {
+        try {
+            await fetchApi<{
+                notification: NotificationApiRecord;
+                unread_count: number;
+            }>(`/api/agency/notifications/${notificationId}/read`, {
+                method: 'POST',
+            });
+
+            return getAgencyNotifications();
+        } catch {
+            // TODO Phase 6: Replace this mock fallback after notification mark-read browser flow is verified with real Sanctum authentication.
+        }
+    } else {
+        // TODO Phase 6: Replace this mock fallback after a mark-unread API/flow is verified with real Sanctum authentication.
+        try {
+            const currentNotifications = await getAgencyNotifications();
+
+            return currentNotifications.map((notification) =>
+                notification.id === notificationId
+                    ? { ...notification, isRead: false }
+                    : notification,
+            );
+        } catch {
+            // Continue to the retained local fallback below.
+        }
+    }
+
     await mockNetworkDelay(80);
 
     const nextNotifications = (
@@ -166,6 +194,19 @@ export async function updateAgencyNotificationReadState(
 }
 
 export async function markAllAgencyNotificationsRead() {
+    try {
+        await fetchApi<{ updated_count: number; unread_count: number }>(
+            '/api/agency/notifications/read-all',
+            {
+                method: 'POST',
+            },
+        );
+
+        return getAgencyNotifications();
+    } catch {
+        // TODO Phase 6: Replace this mock fallback after notification read-all browser flow is verified with real Sanctum authentication.
+    }
+
     await mockNetworkDelay(120);
 
     const nextNotifications = (

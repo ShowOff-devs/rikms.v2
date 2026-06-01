@@ -110,6 +110,10 @@ class AgencyReadController extends Controller
             return ApiResponse::error('This research record is outside your agency scope.', [], 403);
         }
 
+        if ($research->archived_at !== null) {
+            return ApiResponse::error('This research record is archived.', [], 404);
+        }
+
         return ApiResponse::success(
             'Agency research detail retrieved.',
             (new ResearchResource($research->load(['agency', 'uploader', 'files'])))->resolve($request),

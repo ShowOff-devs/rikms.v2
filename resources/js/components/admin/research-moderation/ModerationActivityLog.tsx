@@ -78,7 +78,7 @@ export function ModerationActivityLog({
                     </div>
                 </div>
                 <a
-                    href="/admin/system-activity"
+                    href="/admin/audit-logs"
                     className="hidden text-xs font-semibold text-[#1e3a8a] hover:underline sm:inline"
                 >
                     View All

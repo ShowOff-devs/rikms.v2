@@ -72,7 +72,7 @@ export function AgencyActions({
                 <DropdownMenuItem
                     onSelect={() =>
                         router.visit(
-                            `/admin/system-research?agency=${agency.id}`,
+                            `/admin/research?agency=${agency.id}`,
                         )
                     }
                 >

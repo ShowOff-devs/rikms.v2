@@ -12,7 +12,11 @@ import { useEffect, useMemo, useState } from 'react';
 import PortalFooter from '@/components/layout/portal-footer';
 import PortalNavbar from '@/components/layout/portal-navbar';
 import ResearchEmptyState from '@/components/research/ResearchEmptyState';
-import { getResearchRecord } from '@/lib/research/research-service';
+import { ApiError } from '@/lib/api-client';
+import {
+    getResearchRecord,
+    submitPublicAccessRequest,
+} from '@/lib/research/research-service';
 import type { ResearchRecord } from '@/types/research';
 
 type ResearchDetailPageProps = {
@@ -50,11 +54,14 @@ export default function ResearchDetailPage({
     );
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [requestSubmitted, setRequestSubmitted] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
     const [form, setForm] = useState({
         name: '',
         email: '',
-        organization: '',
-        reason: '',
+        affiliation: '',
+        purpose: '',
+        message: '',
     });
 
     useEffect(() => {
@@ -78,14 +85,35 @@ export default function ResearchDetailPage({
         research?.accessLevel === 'restricted' ||
         research?.accessLevel === 'embargo';
 
-    const handleRequestSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    const handleRequestSubmit = async (
+        event: React.FormEvent<HTMLFormElement>,
+    ) => {
         event.preventDefault();
         setIsSubmitting(true);
+        setSubmitError(null);
+        setFieldErrors({});
 
-        window.setTimeout(() => {
-            setIsSubmitting(false);
+        try {
+            await submitPublicAccessRequest(researchId, {
+                requester_name: form.name,
+                requester_email: form.email,
+                requester_affiliation: form.affiliation || undefined,
+                requester_purpose: form.purpose,
+                message: form.message || undefined,
+            });
             setRequestSubmitted(true);
-        }, 500);
+        } catch (error) {
+            if (error instanceof ApiError) {
+                setSubmitError(error.message);
+                setFieldErrors(flattenErrors(error.errors));
+            } else {
+                setSubmitError(
+                    'Unable to submit your request. Please try again.',
+                );
+            }
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -296,17 +324,21 @@ export default function ResearchDetailPage({
                         {requestSubmitted ? (
                             <div className="mt-6 rounded-[12px] bg-[#ecfdf5] p-4 text-sm leading-6 text-[#047857]">
                                 Your request was submitted for agency review.
-                                Your request is ready for agency review.
                             </div>
                         ) : (
                             <form
                                 className="mt-6 space-y-4"
                                 onSubmit={handleRequestSubmit}
                             >
+                                {submitError ? (
+                                    <div className="rounded-[12px] border border-[#fecaca] bg-[#fef2f2] p-3 text-sm leading-5 text-[#991b1b]">
+                                        {submitError}
+                                    </div>
+                                ) : null}
                                 {[
                                     ['name', 'Requester name'],
                                     ['email', 'Email address'],
-                                    ['organization', 'Organization'],
+                                    ['affiliation', 'Affiliation'],
                                 ].map(([field, label]) => (
                                     <label
                                         key={field}
@@ -314,7 +346,10 @@ export default function ResearchDetailPage({
                                     >
                                         {label}
                                         <input
-                                            required
+                                            required={field !== 'affiliation'}
+                                            aria-required={
+                                                field !== 'affiliation'
+                                            }
                                             type={
                                                 field === 'email'
                                                     ? 'email'
@@ -331,22 +366,51 @@ export default function ResearchDetailPage({
                                             }
                                             className="mt-1 h-10 w-full rounded-[10px] border border-[#e5e7eb] px-3 text-sm outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10"
                                         />
+                                        {fieldErrors[field] ? (
+                                            <span className="mt-1 block text-xs leading-4 text-[#b91c1c]">
+                                                {fieldErrors[field]}
+                                            </span>
+                                        ) : null}
                                     </label>
                                 ))}
                                 <label className="block text-sm font-medium text-[#374151]">
-                                    Reason or message
+                                    Purpose
                                     <textarea
                                         required
                                         rows={4}
-                                        value={form.reason}
+                                        value={form.purpose}
                                         onChange={(event) =>
                                             setForm((current) => ({
                                                 ...current,
-                                                reason: event.target.value,
+                                                purpose: event.target.value,
                                             }))
                                         }
                                         className="mt-1 w-full rounded-[10px] border border-[#e5e7eb] px-3 py-2 text-sm outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10"
                                     />
+                                    {fieldErrors.purpose ? (
+                                        <span className="mt-1 block text-xs leading-4 text-[#b91c1c]">
+                                            {fieldErrors.purpose}
+                                        </span>
+                                    ) : null}
+                                </label>
+                                <label className="block text-sm font-medium text-[#374151]">
+                                    Message
+                                    <textarea
+                                        rows={3}
+                                        value={form.message}
+                                        onChange={(event) =>
+                                            setForm((current) => ({
+                                                ...current,
+                                                message: event.target.value,
+                                            }))
+                                        }
+                                        className="mt-1 w-full rounded-[10px] border border-[#e5e7eb] px-3 py-2 text-sm outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10"
+                                    />
+                                    {fieldErrors.message ? (
+                                        <span className="mt-1 block text-xs leading-4 text-[#b91c1c]">
+                                            {fieldErrors.message}
+                                        </span>
+                                    ) : null}
                                 </label>
                                 <div className="flex flex-wrap justify-end gap-3 pt-2">
                                     <button
@@ -372,5 +436,24 @@ export default function ResearchDetailPage({
                 </div>
             ) : null}
         </>
+    );
+}
+
+function flattenErrors(errors: ApiError['errors']) {
+    const fieldMap: Record<string, string> = {
+        requester_name: 'name',
+        requester_email: 'email',
+        requester_affiliation: 'affiliation',
+        requester_purpose: 'purpose',
+    };
+
+    return Object.entries(errors).reduce<Record<string, string>>(
+        (current, [key, value]) => {
+            const field = fieldMap[key] ?? key;
+            current[field] = Array.isArray(value) ? value[0] : value;
+
+            return current;
+        },
+        {},
     );
 }

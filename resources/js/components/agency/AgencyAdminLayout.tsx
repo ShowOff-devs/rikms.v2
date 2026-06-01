@@ -35,7 +35,7 @@ const navItems = [
     {
         label: 'Research Repository',
         icon: FileText,
-        href: '/agency/research-repository',
+        href: '/agency/research',
     },
     { label: 'Upload Research', icon: Upload, href: '/agency/upload' },
     {
@@ -93,7 +93,7 @@ export default function AgencyAdminLayout({
 
     const handleSignOut = () => {
         clearAgencySession();
-        router.visit('/agency/login');
+        router.post('/logout', {}, { onFinish: () => router.visit('/agency/login') });
     };
 
     const openNotifications = () => {

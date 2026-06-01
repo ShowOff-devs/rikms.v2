@@ -157,7 +157,7 @@ class PublicResearchController extends Controller
                 && ($query['years'] === [] || in_array($year, $query['years'], true))
                 && $year >= $query['yearFrom']
                 && $year <= $query['yearTo']
-                && ($query['accessLevels'] === [] || in_array($record->access_level, $query['accessLevels'], true))
+                && ($query['accessLevels'] === [] || in_array($this->publicAccessLevel((string) $record->access_level), $query['accessLevels'], true))
                 && ($query['statuses'] === [] || in_array($record->status, $query['statuses'], true));
         });
     }
@@ -200,7 +200,7 @@ class PublicResearchController extends Controller
                         'category' => $record->category === $value,
                         'sdg' => in_array($value, $record->sdgs ?? [], true),
                         'year' => (string) $record->publication_year === $value,
-                        'access' => $record->access_level === $value,
+                        'access' => $this->publicAccessLevel((string) $record->access_level) === $value,
                         'status' => $record->status === $value,
                         default => false,
                     };
@@ -208,5 +208,14 @@ class PublicResearchController extends Controller
                 'color' => self::SDG_COLORS[$value] ?? null,
             ];
         })->values();
+    }
+
+    private function publicAccessLevel(string $accessLevel): string
+    {
+        return match ($accessLevel) {
+            'request_required', 'private' => 'restricted',
+            'embargoed' => 'embargo',
+            default => $accessLevel,
+        };
     }
 }

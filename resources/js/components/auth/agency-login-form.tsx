@@ -90,14 +90,14 @@ export default function AgencyLoginForm() {
         setSubmissionError(null);
 
         try {
-            await signInToAgencyPortal({
+            const session = await signInToAgencyPortal({
                 agencyId: form.agencyId,
                 email: form.email,
                 password: form.password,
                 remember: form.remember,
             });
 
-            router.visit('/agency/dashboard');
+            router.visit(session.redirect ?? '/agency/dashboard');
         } catch (error) {
             setSubmissionError(
                 error instanceof Error

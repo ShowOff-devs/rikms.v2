@@ -15,8 +15,12 @@ class AccessRequest extends Model
         'agency_id',
         'requester_name',
         'requester_email',
+        'requester_affiliation',
         'purpose',
+        'message',
+        'intended_use',
         'status',
+        'requested_at',
         'reviewed_by',
         'reviewed_at',
         'review_notes',
@@ -28,6 +32,7 @@ class AccessRequest extends Model
     ];
 
     protected $casts = [
+        'requested_at' => 'datetime',
         'reviewed_at' => 'datetime',
         'archived_at' => 'datetime',
         'restored_at' => 'datetime',

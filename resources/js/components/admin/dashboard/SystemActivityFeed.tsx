@@ -64,7 +64,7 @@ export function SystemActivityFeed({
                     </h2>
                 </div>
                 <Link
-                    href="/admin/system-activity"
+                    href="/admin/audit-logs"
                     className="inline-flex items-center gap-1 text-xs font-medium text-[#1e3a8a] hover:underline"
                 >
                     View All

@@ -1,4 +1,5 @@
 import { mockAgencySettings } from '@/data/mock-settings';
+// TODO Phase 8/9: Replace this mock fallback after the real protected API and browser QA are complete.
 import type {
     AccountSettings,
     AgencySettings,

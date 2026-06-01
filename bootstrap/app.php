@@ -20,6 +20,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->statefulApi();
+
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
         $middleware->alias([
@@ -38,6 +40,14 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(function (AuthenticationException $exception, $request) {
             if ($request->is('api/*')) {
                 return ApiResponse::error('Authentication is required.', [], 401);
+            }
+
+            if ($request->is('admin') || $request->is('admin/*')) {
+                return redirect()->guest(route('admin.login'));
+            }
+
+            if ($request->is('agency') || $request->is('agency/*')) {
+                return redirect()->guest(route('agency.login'));
             }
         });
     })->create();

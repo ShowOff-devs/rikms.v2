@@ -1,4 +1,5 @@
 import { mockAgencyProfile } from '@/data/mock-agency-profile';
+// TODO Phase 8/9: Replace this mock fallback after the real protected API and browser QA are complete.
 import type {
     AgencyLogoUploadResult,
     AgencyProfile,

@@ -96,7 +96,7 @@ export default function AgencyDashboardPage() {
         }
 
         if (action === 'manage') {
-            router.visit('/agency/research-repository');
+            router.visit('/agency/research');
 
             return;
         }
@@ -114,7 +114,7 @@ export default function AgencyDashboardPage() {
     ) => {
         if (action === 'edit' && record.repositoryId) {
             router.visit(
-                `/agency/research-repository/${record.repositoryId}/edit`,
+                `/agency/research/${record.repositoryId}`,
             );
 
             return;
@@ -122,14 +122,14 @@ export default function AgencyDashboardPage() {
 
         if (action === 'archive') {
             router.visit(
-                `/agency/research-repository?search=${encodeURIComponent(record.title)}`,
+                `/agency/research?search=${encodeURIComponent(record.title)}`,
             );
 
             return;
         }
 
         router.visit(
-            `/agency/research-repository?search=${encodeURIComponent(record.title)}`,
+            `/agency/research?search=${encodeURIComponent(record.title)}`,
         );
     };
 
@@ -193,7 +193,7 @@ export default function AgencyDashboardPage() {
                             records={filteredResearchRecords}
                             onAction={handleResearchAction}
                             onViewAll={() =>
-                                router.visit('/agency/research-repository')
+                                router.visit('/agency/research')
                             }
                         />
                     </section>

@@ -46,7 +46,7 @@ export function AgencyResearchSummary({ summary }: AgencyResearchSummaryProps) {
 
             <button
                 type="button"
-                onClick={() => router.visit('/agency/research-repository')}
+                onClick={() => router.visit('/agency/research')}
                 className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-[10px] bg-[rgba(30,58,138,0.1)] text-sm leading-5 font-medium text-[#1e3a8a] hover:bg-[rgba(30,58,138,0.16)]"
             >
                 <FileText className="size-4" />

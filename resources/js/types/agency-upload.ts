@@ -28,6 +28,8 @@ export type AccessType =
     | 'external-link';
 
 export type UploadFileMock = {
+    id?: string;
+    researchId?: string;
     name: string;
     size: number;
     type: string;
@@ -63,4 +65,5 @@ export type AgencyUploadState = {
     submissionStatus: ResearchSubmissionStatus;
     validationResults: string[];
     submissionTimestamp: string | null;
+    researchId?: string | null;
 };

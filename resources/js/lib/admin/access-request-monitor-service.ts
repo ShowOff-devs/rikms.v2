@@ -1,4 +1,4 @@
-import { mockAccessRequestMonitorRecords } from '@/data/mock-access-request-monitor';
+import { fetchApi } from '@/lib/api-client';
 import type {
     AccessReportExportOptions,
     AccessRequestAuditPayload,
@@ -9,56 +9,111 @@ import type {
     AccessRequestOverridePayload,
 } from '@/types/access-request-monitor';
 
-const mockDelay = 250;
+type ApiAccessRequest = {
+    id: number;
+    research_id: number;
+    agency_id?: number;
+    requester_name?: string;
+    requester_email?: string;
+    requester_affiliation?: string;
+    purpose?: string;
+    message?: string;
+    intended_use?: string;
+    status: 'approved' | 'pending' | 'denied';
+    requested_at?: string;
+    review_notes?: string;
+    reviewed_at?: string;
+    research?: {
+        id: number;
+        title: string;
+        access_level?: string;
+        agency?: {
+            id: number;
+            name: string;
+            short_name?: string;
+        };
+    };
+    reviewer?: {
+        name?: string;
+        email?: string;
+    };
+    created_at?: string;
+};
 
-function wait(duration = mockDelay) {
-    return new Promise((resolve) => window.setTimeout(resolve, duration));
+type AccessMonitoringMeta = {
+    summary?: AccessRequestMonitorSummary;
+};
+
+function toRecord(request: ApiAccessRequest): AccessRequestMonitorRecord {
+    const agency = request.research?.agency;
+
+    return {
+        id: String(request.id),
+        requesterName: request.requester_name ?? 'Public requester',
+        requesterEmail: request.requester_email ?? '',
+        organization: request.requester_affiliation ?? 'Not provided',
+        researchTitle: request.research?.title ?? `Research #${request.research_id}`,
+        researchId: String(request.research_id),
+        agencyId: String(agency?.id ?? request.agency_id ?? ''),
+        agencyShortName: agency?.short_name ?? agency?.name ?? 'Unassigned',
+        agencyName: agency?.name ?? 'Unassigned agency',
+        requestDate: request.requested_at ?? request.created_at ?? '',
+        status: request.status,
+        reviewedBy: request.reviewer?.name ?? request.reviewer?.email,
+        reviewedAt: request.reviewed_at,
+        requestMessage: request.message ?? request.purpose,
+        requestedAccessType: request.intended_use,
+        researchAccessPolicy: request.research?.access_level,
+        decisionReason: request.review_notes,
+        reviewerNotes: request.review_notes,
+        auditStatus: request.reviewed_at ? 'reviewed' : 'unreviewed',
+        auditTrail: [],
+    };
 }
 
-function cloneRecords() {
-    return mockAccessRequestMonitorRecords.map((record) => ({
-        ...record,
-        auditTrail: record.auditTrail?.map((entry) => ({ ...entry })),
-    }));
-}
+function dateRangeParams(dateRange: AccessRequestMonitorFilters['dateRange']) {
+    const now = new Date();
+    const params = new URLSearchParams();
 
-function normalize(value: string | number | undefined) {
-    return String(value ?? '').toLowerCase();
-}
-
-function isWithinDateRange(
-    requestDate: string,
-    dateRange: AccessRequestMonitorFilters['dateRange'],
-) {
     if (dateRange === 'all') {
-        return true;
+        return params;
     }
 
-    const date = new Date(requestDate);
-    const now = new Date('2026-05-20T00:00:00+08:00');
+    const start = new Date(now);
 
     if (dateRange === 'last-7-days') {
-        const start = new Date(now);
         start.setDate(now.getDate() - 7);
-
-        return date >= start;
-    }
-
-    if (dateRange === 'last-30-days') {
-        const start = new Date(now);
+    } else if (dateRange === 'last-30-days') {
         start.setDate(now.getDate() - 30);
-
-        return date >= start;
+    } else if (dateRange === 'this-month') {
+        start.setDate(1);
+    } else {
+        start.setMonth(0, 1);
     }
 
-    if (dateRange === 'this-month') {
-        return (
-            date.getFullYear() === now.getFullYear() &&
-            date.getMonth() === now.getMonth()
-        );
+    params.set('date_from', start.toISOString().slice(0, 10));
+
+    return params;
+}
+
+function filterParams(filters?: Partial<AccessRequestMonitorFilters>) {
+    const params = dateRangeParams(filters?.dateRange ?? 'all');
+
+    if (filters?.search) {
+        params.set('search', filters.search);
     }
 
-    return date.getFullYear() === now.getFullYear();
+    if (filters?.status && filters.status !== 'all') {
+        params.set('status', filters.status);
+    }
+
+    if (filters?.agency && filters.agency !== 'all') {
+        params.set('search', [params.get('search'), filters.agency].filter(Boolean).join(' '));
+    }
+
+    params.set('per_page', '100');
+
+    return params;
 }
 
 export function filterAccessRequestMonitorRecords(
@@ -66,41 +121,30 @@ export function filterAccessRequestMonitorRecords(
     filters: AccessRequestMonitorFilters,
     topbarSearch = '',
 ) {
-    const queries = [filters.search, topbarSearch]
-        .map((value) => value.trim().toLowerCase())
-        .filter(Boolean);
+    const query = [filters.search, topbarSearch].join(' ').trim().toLowerCase();
 
     return records.filter((record) => {
-        const searchableText = [
-            record.requesterName,
-            record.requesterEmail,
-            record.organization,
-            record.researchTitle,
-            record.agencyShortName,
-            record.agencyName,
-        ]
-            .map(normalize)
-            .join(' ');
-
-        const searchMatches = queries.every((query) =>
-            searchableText.includes(query),
-        );
-        const agencyMatches =
-            filters.agency === 'all' ||
-            record.agencyShortName === filters.agency;
-        const statusMatches =
+        const matchesSearch =
+            !query ||
+            [
+                record.requesterName,
+                record.requesterEmail,
+                record.organization,
+                record.researchTitle,
+                record.agencyShortName,
+                record.agencyName,
+            ]
+                .join(' ')
+                .toLowerCase()
+                .includes(query);
+        const matchesAgency =
+            filters.agency === 'all' || record.agencyShortName === filters.agency;
+        const matchesStatus =
             filters.status === 'all' || record.status === filters.status;
-        const organizationMatches =
-            filters.organization === 'all' ||
-            record.organization === filters.organization;
+        const matchesOrganization =
+            filters.organization === 'all' || record.organization === filters.organization;
 
-        return (
-            searchMatches &&
-            agencyMatches &&
-            statusMatches &&
-            organizationMatches &&
-            isWithinDateRange(record.requestDate, filters.dateRange)
-        );
+        return matchesSearch && matchesAgency && matchesStatus && matchesOrganization;
     });
 }
 
@@ -110,8 +154,7 @@ export function buildAccessRequestMonitorSummary(
     return {
         total: records.length,
         pending: records.filter((record) => record.status === 'pending').length,
-        approved: records.filter((record) => record.status === 'approved')
-            .length,
+        approved: records.filter((record) => record.status === 'approved').length,
         denied: records.filter((record) => record.status === 'denied').length,
     };
 }
@@ -119,109 +162,75 @@ export function buildAccessRequestMonitorSummary(
 export async function getAccessRequestMonitorRecords(
     filters?: Partial<AccessRequestMonitorFilters>,
 ) {
-    await wait();
+    const params = filterParams(filters);
+    const response = await fetchApi<ApiAccessRequest[]>(
+        `/api/admin/access-monitoring?${params.toString()}`,
+    );
 
-    const records = cloneRecords();
-
-    if (!filters) {
-        return records;
-    }
-
-    return filterAccessRequestMonitorRecords(records, {
-        search: filters.search ?? '',
-        agency: filters.agency ?? 'all',
-        status: filters.status ?? 'all',
-        dateRange: filters.dateRange ?? 'all',
-        organization: filters.organization ?? 'all',
-    });
+    return response.data.map(toRecord);
 }
 
 export async function getAccessRequestMonitorSummary(
     filters?: Partial<AccessRequestMonitorFilters>,
 ) {
-    const records = await getAccessRequestMonitorRecords(filters);
+    const params = filterParams(filters);
+    const response = await fetchApi<ApiAccessRequest[], AccessMonitoringMeta>(
+        `/api/admin/access-monitoring?${params.toString()}`,
+    );
 
-    return buildAccessRequestMonitorSummary(records);
+    return response.meta.summary ?? buildAccessRequestMonitorSummary(response.data.map(toRecord));
 }
 
 export async function getAccessRequestById(id: string) {
-    await wait(150);
+    const response = await fetchApi<ApiAccessRequest>(`/api/admin/access-requests/${id}`);
 
-    return cloneRecords().find((record) => record.id === id) ?? null;
+    return toRecord(response.data);
 }
 
 export async function auditAccessDecision(
     id: string,
     payload?: AccessRequestAuditPayload,
 ) {
-    await wait();
+    const response = await fetchApi<ApiAccessRequest>(
+        `/api/admin/access-requests/${id}/audit-reviewed`,
+        {
+            method: 'POST',
+            body: JSON.stringify({ notes: payload?.notes }),
+        },
+    );
 
-    const record = cloneRecords().find((item) => item.id === id);
-
-    if (!record) {
-        throw new Error('Access request not found.');
-    }
-
-    return {
-        ...record,
-        auditStatus: 'reviewed' as const,
-        auditTrail: [
-            {
-                id: `trail-${id}-audit-${Date.now()}`,
-                action: 'Decision audit reviewed',
-                actor: payload?.actor ?? 'Super Admin',
-                timestamp: new Date().toISOString(),
-                notes: payload?.notes,
-            },
-            ...(record.auditTrail ?? []),
-        ],
-    };
+    return { ...toRecord(response.data), auditStatus: 'reviewed' as const };
 }
 
 export async function overrideAccessRequestDecision(
     id: string,
     payload: AccessRequestOverridePayload,
 ) {
-    await wait(450);
+    const response = await fetchApi<ApiAccessRequest>(
+        `/api/admin/access-requests/${id}/override-deny`,
+        {
+            method: 'POST',
+            body: JSON.stringify({ reason: payload.reason }),
+        },
+    );
 
-    const record = cloneRecords().find((item) => item.id === id);
-
-    if (!record) {
-        throw new Error('Access request not found.');
-    }
-
-    return {
-        ...record,
-        status: 'denied' as const,
-        decisionReason: payload.reason,
-        reviewedBy: payload.actor ?? 'Super Admin',
-        reviewedAt: new Date().toISOString(),
-        auditStatus: 'reviewed' as const,
-        auditTrail: [
-            {
-                id: `trail-${id}-override-${Date.now()}`,
-                action: 'Decision overridden by Super Admin',
-                actor: payload.actor ?? 'Super Admin',
-                timestamp: new Date().toISOString(),
-                notes: payload.reason,
-            },
-            ...(record.auditTrail ?? []),
-        ],
-    };
+    return toRecord(response.data);
 }
 
 export async function exportAccessRequestReport(
     options: AccessReportExportOptions,
 ): Promise<AccessRequestExportResult> {
-    await wait(650);
+    const response = await fetch('/api/admin/access-monitoring/export', {
+        credentials: 'same-origin',
+        headers: { Accept: 'text/csv', 'X-Requested-With': 'XMLHttpRequest' },
+    });
+
+    if (!response.ok) {
+        throw new Error('Unable to export access request report.');
+    }
 
     return {
-        fileName: `access-request-report-${new Date()
-            .toISOString()
-            .slice(
-                0,
-                10,
-            )}.${options.format === 'excel' ? 'xlsx' : options.format}`,
+        fileName: `access-monitoring-${new Date().toISOString().slice(0, 10)}.csv`,
         queuedAt: new Date().toISOString(),
         options,
     };

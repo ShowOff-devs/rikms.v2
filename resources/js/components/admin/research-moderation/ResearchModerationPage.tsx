@@ -278,11 +278,13 @@ export function ResearchModerationPage() {
         setIsActionLoading(true);
 
         try {
-            await markResearchIssueResolved(record.id, { note });
+            const updatedRecord = await markResearchIssueResolved(record.id, {
+                note,
+            });
             setRecords((current) =>
                 current.map((item) =>
                     item.id === record.id
-                        ? { ...item, status: 'resolved' }
+                        ? { ...item, ...updatedRecord, status: 'resolved' }
                         : item,
                 ),
             );
@@ -297,6 +299,12 @@ export function ResearchModerationPage() {
             setFeedback(`${record.title} was marked as resolved.`);
             setSelectedReviewRecord(null);
             closeConfirmation();
+        } catch (caught) {
+            setFeedback(
+                caught instanceof Error
+                    ? caught.message
+                    : 'Unable to complete moderation action.',
+            );
         } finally {
             setIsActionLoading(false);
         }
@@ -310,20 +318,22 @@ export function ResearchModerationPage() {
         setIsActionLoading(true);
 
         try {
-            await flagResearchForReview(record.id, { note });
+            const updatedRecord = await flagResearchForReview(record.id, {
+                note,
+            });
             setRecords((current) => {
                 const exists = current.some((item) => item.id === record.id);
 
                 if (!exists) {
                     return [
-                        { ...record, status: 'pending-review' },
+                        { ...record, ...updatedRecord },
                         ...current,
                     ];
                 }
 
                 return current.map((item) =>
                     item.id === record.id
-                        ? { ...item, status: 'pending-review' }
+                        ? { ...item, ...updatedRecord }
                         : item,
                 );
             });
@@ -346,6 +356,12 @@ export function ResearchModerationPage() {
             setFeedback(`${record.title} was flagged for review.`);
             setSelectedReviewRecord(null);
             closeConfirmation();
+        } catch (caught) {
+            setFeedback(
+                caught instanceof Error
+                    ? caught.message
+                    : 'Unable to complete moderation action.',
+            );
         } finally {
             setIsActionLoading(false);
         }
@@ -369,6 +385,12 @@ export function ResearchModerationPage() {
             setFeedback(`${record.title} was archived.`);
             setSelectedReviewRecord(null);
             closeConfirmation();
+        } catch (caught) {
+            setFeedback(
+                caught instanceof Error
+                    ? caught.message
+                    : 'Unable to archive research.',
+            );
         } finally {
             setIsActionLoading(false);
         }

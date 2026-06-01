@@ -153,32 +153,47 @@ export function AccessRequestsPage() {
 
         setIsSavingDecision(true);
 
-        const updatedRequest =
-            decisionState.decision === 'approved'
-                ? await approveAccessRequest(decisionState.request.id)
-                : await denyAccessRequest(
-                      decisionState.request.id,
-                      denialReason.trim(),
-                  );
+        try {
+            const updatedRequest =
+                decisionState.decision === 'approved'
+                    ? await approveAccessRequest(decisionState.request.id)
+                    : await denyAccessRequest(
+                          decisionState.request.id,
+                          denialReason.trim(),
+                      );
 
-        if (updatedRequest) {
-            setRequests((current) =>
-                current.map((request) =>
-                    request.id === updatedRequest.id ? updatedRequest : request,
-                ),
-            );
-            setSelectedRequest((current) =>
-                current?.id === updatedRequest.id ? updatedRequest : current,
-            );
+            if (updatedRequest) {
+                setRequests((current) =>
+                    current.map((request) =>
+                        request.id === updatedRequest.id
+                            ? updatedRequest
+                            : request,
+                    ),
+                );
+                setSelectedRequest((current) =>
+                    current?.id === updatedRequest.id
+                        ? updatedRequest
+                        : current,
+                );
+                setFeedback(
+                    `${updatedRequest.requesterName}'s request was ${
+                        updatedRequest.status === 'approved'
+                            ? 'approved'
+                            : 'denied'
+                    }.`,
+                );
+            }
+
+            setDecisionState(null);
+            setDenialReason('');
+        } catch (error) {
             setFeedback(
-                `${updatedRequest.requesterName}'s request was ${
-                    updatedRequest.status === 'approved' ? 'approved' : 'denied'
-                }.`,
+                error instanceof Error
+                    ? error.message
+                    : 'Unable to save access request decision.',
             );
         }
 
-        setDecisionState(null);
-        setDenialReason('');
         setIsSavingDecision(false);
     };
 

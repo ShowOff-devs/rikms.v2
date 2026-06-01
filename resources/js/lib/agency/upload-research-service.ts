@@ -135,6 +135,7 @@ export const createInitialUploadState = (): AgencyUploadState => ({
     submissionStatus: 'draft',
     validationResults: [],
     submissionTimestamp: null,
+    researchId: null,
 });
 
 export function getDisplayTitle(state: AgencyUploadState) {

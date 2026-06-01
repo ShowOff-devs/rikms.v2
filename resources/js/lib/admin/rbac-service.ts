@@ -1,9 +1,4 @@
-import {
-    mockPermissions,
-    mockRoleChangeHistory,
-    mockRoles,
-    mockUserRoleAssignments,
-} from '@/data/mock-rbac';
+import { fetchApi } from '@/lib/api-client';
 import type {
     CreateRolePayload,
     Permission,
@@ -13,154 +8,89 @@ import type {
     UserRoleAssignment,
 } from '@/types/rbac';
 
-const mockNetworkDelay = (duration = 160) =>
-    new Promise<void>((resolve) => {
-        window.setTimeout(resolve, duration);
-    });
+let roleChangeHistory: RoleChangeHistory[] = [];
+let cachedPermissions: Permission[] = [];
+let cachedAssignments: UserRoleAssignment[] = [];
 
-let roles: Role[] = mockRoles.map(cloneRole);
-let roleChangeHistory: RoleChangeHistory[] = mockRoleChangeHistory.map(
-    (change) => ({
-        ...change,
-        before: change.before ? [...change.before] : undefined,
-        after: change.after ? [...change.after] : undefined,
-    }),
-);
-let userRoleAssignments = mockUserRoleAssignments.map((assignment) => ({
-    ...assignment,
-}));
-
-function cloneRole(role: Role): Role {
+function toPermission(permission: Permission): Permission {
     return {
-        ...role,
-        permissionIds: [...role.permissionIds],
-        assignedUsers: role.assignedUsers?.map((user) => ({ ...user })),
+        ...permission,
+        module: permission.module,
     };
 }
 
-function clonePermission(permission: Permission): Permission {
-    return { ...permission };
-}
-
-function cloneHistory(change: RoleChangeHistory): RoleChangeHistory {
-    return {
-        ...change,
-        before: change.before ? [...change.before] : undefined,
-        after: change.after ? [...change.after] : undefined,
-    };
-}
-
-function normalizeSlug(value: string) {
-    return value
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '');
-}
-
-function getPermissionKeys(permissionIds: string[]) {
-    return permissionIds
-        .map((id) => mockPermissions.find((permission) => permission.id === id))
-        .filter((permission): permission is Permission => Boolean(permission))
-        .map((permission) => permission.key);
+function permissionPayload(permissionIds: string[]) {
+    return permissionIds.map((id) => Number(id)).filter(Number.isFinite);
 }
 
 export async function getRoles(): Promise<Role[]> {
-    await mockNetworkDelay();
+    const response = await fetchApi<Role[]>('/api/admin/rbac/roles');
 
-    return roles.map(cloneRole);
+    return response.data;
 }
 
 export async function getRoleById(id: string): Promise<Role | null> {
-    await mockNetworkDelay();
+    const roles = await getRoles();
 
-    const role = roles.find((item) => item.id === id);
-
-    return role ? cloneRole(role) : null;
+    return roles.find((role) => role.id === id) ?? null;
 }
 
 export async function createRole(payload: CreateRolePayload): Promise<Role> {
-    await mockNetworkDelay(260);
+    const response = await fetchApi<Role>('/api/admin/rbac/roles', {
+        method: 'POST',
+        body: JSON.stringify({
+            name: payload.name,
+            description: payload.description,
+            permission_ids: permissionPayload(payload.permissionIds),
+        }),
+    });
 
-    const now = new Date().toISOString();
-    const idBase = normalizeSlug(payload.name);
-    const id = roles.some((role) => role.id === idBase)
-        ? `${idBase}-${Date.now()}`
-        : idBase;
-
-    const createdRole: Role = {
-        id,
-        name: payload.name.trim(),
-        description: payload.description.trim(),
-        isSystemRole: false,
-        userCount: 0,
-        permissionIds: [...payload.permissionIds],
-        createdAt: now,
-        updatedAt: now,
-        assignedUsers: [],
-    };
-
-    roles = [createdRole, ...roles];
-
-    return cloneRole(createdRole);
+    return response.data;
 }
 
 export async function updateRole(
     id: string,
     payload: UpdateRolePayload,
 ): Promise<Role> {
-    await mockNetworkDelay(260);
+    await fetchApi<Role>(`/api/admin/rbac/roles/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+            name: payload.name,
+            description: payload.description,
+        }),
+    });
 
-    const existingRole = roles.find((role) => role.id === id);
+    const permissionResponse = await fetchApi<Role>(
+        `/api/admin/rbac/roles/${id}/permissions`,
+        {
+            method: 'PATCH',
+            body: JSON.stringify({
+                permission_ids: permissionPayload(payload.permissionIds),
+            }),
+        },
+    );
 
-    if (!existingRole) {
-        throw new Error('Role could not be updated.');
-    }
-
-    const updatedRole: Role = {
-        ...existingRole,
-        name: existingRole.isSystemRole
-            ? existingRole.name
-            : payload.name.trim(),
-        description: payload.description.trim(),
-        permissionIds: [...payload.permissionIds],
-        updatedAt: new Date().toISOString(),
-    };
-
-    roles = roles.map((role) => (role.id === id ? updatedRole : role));
-
-    return cloneRole(updatedRole);
+    return permissionResponse.data;
 }
 
 export async function deleteRole(id: string): Promise<void> {
-    await mockNetworkDelay(240);
+    void id;
 
-    const role = roles.find((item) => item.id === id);
-
-    if (!role) {
-        throw new Error('Role could not be deleted.');
-    }
-
-    if (role.isSystemRole) {
-        throw new Error('Protected system roles cannot be deleted.');
-    }
-
-    roles = roles.filter((item) => item.id !== id);
-    userRoleAssignments = userRoleAssignments.filter(
-        (assignment) => assignment.roleId !== id,
+    throw new Error(
+        'Role deletion is deferred until a protected archive/delete endpoint is implemented.',
     );
 }
 
 export async function getPermissions(): Promise<Permission[]> {
-    await mockNetworkDelay();
+    const response = await fetchApi<Permission[]>('/api/admin/rbac/permissions');
 
-    return mockPermissions.map(clonePermission);
+    cachedPermissions = response.data.map(toPermission);
+
+    return cachedPermissions;
 }
 
 export async function getRoleChangeHistory(): Promise<RoleChangeHistory[]> {
-    await mockNetworkDelay();
-
-    return roleChangeHistory.map(cloneHistory);
+    return roleChangeHistory.map((change) => ({ ...change }));
 }
 
 export async function addRoleChangeHistory(
@@ -169,8 +99,6 @@ export async function addRoleChangeHistory(
         date?: string;
     },
 ): Promise<RoleChangeHistory> {
-    await mockNetworkDelay(80);
-
     const createdChange: RoleChangeHistory = {
         ...payload,
         id: payload.id ?? `change-${Date.now()}`,
@@ -181,37 +109,51 @@ export async function addRoleChangeHistory(
 
     roleChangeHistory = [createdChange, ...roleChangeHistory];
 
-    return cloneHistory(createdChange);
+    return { ...createdChange };
 }
 
 export async function getUserRoleAssignments(): Promise<UserRoleAssignment[]> {
-    await mockNetworkDelay();
+    const response = await fetchApi<UserRoleAssignment[]>('/api/admin/rbac/users');
 
-    return userRoleAssignments.map((assignment) => ({ ...assignment }));
+    cachedAssignments = response.data;
+
+    return cachedAssignments;
 }
 
 export async function updateUserRole(
     userId: string,
     roleId: string,
 ): Promise<UserRoleAssignment> {
-    await mockNetworkDelay(220);
+    const existingAssignment = cachedAssignments.find((assignment) => assignment.id === userId);
 
-    const assignment = userRoleAssignments.find((item) => item.id === userId);
-    const role = roles.find((item) => item.id === roleId);
-
-    if (!assignment || !role) {
-        throw new Error('User role assignment could not be updated.');
+    if (existingAssignment?.roleId && existingAssignment.roleId !== roleId) {
+        await fetchApi<UserRoleAssignment>(
+            `/api/admin/rbac/users/${userId}/roles/${existingAssignment.roleId}`,
+            {
+                method: 'DELETE',
+                body: JSON.stringify({ confirm_self_removal: false }),
+            },
+        );
     }
 
-    const updatedAssignment = { ...assignment, roleId };
-
-    userRoleAssignments = userRoleAssignments.map((item) =>
-        item.id === userId ? updatedAssignment : item,
+    const response = await fetchApi<UserRoleAssignment>(
+        `/api/admin/rbac/users/${userId}/roles`,
+        {
+            method: 'POST',
+            body: JSON.stringify({ role_id: Number(roleId) }),
+        },
     );
 
-    return { ...updatedAssignment };
+    cachedAssignments = cachedAssignments.map((assignment) =>
+        assignment.id === userId ? response.data : assignment,
+    );
+
+    return response.data;
 }
 
 export function getPermissionKeyDiff(permissionIds: string[]) {
-    return getPermissionKeys(permissionIds);
+    return permissionIds
+        .map((id) => cachedPermissions.find((permission) => permission.id === id))
+        .filter((permission): permission is Permission => Boolean(permission))
+        .map((permission) => permission.key);
 }

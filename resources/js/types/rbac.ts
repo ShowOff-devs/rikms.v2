@@ -1,12 +1,17 @@
 export type PermissionModule =
+    | 'dashboard'
     | 'research'
-    | 'upload-research'
-    | 'agency'
+    | 'uploads'
+    | 'agencies'
     | 'users'
     | 'access-requests'
+    | 'approvals'
     | 'analytics'
+    | 'reports'
+    | 'notifications'
     | 'security'
     | 'archive'
+    | 'audit-logs'
     | 'platform-settings';
 
 export type Permission = {

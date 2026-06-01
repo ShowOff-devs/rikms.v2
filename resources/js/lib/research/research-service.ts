@@ -1,3 +1,4 @@
+import { fetchApi } from '@/lib/api-client';
 import type {
     ResearchFacetOptions,
     ResearchFilterOption,
@@ -129,4 +130,23 @@ export async function getResearchRecord(
 
 export async function getPublicPortalSummary(): Promise<PublicPortalSummary> {
     return fetchJson<PublicPortalSummary>('/api/public/summary');
+}
+
+export type PublicAccessRequestPayload = {
+    requester_name: string;
+    requester_email: string;
+    requester_affiliation?: string;
+    requester_purpose: string;
+    message?: string;
+    intended_use?: string;
+};
+
+export async function submitPublicAccessRequest(
+    researchId: string,
+    payload: PublicAccessRequestPayload,
+) {
+    return fetchApi(`/api/public/research/${encodeURIComponent(researchId)}/access-requests`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+    });
 }

@@ -37,6 +37,8 @@ class PublicResearchResource extends JsonResource
         $sdgs = $this->sdgs ?? [];
         $category = $this->category ?: 'Uncategorized';
 
+        $accessLevel = $this->publicAccessLevel((string) $this->access_level);
+
         return [
             'id' => $this->slug ?: (string) $this->id,
             'title' => $this->title,
@@ -58,7 +60,7 @@ class PublicResearchResource extends JsonResource
                     'type' => 'category',
                 ],
             ],
-            'accessLevel' => $this->access_level,
+            'accessLevel' => $accessLevel,
             'embargoUntil' => $this->embargo_until?->toDateString(),
             'externalUrl' => $this->external_url,
             'status' => $this->status,
@@ -66,5 +68,14 @@ class PublicResearchResource extends JsonResource
             'updatedAt' => $this->updated_at?->toDateString(),
             'keywords' => $this->keywords ?? [],
         ];
+    }
+
+    private function publicAccessLevel(string $accessLevel): string
+    {
+        return match ($accessLevel) {
+            'request_required', 'private' => 'restricted',
+            'embargoed' => 'embargo',
+            default => $accessLevel,
+        };
     }
 }

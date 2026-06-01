@@ -12,7 +12,9 @@ class SdgClassification extends Model
 
     protected $fillable = [
         'research_id',
+        'file_id',
         'agency_id',
+        'uploaded_by_user_id',
         'primary_sdg',
         'primary_sdg_label',
         'sdg_results',
@@ -26,7 +28,9 @@ class SdgClassification extends Model
 
     protected $casts = [
         'research_id' => 'integer',
+        'file_id' => 'integer',
         'agency_id' => 'integer',
+        'uploaded_by_user_id' => 'integer',
         'sdg_results' => 'array',
         'raw_ai_response' => 'array',
         'confidence_score' => 'float',

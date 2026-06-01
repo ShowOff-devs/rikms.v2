@@ -225,7 +225,7 @@ export function SystemResearchPage() {
                         }
                         onView={setSelectedRecord}
                         onOpen={(record) =>
-                            router.visit(`/admin/system-research/${record.id}`)
+                            router.visit(`/admin/research/${record.id}`)
                         }
                     />
                 </div>

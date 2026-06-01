@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
 import {
     Bell,
     ChevronDown,
@@ -29,6 +29,10 @@ export function AdminTopbar({
     search,
     onSearchChange,
 }: AdminTopbarProps) {
+    const handleSignOut = () => {
+        router.post('/logout', {}, { onFinish: () => router.visit('/admin/login') });
+    };
+
     return (
         <header className="sticky top-0 z-40 flex h-16 items-center border-b border-white/10 bg-[#0f172a] px-4 text-white lg:px-0 lg:pr-6">
             <Link
@@ -80,7 +84,7 @@ export function AdminTopbar({
 
             <div className="flex shrink-0 items-center gap-2">
                 <Link
-                    href="/admin/system-activity"
+                    href="/admin/audit-logs"
                     className="relative flex size-9 items-center justify-center rounded-[10px] text-white/70 transition hover:bg-white/[0.07] hover:text-white"
                     aria-label="System notifications"
                     title="System notifications"
@@ -114,29 +118,29 @@ export function AdminTopbar({
                         <DropdownMenuLabel>Super Admin</DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem asChild>
-                            <Link href="/admin/security-center">
+                            <Link href="/admin/security">
                                 <ShieldCheck className="size-4" />
                                 Security Center
                             </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild>
-                            <Link href="/admin/platform-settings">
+                            <Link href="/admin/settings">
                                 <Settings className="size-4" />
                                 Platform Settings
                             </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild>
-                            <Link href="/admin/platform-settings">
+                            <Link href="/admin/settings">
                                 <UserRound className="size-4" />
                                 Profile
                             </Link>
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem asChild>
-                            <Link href="/admin/login">
+                            <button type="button" onClick={handleSignOut}>
                                 <LogOut className="size-4" />
                                 Sign out
-                            </Link>
+                            </button>
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>

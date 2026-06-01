@@ -1,6 +1,25 @@
 <?php
 
+use App\Models\Agency;
+use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
+
+function createAgencyPortalUser(string $role = 'agency_admin'): User
+{
+    $agency = Agency::create([
+        'slug' => 'agency-portal-'.str()->random(8),
+        'name' => 'Agency Portal Test Agency',
+        'short_name' => 'APT',
+        'type' => 'Government Agency',
+        'status' => 'active',
+    ]);
+
+    return User::factory()->create([
+        'agency_id' => $agency->id,
+        'role' => $role,
+        'status' => 'active',
+    ]);
+}
 
 test('agency login page can be rendered', function () {
     $response = $this->get('/agency/login');
@@ -18,13 +37,13 @@ test('agency forgot password page can be rendered', function () {
 });
 
 test('agency research repository page can be rendered', function () {
-    $response = $this->get('/agency/research-repository');
+    $response = $this->actingAs(createAgencyPortalUser())->get('/agency/research-repository');
 
     $response->assertOk();
 });
 
 test('agency research repository edit page can be rendered', function () {
-    $response = $this->get('/agency/research-repository/rr-001/edit');
+    $response = $this->actingAs(createAgencyPortalUser())->get('/agency/research-repository/rr-001/edit');
 
     $response->assertOk();
     $response->assertInertia(fn (Assert $page) => $page
@@ -34,13 +53,13 @@ test('agency research repository edit page can be rendered', function () {
 });
 
 test('agency dashboard page can be rendered', function () {
-    $response = $this->get('/agency/dashboard');
+    $response = $this->actingAs(createAgencyPortalUser())->get('/agency/dashboard');
 
     $response->assertOk();
 });
 
 test('agency access requests page can be rendered', function () {
-    $response = $this->get('/agency/access-requests');
+    $response = $this->actingAs(createAgencyPortalUser())->get('/agency/access-requests');
 
     $response->assertOk();
     $response->assertInertia(fn (Assert $page) => $page
@@ -49,7 +68,7 @@ test('agency access requests page can be rendered', function () {
 });
 
 test('agency analytics page can be rendered', function () {
-    $response = $this->get('/agency/analytics');
+    $response = $this->actingAs(createAgencyPortalUser())->get('/agency/analytics');
 
     $response->assertOk();
     $response->assertInertia(fn (Assert $page) => $page
@@ -58,7 +77,7 @@ test('agency analytics page can be rendered', function () {
 });
 
 test('agency notifications page can be rendered', function () {
-    $response = $this->get('/agency/notifications');
+    $response = $this->actingAs(createAgencyPortalUser())->get('/agency/notifications');
 
     $response->assertOk();
     $response->assertInertia(fn (Assert $page) => $page
@@ -67,7 +86,7 @@ test('agency notifications page can be rendered', function () {
 });
 
 test('agency profile page can be rendered', function () {
-    $response = $this->get('/agency/profile');
+    $response = $this->actingAs(createAgencyPortalUser())->get('/agency/profile');
 
     $response->assertOk();
     $response->assertInertia(fn (Assert $page) => $page
@@ -76,7 +95,7 @@ test('agency profile page can be rendered', function () {
 });
 
 test('agency settings page can be rendered', function () {
-    $response = $this->get('/agency/settings');
+    $response = $this->actingAs(createAgencyPortalUser())->get('/agency/settings');
 
     $response->assertOk();
     $response->assertInertia(fn (Assert $page) => $page
@@ -85,7 +104,7 @@ test('agency settings page can be rendered', function () {
 });
 
 test('agency upload pages can be rendered', function (string $path) {
-    $response = $this->get($path);
+    $response = $this->actingAs(createAgencyPortalUser())->get($path);
 
     $response->assertOk();
 })->with([
@@ -94,3 +113,32 @@ test('agency upload pages can be rendered', function (string $path) {
     '/agency/upload/terminal-report',
     '/agency/upload/project-accomplishment',
 ]);
+
+test('agency portal pages redirect guests to login', function () {
+    $this->get('/agency/dashboard')->assertRedirect('/agency/login');
+});
+
+test('admin portal rejects agency users and allows super admins', function () {
+    $this->actingAs(createAgencyPortalUser())
+        ->get('/admin/research-moderation')
+        ->assertForbidden();
+
+    $this->actingAs(createAgencyPortalUser('super_admin'))
+        ->get('/admin/research-moderation')
+        ->assertOk();
+});
+
+test('admin login redirects an existing agency admin session to agency dashboard', function () {
+    $agencyAdmin = createAgencyPortalUser();
+
+    $this->actingAs($agencyAdmin)
+        ->get('/admin/login')
+        ->assertRedirect('/agency/dashboard');
+
+    $this->assertAuthenticatedAs($agencyAdmin);
+});
+
+test('web and api admin dashboard route names are distinct', function () {
+    expect(route('admin.dashboard', absolute: false))->toBe('/admin/dashboard')
+        ->and(route('api.admin.dashboard', absolute: false))->toBe('/api/admin/dashboard');
+});

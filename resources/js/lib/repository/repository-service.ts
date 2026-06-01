@@ -7,6 +7,11 @@ import {
     repositorySdgColors,
     repositoryStatusLabels,
 } from '@/data/mock-repository';
+import {
+    mapRepositoryPayloadToResearchPayload,
+    submitAgencyResearch,
+    updateAgencyResearchDraft,
+} from '@/lib/agency/agency-research-service';
 import { fetchApi } from '@/lib/api-client';
 import type {
     RepositoryAccessType,
@@ -35,7 +40,7 @@ type AgencyResearchApiRecord = {
     sdgs?: string[];
     category?: string | null;
     keywords?: string[];
-    downloads: number;
+    downloads?: number;
     embargo_until?: string | null;
     external_url?: string | null;
     created_at?: string | null;
@@ -431,102 +436,155 @@ export async function updateRepositoryItem(
     id: string,
     payload: RepositoryUpdatePayload,
 ): Promise<RepositoryItem | null> {
-    await mockNetworkDelay(260);
-
-    let updatedItem: RepositoryItem | null = null;
-
-    updateRepositoryItems((items) =>
-        items.map((item) => {
-            if (item.id !== id) {
-                return item;
-            }
-
-            updatedItem = {
-                ...item,
-                ...payload,
-                updatedAt: new Date().toISOString(),
-                versions: [
-                    {
-                        id: `${id}-v${item.versions.length + 1}`,
-                        label: 'Metadata changes saved',
-                        actor: 'Agency Admin',
-                        timestamp: new Date().toISOString(),
-                    },
-                    ...payload.versions,
-                ],
-            };
-
-            return updatedItem;
-        }),
+    const updatedItem = await updateAgencyResearchDraft(
+        id,
+        mapRepositoryPayloadToResearchPayload(payload),
     );
 
-    return updatedItem ? cloneRepositoryItem(updatedItem) : null;
+    return mapRepositoryItemFromApi(updatedItem);
 }
 
 export async function saveRepositoryItemAsDraft(
     id: string,
     payload: RepositoryUpdatePayload,
 ) {
-    return updateRepositoryItem(id, { ...payload, status: 'draft' });
+    return updateRepositoryItem(id, payload);
 }
 
 export async function publishRepositoryItem(
     id: string,
     payload: RepositoryUpdatePayload,
 ) {
-    return updateRepositoryItem(id, { ...payload, status: 'published' });
+    await updateRepositoryItem(id, payload);
+
+    return mapRepositoryItemFromApi(await submitAgencyResearch(id));
 }
 
 export async function archiveRepositoryItem(
     id: string,
 ): Promise<RepositoryItem | null> {
+    try {
+        const { data } = await fetchApi<AgencyResearchApiRecord>(
+            `/api/agency/research/${id}/archive`,
+            {
+                method: 'POST',
+                body: JSON.stringify({
+                    reason: 'Archived from agency repository editor.',
+                }),
+            },
+        );
+
+        return mapRepositoryItemFromApi(data);
+    } catch {
+        // TODO Phase 6: Replace this mock fallback after agency repository archive is verified with real Sanctum authentication.
+    }
+
     const item = await getRepositoryItemById(id);
 
     if (!item) {
         return null;
     }
 
-    return updateRepositoryItem(id, {
-        ...item,
-        status: 'archived',
-    });
+    let archivedItem: RepositoryItem | null = null;
+
+    updateRepositoryItems((items) =>
+        items.map((currentItem) => {
+            if (currentItem.id !== id) {
+                return currentItem;
+            }
+
+            archivedItem = {
+                ...currentItem,
+                status: 'archived',
+                updatedAt: new Date().toISOString(),
+            };
+
+            return archivedItem;
+        }),
+    );
+
+    return archivedItem ? cloneRepositoryItem(archivedItem) : null;
 }
 
 export async function restoreRepositoryItem(
     id: string,
 ): Promise<RepositoryItem | null> {
+    try {
+        const { data } = await fetchApi<AgencyResearchApiRecord>(
+            `/api/agency/research/${id}/restore`,
+            {
+                method: 'POST',
+            },
+        );
+
+        return mapRepositoryItemFromApi(data);
+    } catch {
+        // TODO Phase 6: Replace this mock fallback after agency repository restore is verified with real Sanctum authentication.
+    }
+
     const item = await getRepositoryItemById(id);
 
     if (!item) {
         return null;
     }
 
-    return updateRepositoryItem(id, {
-        ...item,
-        status: 'draft',
-    });
+    let restoredItem: RepositoryItem | null = null;
+
+    updateRepositoryItems((items) =>
+        items.map((currentItem) => {
+            if (currentItem.id !== id) {
+                return currentItem;
+            }
+
+            restoredItem = {
+                ...currentItem,
+                status: 'draft',
+                updatedAt: new Date().toISOString(),
+            };
+
+            return restoredItem;
+        }),
+    );
+
+    return restoredItem ? cloneRepositoryItem(restoredItem) : null;
 }
 
 export async function replaceRepositoryFile(
     id: string,
     file: RepositoryFileReplacement,
 ): Promise<RepositoryItem | null> {
+    // TODO Phase 6: Replace this mock fallback after repository file replacement API/flow is verified with real Sanctum authentication.
     const item = await getRepositoryItemById(id);
 
     if (!item) {
         return null;
     }
 
-    return updateRepositoryItem(id, {
-        ...item,
-        file: {
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            pages: file.pages ?? item.file.pages,
-            uploadedAt: new Date().toISOString(),
-        },
-    });
+    let replacedItem: RepositoryItem | null = null;
+
+    updateRepositoryItems((items) =>
+        items.map((currentItem) => {
+            if (currentItem.id !== id) {
+                return currentItem;
+            }
+
+            replacedItem = {
+                ...currentItem,
+                file: {
+                    name: file.name,
+                    size: file.size,
+                    type: file.type,
+                    pages: file.pages ?? item.file.pages,
+                    uploadedAt: new Date().toISOString(),
+                },
+                updatedAt: new Date().toISOString(),
+            };
+
+            return replacedItem;
+        }),
+    );
+
+    return replacedItem ? cloneRepositoryItem(replacedItem) : null;
 }
 
 async function getApiRepositoryItems() {
@@ -559,7 +617,10 @@ function mapRepositoryItemFromApi(record: AgencyResearchApiRecord): RepositoryIt
         category: record.category ?? 'Uncategorized',
         keywords: record.keywords ?? [],
         metadataCompletion: 85,
-        digitalLibraryScore: Math.min(100, 70 + Math.min(record.downloads, 30)),
+        digitalLibraryScore: Math.min(
+            100,
+            70 + Math.min(record.downloads ?? 0, 30),
+        ),
         isAiTagged: false,
         publisher: record.agency?.name ?? '',
         externalLink: record.external_url ?? undefined,

@@ -12,7 +12,9 @@ class AiMetadata extends Model
 
     protected $fillable = [
         'research_id',
+        'file_id',
         'agency_id',
+        'uploaded_by_user_id',
         'title',
         'abstract',
         'authors',
@@ -28,7 +30,9 @@ class AiMetadata extends Model
 
     protected $casts = [
         'research_id' => 'integer',
+        'file_id' => 'integer',
         'agency_id' => 'integer',
+        'uploaded_by_user_id' => 'integer',
         'authors' => 'array',
         'keywords' => 'array',
         'raw_ai_response' => 'array',

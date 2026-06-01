@@ -17,6 +17,7 @@ const wait = (ms: number) =>
 export async function mockUploadResearchFile(
     file: File,
 ): Promise<UploadFileMock> {
+    // TODO Phase 5: Delete after all upload entry points use the real research file API.
     await wait(450);
 
     return {
@@ -29,6 +30,7 @@ export async function mockUploadResearchFile(
 export async function mockRunResearchMetadataExtraction(
     state: AgencyUploadState,
 ): Promise<{ metadata: MetadataField[]; aiSuggestedSDGs: number[] }> {
+    // TODO Phase 5: Replace mock AI metadata when queued PDF/AI/SDG result APIs are ready.
     await wait(850);
 
     return {
@@ -42,6 +44,7 @@ export async function mockRunResearchMetadataExtraction(
 }
 
 export async function mockSaveResearchDraft(state: AgencyUploadState) {
+    // TODO Phase 5: Delete after all draft entry points use the real agency research API.
     await wait(350);
 
     return {
@@ -73,6 +76,7 @@ export async function mockValidateResearchSubmission(state: AgencyUploadState) {
 }
 
 export async function mockSubmitResearch(state: AgencyUploadState) {
+    // TODO Phase 5: Delete after all submit entry points use the real agency research API.
     const validation = await mockValidateResearchSubmission(state);
 
     if (!validation.passed) {

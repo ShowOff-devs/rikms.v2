@@ -341,7 +341,7 @@ export default function AgencyResearchRepositoryPage() {
                                                     onView={openViewModal}
                                                     onEdit={(record) =>
                                                         router.visit(
-                                                            `/agency/research-repository/${record.id}/edit`,
+                                                            `/agency/research/${record.id}`,
                                                         )
                                                     }
                                                     onArchive={openArchiveModal}
@@ -353,7 +353,7 @@ export default function AgencyResearchRepositoryPage() {
                                                     onView={openViewModal}
                                                     onEdit={(record) =>
                                                         router.visit(
-                                                            `/agency/research-repository/${record.id}/edit`,
+                                                            `/agency/research/${record.id}`,
                                                         )
                                                     }
                                                     onArchive={openArchiveModal}

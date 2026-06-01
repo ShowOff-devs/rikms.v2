@@ -49,7 +49,8 @@ export type ModerationIssueType =
     | 'duplicate-research'
     | 'missing-metadata'
     | 'pending-access'
-    | 'incomplete-affiliation';
+    | 'incomplete-affiliation'
+    | 'research-review';
 
 export type ModerationItem = {
     id: string;

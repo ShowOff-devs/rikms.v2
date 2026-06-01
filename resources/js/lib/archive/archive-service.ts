@@ -1,4 +1,5 @@
 import { mockArchiveActivity, mockArchivedResearch } from '@/data/mock-archive';
+import { fetchApi } from '@/lib/api-client';
 import {
     getRepositoryItemsSnapshot,
     updateRepositoryItem,
@@ -13,6 +14,19 @@ import type { RepositoryStatus } from '@/types/repository';
 const archiveStorageKey = 'rikms.archive.records.v1';
 const activityStorageKey = 'rikms.archive.activity.v1';
 const deletedArchiveStorageKey = 'rikms.archive.deleted.v1';
+
+type ResearchApiRecord = {
+    id: number;
+    agency?: { short_name?: string | null; name?: string | null } | null;
+    title: string;
+    authors?: string[];
+    publication_year?: number | null;
+    category?: string | null;
+    access_level?: string | null;
+    status: string;
+    archived_at?: string | null;
+    archived_by_user?: { name?: string | null; email?: string | null } | null;
+};
 
 const mockNetworkDelay = (duration = 120) =>
     new Promise((resolve) => {
@@ -168,6 +182,16 @@ export function createArchiveActivity(
 }
 
 export async function getArchivedResearch(): Promise<ArchivedResearch[]> {
+    try {
+        const { data } = await fetchApi<ResearchApiRecord[]>(
+            '/api/agency/archive/research?per_page=100',
+        );
+
+        return data.map(mapApiArchivedResearch);
+    } catch {
+        // TODO Phase 6: Replace this mock fallback after agency archive listing is verified with real Sanctum authentication.
+    }
+
     await mockNetworkDelay();
 
     return getArchivedResearchSnapshot();
@@ -228,6 +252,27 @@ export function filterArchivedResearch(
 export async function restoreArchivedResearch(
     id: string,
 ): Promise<ArchivedResearch | null> {
+    const researchId = apiResearchId(id);
+
+    if (researchId) {
+        try {
+            const { data } = await fetchApi<ResearchApiRecord>(
+                `/api/agency/research/${researchId}/restore`,
+                {
+                    method: 'POST',
+                },
+            );
+
+            return mapApiArchivedResearch({
+                ...data,
+                status: 'archived',
+                archived_at: data.archived_at ?? new Date().toISOString(),
+            });
+        } catch {
+            // TODO Phase 6: Replace this mock fallback after agency archive restore is verified with real Sanctum authentication.
+        }
+    }
+
     await mockNetworkDelay(220);
 
     const records = getArchivedResearchSnapshot();
@@ -261,6 +306,7 @@ export async function restoreArchivedResearch(
 export async function permanentlyDeleteArchivedResearch(
     id: string,
 ): Promise<ArchivedResearch | null> {
+    // TODO Phase 6: Replace this mock fallback after a protected permanent-delete API/flow is verified with real Sanctum authentication.
     await mockNetworkDelay(260);
 
     const records = getArchivedResearchSnapshot();
@@ -277,12 +323,46 @@ export async function permanentlyDeleteArchivedResearch(
 }
 
 export async function getArchiveActivity(): Promise<ArchiveActivity[]> {
+    // TODO Phase 6: Replace this mock fallback after agency archive activity API/flow is verified with real Sanctum authentication.
     await mockNetworkDelay();
 
     return (
         readStoredRecords<ArchiveActivity>(activityStorageKey) ??
         mockArchiveActivity
     ).map(cloneActivity);
+}
+
+function apiResearchId(id: string) {
+    if (id.startsWith('research-')) {
+        return Number(id.replace('research-', ''));
+    }
+
+    const numericId = Number(id);
+
+    return Number.isFinite(numericId) && numericId > 0 ? numericId : null;
+}
+
+function mapApiArchivedResearch(record: ResearchApiRecord): ArchivedResearch {
+    return {
+        id: `research-${record.id}`,
+        title: record.title,
+        authors: record.authors?.length ? record.authors : ['Unspecified'],
+        year: record.publication_year ?? new Date().getFullYear(),
+        archiveDate: record.archived_at ?? new Date().toISOString(),
+        archivedBy:
+            record.archived_by_user?.name ??
+            record.archived_by_user?.email ??
+            'Agency Admin',
+        status: 'archived',
+        originalStatus:
+            record.access_level === 'restricted' ? 'restricted' : 'published',
+        documentType: 'research-study',
+        agency:
+            record.agency?.short_name ??
+            record.agency?.name ??
+            'Agency Repository',
+        repositoryItemId: String(record.id),
+    };
 }
 
 export function addArchiveActivity(activity: ArchiveActivity) {

@@ -35,40 +35,40 @@ const adminNavItems: AdminNavItem[] = [
     { label: 'Agency Management', href: '/admin/agencies', icon: Building2 },
     {
         label: 'Agency Admin Users',
-        href: '/admin/agency-admin-users',
+        href: '/admin/users',
         icon: Users,
     },
     {
         label: 'System Research',
-        href: '/admin/system-research',
+        href: '/admin/research',
         icon: FileText,
     },
     {
         label: 'Research Integrity & Moderation',
-        href: '/admin/research-moderation',
+        href: '/admin/moderation',
         icon: FileSearch,
     },
     {
         label: 'Access Request Monitoring',
-        href: '/admin/access-request-monitor',
+        href: '/admin/access-requests',
         icon: ClipboardList,
     },
     { label: 'System Analytics', href: '/admin/analytics', icon: BarChart3 },
     {
         label: 'System Notifications & Activity Logs',
-        href: '/admin/system-activity',
+        href: '/admin/audit-logs',
         icon: Bell,
     },
     { label: 'RBAC Management', href: '/admin/rbac', icon: KeyRound },
     {
         label: 'Security Center',
-        href: '/admin/security-center',
+        href: '/admin/security',
         icon: ShieldCheck,
     },
     { label: 'Archive', href: '/admin/archive', icon: Archive },
     {
         label: 'Platform Settings',
-        href: '/admin/platform-settings',
+        href: '/admin/settings',
         icon: Settings,
     },
 ];

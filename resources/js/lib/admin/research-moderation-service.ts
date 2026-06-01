@@ -4,6 +4,14 @@ import {
     moderationActivities,
     moderationIssueTypeLabels,
 } from '@/data/mock-research-moderation';
+import {
+    approveAdminResearch,
+    archiveAdminResearch,
+    getAdminModerationResearchRecords,
+    publishAdminResearch,
+    rejectAdminResearch,
+    returnAdminResearch,
+} from '@/lib/admin/admin-moderation-service';
 import type {
     DuplicateResearchMatch,
     FlaggedResearchRecord,
@@ -91,11 +99,18 @@ export async function getModerationSummary(): Promise<ModerationSummary> {
 export async function getFlaggedResearchRecords(
     filters: Partial<ModerationFilters> = {},
 ): Promise<FlaggedResearchRecord[]> {
-    await mockNetworkDelay();
+    try {
+        const records = await getAdminModerationResearchRecords();
 
-    return flaggedResearchRecords.filter((record) =>
-        matchesFilters(record, filters),
-    );
+        return records.filter((record) => matchesFilters(record, filters));
+    } catch {
+        // TODO Phase 5: Remove fallback when moderation queue UI is browser-verified with real admin data.
+        await mockNetworkDelay();
+
+        return flaggedResearchRecords.filter((record) =>
+            matchesFilters(record, filters),
+        );
+    }
 }
 
 export async function getDuplicateResearchMatches(): Promise<
@@ -117,36 +132,31 @@ export async function getModerationActivityLog(): Promise<
 export async function markResearchIssueResolved(
     id: string,
     payload: ModerationActionPayload = {},
-): Promise<{
-    id: string;
-    status: 'resolved';
-    payload: ModerationActionPayload;
-}> {
-    await mockNetworkDelay(360);
-
-    return { id, status: 'resolved', payload };
+): Promise<FlaggedResearchRecord> {
+    try {
+        return await approveAdminResearch(id, payload);
+    } catch {
+        return publishAdminResearch(id, payload);
+    }
 }
 
 export async function flagResearchForReview(
     id: string,
     payload: ModerationActionPayload = {},
-): Promise<{
-    id: string;
-    status: 'pending-review';
-    payload: ModerationActionPayload;
-}> {
-    await mockNetworkDelay(360);
+): Promise<FlaggedResearchRecord> {
+    try {
+        return await rejectAdminResearch(id, payload);
+    } catch {
+        return returnAdminResearch(id, payload);
+    }
 
-    return { id, status: 'pending-review', payload };
 }
 
 export async function archiveFlaggedResearch(
     id: string,
     payload: ModerationActionPayload = {},
-): Promise<{ id: string; archived: true; payload: ModerationActionPayload }> {
-    await mockNetworkDelay(460);
-
-    return { id, archived: true, payload };
+): Promise<FlaggedResearchRecord> {
+    return archiveAdminResearch(id, payload);
 }
 
 export async function exportModerationReport(

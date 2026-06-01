@@ -60,7 +60,7 @@ export function SecurityStatusPanel({
                     </h2>
                 </div>
                 <Link
-                    href="/admin/security-center"
+                    href="/admin/security"
                     className="inline-flex h-[30px] items-center justify-center gap-1.5 rounded-[8px] border border-[#ffc9c9] bg-[#fef2f2] px-3 text-xs font-medium text-[#e7000b] transition hover:bg-[#fee2e2]"
                 >
                     <LockKeyhole className="size-3" aria-hidden="true" />

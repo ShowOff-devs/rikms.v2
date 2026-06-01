@@ -33,6 +33,11 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import {
+    saveAgencyResearchDraft,
+    submitAgencyResearch,
+} from '@/lib/agency/agency-research-service';
+import { uploadAgencyResearchFile } from '@/lib/agency/agency-upload-service';
+import {
     accessOptions,
     createInitialUploadState,
     getAccessLabel,
@@ -40,11 +45,9 @@ import {
     getDocumentTypeLabel,
     sdgOptions,
 } from '@/lib/agency/upload-research-service';
+import { apiMessage } from '@/lib/api-client';
 import {
     mockRunResearchMetadataExtraction,
-    mockSaveResearchDraft,
-    mockSubmitResearch,
-    mockUploadResearchFile,
     mockValidateResearchSubmission,
 } from '@/lib/upload/services/mock-research-upload-service';
 import { cn } from '@/lib/utils';
@@ -456,8 +459,8 @@ function UploadStep({
 
         const extension = file.name.split('.').pop()?.toLowerCase();
 
-        if (!extension || !['pdf', 'doc', 'docx'].includes(extension)) {
-            setUploadError('Upload a PDF, DOC, or DOCX research document.');
+        if (!extension || extension !== 'pdf') {
+            setUploadError('Upload a PDF research document.');
             setState((current) => ({
                 ...current,
                 file: null,
@@ -467,8 +470,8 @@ function UploadStep({
             return;
         }
 
-        if (file.size > 50 * 1024 * 1024) {
-            setUploadError('Maximum file size is 50 MB.');
+        if (file.size > 20 * 1024 * 1024) {
+            setUploadError('Maximum file size is 20 MB.');
             setState((current) => ({
                 ...current,
                 file: null,
@@ -485,16 +488,29 @@ function UploadStep({
         }));
 
         try {
-            const uploadedFile = await mockUploadResearchFile(file);
+            const draft = await saveAgencyResearchDraft({
+                ...state,
+                file: {
+                    name: file.name,
+                    size: file.size,
+                    type: file.type || 'application/pdf',
+                },
+            });
+            const uploadedFile = await uploadAgencyResearchFile(
+                draft.id,
+                file,
+                state,
+            );
 
             setState((current) => ({
                 ...current,
                 file: uploadedFile,
+                researchId: String(draft.id),
                 uploadStatus: 'uploaded',
             }));
-        } catch {
+        } catch (error) {
             setUploadError(
-                'The mock upload failed. Try selecting the file again.',
+                apiMessage(error, 'The upload failed. Try selecting the file again.'),
             );
             setState((current) => ({
                 ...current,
@@ -529,7 +545,7 @@ function UploadStep({
                 <input
                     ref={inputRef}
                     type="file"
-                    accept=".pdf,.doc,.docx"
+                    accept=".pdf,application/pdf"
                     className="hidden"
                     onChange={(event) =>
                         void handleFile(event.target.files?.[0])
@@ -1570,6 +1586,7 @@ export default function UploadResearchWizard() {
     const [success, setSuccess] = useState(false);
     const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
 
     const currentCanContinue = useMemo(
         () => canContinue(currentStep, state),
@@ -1606,33 +1623,64 @@ export default function UploadResearchWizard() {
             submissionStatus: 'draft',
         }));
 
-        const result = await mockSaveResearchDraft(state);
-        setDraftSavedAt(
-            new Intl.DateTimeFormat(undefined, {
-                hour: 'numeric',
-                minute: '2-digit',
-            }).format(new Date(result.savedAt)),
-        );
+        try {
+            const result = await saveAgencyResearchDraft(
+                state,
+                state.researchId,
+            );
+
+            setState((current) => ({
+                ...current,
+                researchId: String(result.id),
+            }));
+            setDraftSavedAt(
+                new Intl.DateTimeFormat(undefined, {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                }).format(new Date()),
+            );
+            setSubmitError(null);
+        } catch (error) {
+            setSubmitError(apiMessage(error, 'Unable to save draft.'));
+            setState((current) => ({
+                ...current,
+                submissionStatus: 'error',
+            }));
+        }
     };
 
     const submitResearch = async () => {
         setIsSubmitting(true);
+        setSubmitError(null);
         setState((current) => ({
             ...current,
             submissionStatus: 'submitting',
         }));
 
         try {
-            const result = await mockSubmitResearch(state);
+            const validation = await mockValidateResearchSubmission(state);
+
+            if (!validation.passed) {
+                throw new Error('Research submission is incomplete.');
+            }
+
+            const draft = await saveAgencyResearchDraft(
+                state,
+                state.researchId,
+            );
+            const result = await submitAgencyResearch(draft.id);
 
             setState((current) => ({
                 ...current,
+                researchId: String(result.id),
                 submissionStatus: 'submitted',
-                submissionTimestamp: result.submittedAt,
+                submissionTimestamp:
+                    result.updated_at ?? new Date().toISOString(),
             }));
             setConfirmOpen(false);
             setSuccess(true);
-        } catch {
+        } catch (error) {
+            setSubmitError(apiMessage(error, 'Unable to submit research.'));
             setState((current) => ({
                 ...current,
                 submissionStatus: 'error',
@@ -1660,6 +1708,11 @@ export default function UploadResearchWizard() {
                 <WizardHeader currentStep={currentStep} />
                 <div className="mt-5 flex items-start gap-5">
                     <div className="min-w-0 flex-1">
+                        {submitError ? (
+                            <div className="mb-4 rounded-[12px] border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-sm font-medium text-[#b91c1c]">
+                                {submitError}
+                            </div>
+                        ) : null}
                         {currentStep === 2 && (
                             <UploadStep state={state} setState={setState} />
                         )}

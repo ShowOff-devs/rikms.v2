@@ -14,7 +14,13 @@ import { FileInformationSection } from '@/components/repository/edit/FileInforma
 import { PublicationInformationSection } from '@/components/repository/edit/PublicationInformationSection';
 import { ResearchClassificationSection } from '@/components/repository/edit/ResearchClassificationSection';
 import { ResearchStatusPanel } from '@/components/repository/edit/ResearchStatusPanel';
+import { SectionCard } from '@/components/repository/edit/SectionCard';
 import { VersionHistorySection } from '@/components/repository/edit/VersionHistorySection';
+import {
+    getAgencyAiResults
+    
+} from '@/lib/agency/agency-ai-results-service';
+import type {AgencyAiResults} from '@/lib/agency/agency-ai-results-service';
 import { getAgencySession } from '@/lib/auth/agency-auth';
 import {
     archiveRepositoryItem,
@@ -153,6 +159,10 @@ export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
+    const [aiResults, setAiResults] = useState<AgencyAiResults | null>(null);
+    const [aiResultsMessage, setAiResultsMessage] = useState(
+        'Loading AI suggestions...',
+    );
     const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
     const [isDirty, setIsDirty] = useState(false);
 
@@ -174,6 +184,31 @@ export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
             setForm(record ? emptyPayload(record) : null);
             setIsLoading(false);
         });
+
+        return () => {
+            isCurrent = false;
+        };
+    }, [repositoryId]);
+
+    useEffect(() => {
+        let isCurrent = true;
+
+        getAgencyAiResults(repositoryId)
+            .then((results) => {
+                if (!isCurrent) {
+                    return;
+                }
+
+                setAiResults(results);
+                setAiResultsMessage('');
+            })
+            .catch(() => {
+                if (isCurrent) {
+                    setAiResultsMessage(
+                        'AI/PDF/SDG suggestions are not available yet.',
+                    );
+                }
+            });
 
         return () => {
             isCurrent = false;
@@ -214,23 +249,31 @@ export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
 
         setIsSaving(true);
 
-        const saved =
-            action === 'draft'
-                ? await saveRepositoryItemAsDraft(repositoryId, nextPayload)
-                : action === 'publish'
-                  ? await publishRepositoryItem(repositoryId, nextPayload)
-                  : await updateRepositoryItem(repositoryId, nextPayload);
+        try {
+            const saved =
+                action === 'draft'
+                    ? await saveRepositoryItemAsDraft(repositoryId, nextPayload)
+                    : action === 'publish'
+                      ? await publishRepositoryItem(repositoryId, nextPayload)
+                      : await updateRepositoryItem(repositoryId, nextPayload);
 
-        if (saved) {
-            setItem(saved);
-            setForm(emptyPayload(saved));
-            setIsDirty(false);
+            if (saved) {
+                setItem(saved);
+                setForm(emptyPayload(saved));
+                setIsDirty(false);
+                setMessage(
+                    action === 'publish'
+                        ? 'Research submitted for moderation.'
+                        : action === 'draft'
+                          ? 'Draft saved successfully.'
+                          : 'Changes saved successfully.',
+                );
+            }
+        } catch (error) {
             setMessage(
-                action === 'publish'
-                    ? 'Research published successfully.'
-                    : action === 'draft'
-                      ? 'Draft saved successfully.'
-                      : 'Changes saved successfully.',
+                error instanceof Error
+                    ? error.message
+                    : 'Unable to save research changes.',
             );
         }
 
@@ -281,7 +324,7 @@ export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
                     <button
                         type="button"
                         onClick={() =>
-                            router.visit('/agency/research-repository')
+                            router.visit('/agency/research')
                         }
                         className="mb-4 inline-flex h-8 items-center gap-2 rounded-[10px] px-2 text-sm font-medium text-[#6a7282] hover:bg-white hover:text-[#1e3a8a]"
                     >
@@ -398,6 +441,10 @@ export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
                                     <VersionHistorySection
                                         versions={form.versions}
                                     />
+                                    <AiSuggestionsPanel
+                                        results={aiResults}
+                                        message={aiResultsMessage}
+                                    />
                                 </aside>
                             </section>
 
@@ -443,5 +490,84 @@ export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
                 </div>
             ) : null}
         </AgencyAdminLayout>
+    );
+}
+
+function AiSuggestionsPanel({
+    results,
+    message,
+}: {
+    results: AgencyAiResults | null;
+    message: string;
+}) {
+    const metadata = results?.ai_metadata;
+    const sdg = results?.sdg_classification;
+    const pdf = results?.pdf_parsing_result;
+    const suggestedSdgs =
+        sdg?.suggested_sdg_tags?.map((tag) =>
+            typeof tag === 'string'
+                ? tag
+                : [tag.sdg, tag.label].filter(Boolean).join(' - '),
+        ) ?? [];
+
+    return (
+        <SectionCard
+            eyebrow="Suggested"
+            title="AI/PDF/SDG Results"
+            description="Read-only suggestions from secondary metadata storage."
+        >
+            {message ? (
+                <p className="text-sm leading-5 text-[#6a7282]">{message}</p>
+            ) : (
+                <div className="space-y-4 text-sm">
+                    <AiSuggestionRow
+                        label="PDF parsing"
+                        value={
+                            pdf?.status === 'not_available'
+                                ? 'Pending Review'
+                                : `${pdf?.status ?? 'Pending Review'}${
+                                      pdf?.page_count
+                                          ? ` - ${pdf.page_count} pages`
+                                          : ''
+                                  }`
+                        }
+                    />
+                    <AiSuggestionRow
+                        label="Extracted title"
+                        value={
+                            metadata?.extracted_title ??
+                            metadata?.message ??
+                            'Pending Review'
+                        }
+                    />
+                    <AiSuggestionRow
+                        label="Keywords"
+                        value={
+                            metadata?.extracted_keywords?.join(', ') ??
+                            'Pending Review'
+                        }
+                    />
+                    <AiSuggestionRow
+                        label="SDG suggestions"
+                        value={
+                            suggestedSdgs.length > 0
+                                ? suggestedSdgs.join(', ')
+                                : 'Pending Review'
+                        }
+                    />
+                </div>
+            )}
+        </SectionCard>
+    );
+}
+
+function AiSuggestionRow({ label, value }: { label: string; value: string }) {
+    return (
+        <div>
+            <p className="text-[11px] font-bold text-[#6a7282] uppercase">
+                {label}
+            </p>
+            <p className="mt-1 leading-5 text-[#101828]">{value}</p>
+        </div>
     );
 }

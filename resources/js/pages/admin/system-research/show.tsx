@@ -49,7 +49,7 @@ export default function SystemResearchDetailRoute({
             <main className="px-4 py-8 lg:px-8">
                 <div className="mx-auto max-w-[960px]">
                     <Link
-                        href="/admin/system-research"
+                        href="/admin/research"
                         className="inline-flex h-10 items-center gap-2 rounded-[10px] border border-[#e5e7eb] bg-white px-4 text-sm font-medium text-[#4a5565] transition hover:bg-[#f9fafb]"
                     >
                         <ArrowLeft className="size-4" aria-hidden="true" />

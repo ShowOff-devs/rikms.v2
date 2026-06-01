@@ -1,4 +1,4 @@
-import { Head } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import {
     AlertTriangle,
     Eye,
@@ -20,10 +20,61 @@ const dostLogo = '/assets/figma/dost-xi-logo.png';
 
 export default function AdminLoginPage() {
     const [showPassword, setShowPassword] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    async function handleSubmit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        // TODO: Connect to future super admin guard, 2FA challenge, and audit logging.
+        const form = new FormData(event.currentTarget);
+
+        setError(null);
+        setIsSubmitting(true);
+
+        try {
+            const token = document
+                .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
+                ?.getAttribute('content');
+
+            const response = await fetch('/admin/login', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    ...(token ? { 'X-CSRF-TOKEN': token } : {}),
+                },
+                body: JSON.stringify({
+                    email: form.get('email'),
+                    password: form.get('password'),
+                    remember: form.get('remember_device') === 'on',
+                }),
+            });
+
+            const body = (await response.json().catch(() => ({}))) as {
+                message?: string;
+                redirect?: string;
+                errors?: Record<string, string[]>;
+            };
+
+            if (!response.ok) {
+                throw new Error(
+                    body.message ??
+                        body.errors?.email?.[0] ??
+                        'Unable to sign in with those credentials.',
+                );
+            }
+
+            router.visit(body.redirect ?? '/admin/dashboard');
+        } catch (caught) {
+            setError(
+                caught instanceof Error
+                    ? caught.message
+                    : 'Unable to sign in right now.',
+            );
+        } finally {
+            setIsSubmitting(false);
+        }
     }
 
     return (
@@ -57,6 +108,11 @@ export default function AdminLoginPage() {
                 </div>
 
                 <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
+                    {error ? (
+                        <div className="rounded-[10px] border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-sm text-[#b91c1c]">
+                            {error}
+                        </div>
+                    ) : null}
                     <div className="space-y-1.5">
                         <Label
                             htmlFor="admin-email"
@@ -163,10 +219,11 @@ export default function AdminLoginPage() {
 
                     <Button
                         type="submit"
+                        disabled={isSubmitting}
                         className="h-12 w-full rounded-[10px] bg-[#1e3a8a] text-base leading-6 font-semibold text-white shadow-[0_1px_1.5px_rgba(0,0,0,0.1),0_1px_1px_rgba(0,0,0,0.1)] hover:bg-[#1d3478]"
                     >
                         <LockKeyhole className="size-4" aria-hidden="true" />
-                        Access System Portal
+                        {isSubmitting ? 'Signing in...' : 'Access System Portal'}
                     </Button>
                 </form>
 

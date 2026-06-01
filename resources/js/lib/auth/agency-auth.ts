@@ -73,6 +73,66 @@ const mockNetworkDelay = (duration = 900) =>
 
 const isBrowser = () => typeof window !== 'undefined';
 
+type SharedAuthUser = {
+    id: number;
+    email: string;
+    role?: string;
+    agency_id?: number | null;
+    agency?: {
+        slug?: string | null;
+        short_name?: string | null;
+        name?: string | null;
+    } | null;
+};
+
+type InertiaPagePayload = {
+    props?: {
+        auth?: {
+            user?: SharedAuthUser | null;
+        };
+    };
+};
+
+type LoginResponsePayload = {
+    redirect?: string;
+};
+
+function getSharedAuthUser(): SharedAuthUser | null {
+    if (!isBrowser()) {
+        return null;
+    }
+
+    const page = document.getElementById('app')?.dataset.page;
+
+    if (!page) {
+        return null;
+    }
+
+    try {
+        return (
+            (JSON.parse(page) as InertiaPagePayload).props?.auth?.user ?? null
+        );
+    } catch {
+        return null;
+    }
+}
+
+function makeSessionFromUser(user: SharedAuthUser): AgencyAuthSession | null {
+    if (user.role !== 'agency_admin' || !user.agency_id) {
+        return null;
+    }
+
+    return {
+        agencyId: user.agency?.slug ?? String(user.agency_id),
+        agencyName:
+            user.agency?.short_name ?? user.agency?.name ?? 'Agency Admin',
+        email: user.email,
+        portal: 'agency-admin',
+        remember: false,
+        loggedInAt: new Date().toISOString(),
+    };
+}
+
 const readStoredSession = (): AgencyAuthSession | null => {
     if (!isBrowser()) {
         return null;
@@ -123,7 +183,10 @@ export function getAgencyOption(agencyId: string) {
 }
 
 export function getAgencySession() {
-    return readStoredSession();
+    const user = getSharedAuthUser();
+    const realSession = user ? makeSessionFromUser(user) : null;
+
+    return realSession ?? readStoredSession();
 }
 
 export function clearAgencySession() {
@@ -136,8 +199,6 @@ export function clearAgencySession() {
 }
 
 export async function signInToAgencyPortal(payload: AgencyLoginPayload) {
-    await mockNetworkDelay();
-
     const agency = getAgencyOption(payload.agencyId);
 
     if (!agency) {
@@ -145,18 +206,50 @@ export async function signInToAgencyPortal(payload: AgencyLoginPayload) {
     }
 
     const normalizedEmail = payload.email.trim().toLowerCase();
-    const normalizedPassword = payload.password.trim().toLowerCase();
 
-    // Temporary mock rules for frontend-only implementation.
-    // Replace this function with the Laravel API request once backend auth is available.
-    if (
-        normalizedEmail === 'invalid@agency.gov.ph' ||
-        normalizedPassword === 'invalid'
-    ) {
-        throw new Error(
-            'Invalid credentials. Please verify your agency account details and try again.',
-        );
-    }
+    const loginPayload = await fetch('/agency/login', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            ...(document
+                .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
+                ?.getAttribute('content')
+                ? {
+                      'X-CSRF-TOKEN':
+                          document
+                              .querySelector<HTMLMetaElement>(
+                                  'meta[name="csrf-token"]',
+                              )
+                              ?.getAttribute('content') ?? '',
+                  }
+                : {}),
+        },
+        body: JSON.stringify({
+            email: normalizedEmail,
+            password: payload.password,
+            remember: payload.remember,
+        }),
+    }).then(async (response) => {
+        const body = (await response.json().catch(() => ({}))) as
+            | (LoginResponsePayload & {
+                  message?: string;
+                  errors?: Record<string, string[]>;
+              })
+            | undefined;
+
+        if (!response.ok) {
+            throw new Error(
+                body?.message ??
+                    body?.errors?.email?.[0] ??
+                    'Invalid credentials. Please verify your agency account details and try again.',
+            );
+        }
+
+        return body ?? {};
+    });
 
     const session: AgencyAuthSession = {
         agencyId: agency.id,
@@ -169,7 +262,10 @@ export async function signInToAgencyPortal(payload: AgencyLoginPayload) {
 
     storeSession(session);
 
-    return session;
+    return {
+        ...session,
+        redirect: loginPayload.redirect,
+    };
 }
 
 export async function requestAgencyPasswordReset(

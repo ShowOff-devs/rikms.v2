@@ -12,9 +12,13 @@ class Statuses
 
     public const RESEARCH_PUBLISHED = 'published';
 
+    public const RESEARCH_ARCHIVED = 'archived';
+
     public const ACCESS_REQUEST_PENDING = 'pending';
 
     public const NOTIFICATION_UNREAD = 'unread';
+
+    public const NOTIFICATION_READ = 'read';
 
     public const USERS = [
         'active',

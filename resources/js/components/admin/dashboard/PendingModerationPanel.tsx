@@ -7,6 +7,7 @@ const issueStyles = {
     'missing-metadata': 'bg-[#dbeafe] text-[#1447e6]',
     'pending-access': 'bg-[#fef3c7] text-[#bb4d00]',
     'incomplete-affiliation': 'bg-[#dbeafe] text-[#1447e6]',
+    'research-review': 'bg-[#fef3c7] text-[#bb4d00]',
 };
 
 export function PendingModerationPanel({
@@ -62,7 +63,7 @@ export function PendingModerationPanel({
                                             type="button"
                                             onClick={() =>
                                                 router.visit(
-                                                    '/admin/research-moderation',
+                                                    '/admin/moderation',
                                                 )
                                             }
                                             className="font-medium text-[#1e3a8a]"

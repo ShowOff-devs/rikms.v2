@@ -14,10 +14,18 @@ class EnsureUserHasRole
         $user = $request->user();
 
         if (! $user) {
+            if (! $request->is('api/*') && ! $request->expectsJson()) {
+                return redirect()->route('login');
+            }
+
             return ApiResponse::error('Authentication is required.', [], 401);
         }
 
         if (! $user->hasAnyRole($this->normalizeArguments($roles))) {
+            if (! $request->is('api/*') && ! $request->expectsJson()) {
+                abort(403, 'You do not have permission to access this resource.');
+            }
+
             return ApiResponse::error('You do not have permission to access this resource.', [], 403);
         }
 

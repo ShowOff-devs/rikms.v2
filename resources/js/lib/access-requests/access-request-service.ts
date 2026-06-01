@@ -1,9 +1,17 @@
 import { mockAccessRequests } from '@/data/mock-access-requests';
+import {
+    approveAgencyAccessRequest,
+    denyAgencyAccessRequest,
+    mapAccessRequestFromApi,
+} from '@/lib/agency/agency-access-request-service';
+import { fetchApi } from '@/lib/api-client';
 import type {
     AccessRequest,
     AccessRequestDateFilter,
     AccessRequestFilters,
 } from '@/types/access-request';
+
+type AccessRequestApiRecord = Parameters<typeof mapAccessRequestFromApi>[0];
 
 let accessRequests = mockAccessRequests.map((request) => ({ ...request }));
 
@@ -34,9 +42,20 @@ const matchesDateFilter = (
 };
 
 export async function getAccessRequests() {
-    await mockNetworkDelay();
+    try {
+        const { data } = await fetchApi<AccessRequestApiRecord[]>(
+            '/api/agency/access-requests?per_page=100',
+        );
 
-    return cloneRequests(accessRequests);
+        accessRequests = data.map(mapAccessRequestFromApi);
+
+        return cloneRequests(accessRequests);
+    } catch {
+        // TODO Phase 8/9: Replace this mock fallback after the real protected API and browser QA are complete.
+        await mockNetworkDelay();
+
+        return cloneRequests(accessRequests);
+    }
 }
 
 export function searchAccessRequests(
@@ -82,36 +101,18 @@ export function filterAccessRequests(
 }
 
 export async function approveAccessRequest(id: string) {
-    await mockNetworkDelay();
-
+    const updated = await approveAgencyAccessRequest(id);
     accessRequests = accessRequests.map((request) =>
-        request.id === id
-            ? {
-                  ...request,
-                  status: 'approved',
-                  denialReason: undefined,
-                  processedAt: 'Mar 6, 2025',
-                  processedBy: 'Agency Admin',
-              }
-            : request,
+        request.id === id ? updated : request,
     );
 
     return getAccessRequestById(id);
 }
 
 export async function denyAccessRequest(id: string, reason?: string) {
-    await mockNetworkDelay();
-
+    const updated = await denyAgencyAccessRequest(id, reason);
     accessRequests = accessRequests.map((request) =>
-        request.id === id
-            ? {
-                  ...request,
-                  status: 'denied',
-                  denialReason: reason,
-                  processedAt: 'Mar 6, 2025',
-                  processedBy: 'Agency Admin',
-              }
-            : request,
+        request.id === id ? updated : request,
     );
 
     return getAccessRequestById(id);
