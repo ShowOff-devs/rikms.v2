@@ -1,5 +1,5 @@
 import { Clock3 } from 'lucide-react';
-import { archiveRecordTypeLabels } from '@/data/mock-admin-archive';
+import { archiveRecordTypeLabels } from '@/data/admin-archive-options';
 import { cn } from '@/lib/utils';
 import type {
     ArchiveActivity,

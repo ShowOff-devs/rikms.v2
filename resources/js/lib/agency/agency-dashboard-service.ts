@@ -1,10 +1,3 @@
-import {
-    agencyAccessRequests,
-    agencyResearchRecords,
-    dashboardMetrics,
-    researchByCategory,
-    researchByYear,
-} from '@/data/mock-agency-dashboard';
 import { fetchApi } from '@/lib/api-client';
 import type {
     AccessRequestStatus,
@@ -48,98 +41,68 @@ type AgencyAccessRequestsApiData = Array<{
     };
 }>;
 
-const mockNetworkDelay = (duration = 200) =>
-    new Promise((resolve) => window.setTimeout(resolve, duration));
-
 export async function getAgencyDashboardData() {
-    try {
-        const [{ data }, requests] = await Promise.all([
-            fetchApi<AgencyDashboardApiData>('/api/agency/dashboard'),
-            getAgencyAccessRequests(),
-        ]);
+    const [{ data }, requests] = await Promise.all([
+        fetchApi<AgencyDashboardApiData>('/api/agency/dashboard'),
+        getAgencyAccessRequests(),
+    ]);
 
-        return {
-            metrics: [
-                {
-                    id: 'total-research',
-                    label: 'Total Research',
-                    value: data.metrics.total_research,
-                    tone: 'blue' as const,
-                },
-                {
-                    id: 'draft-research',
-                    label: 'Draft Research',
-                    value: data.metrics.draft_research,
-                    tone: 'amber' as const,
-                },
-                {
-                    id: 'published-research',
-                    label: 'Published',
-                    value: data.metrics.published_research,
-                    tone: 'green' as const,
-                },
-                {
-                    id: 'pending-requests',
-                    label: 'Pending Requests',
-                    value: data.metrics.pending_access_requests,
-                    tone: 'slate' as const,
-                },
-            ],
-            researchByYear:
-                data.research_by_year.length > 0
-                    ? data.research_by_year
-                    : researchByYear,
-            researchByCategory:
-                data.research_by_category.length > 0
-                    ? data.research_by_category.map((item, index) => ({
-                          ...item,
-                          color:
-                              ['#1e3a8a', '#009966', '#f97316', '#64748b'][
-                                  index % 4
-                              ],
-                      }))
-                    : researchByCategory,
-            researchRecords: data.recent_research.map((record) =>
-                mapResearchRecord(record),
-            ),
-            accessRequests: requests,
-        };
-    } catch {
-        await mockNetworkDelay();
-
-        return {
-            metrics: dashboardMetrics,
-            researchByYear,
-            researchByCategory,
-            researchRecords: agencyResearchRecords,
-            accessRequests: agencyAccessRequests,
-        };
-    }
+    return {
+        metrics: [
+            {
+                id: 'total-research',
+                label: 'Total Research',
+                value: data.metrics.total_research,
+                tone: 'blue' as const,
+            },
+            {
+                id: 'draft-research',
+                label: 'Draft Research',
+                value: data.metrics.draft_research,
+                tone: 'amber' as const,
+            },
+            {
+                id: 'published-research',
+                label: 'Published',
+                value: data.metrics.published_research,
+                tone: 'green' as const,
+            },
+            {
+                id: 'pending-requests',
+                label: 'Pending Requests',
+                value: data.metrics.pending_access_requests,
+                tone: 'slate' as const,
+            },
+        ],
+        researchByYear: data.research_by_year,
+        researchByCategory: data.research_by_category.map((item, index) => ({
+            ...item,
+            color: ['#1e3a8a', '#009966', '#f97316', '#64748b'][index % 4],
+        })),
+        researchRecords: data.recent_research.map((record) =>
+            mapResearchRecord(record),
+        ),
+        accessRequests: requests,
+    };
 }
 
 export async function getAgencyAccessRequests() {
-    try {
-        const { data } = await fetchApi<AgencyAccessRequestsApiData>(
-            '/api/agency/access-requests?status=pending&per_page=5',
-        );
+    const { data } = await fetchApi<AgencyAccessRequestsApiData>(
+        '/api/agency/access-requests?status=pending&per_page=5',
+    );
 
-        return data.map((request) => ({
-            id: String(request.id),
-            requesterName: request.requester_name ?? 'Unknown requester',
-            organization:
-                request.research?.agency?.short_name ??
-                request.research?.agency?.name ??
-                request.requester_email ??
-                'External requester',
-            researchTitle: request.research?.title ?? 'Untitled research',
-            requestDate: formatDate(request.created_at),
-            status: mapAccessRequestStatus(request.status),
-        }));
-    } catch {
-        await mockNetworkDelay();
-
-        return agencyAccessRequests;
-    }
+    return data.map((request) => ({
+        id: String(request.id),
+        requesterName: request.requester_name ?? 'Unknown requester',
+        organization:
+            request.research?.agency?.short_name ??
+            request.research?.agency?.name ??
+            request.requester_email ??
+            'External requester',
+        researchTitle: request.research?.title ?? 'Untitled research',
+        requestDate: formatDate(request.created_at),
+        status: mapAccessRequestStatus(request.status),
+    }));
 }
 
 export function filterAgencyResearchRecords(

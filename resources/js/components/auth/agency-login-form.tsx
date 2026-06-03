@@ -15,7 +15,8 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
-import { getAgencyOptions, signInToAgencyPortal } from '@/lib/auth/agency-auth';
+import { signInToAgencyPortal } from '@/lib/auth/agency-auth';
+import type { AgencyOption } from '@/types/auth';
 
 type AgencyLoginFieldErrors = Partial<
     Record<'agencyId' | 'email' | 'password', string>
@@ -32,8 +33,11 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const usepSeal = '/assets/figma/usep-seal.png';
 const dostSeal = '/assets/figma/dost-xi-logo.png';
 
-export default function AgencyLoginForm() {
-    const agencies = getAgencyOptions();
+type AgencyLoginFormProps = {
+    agencies: AgencyOption[];
+};
+
+export default function AgencyLoginForm({ agencies }: AgencyLoginFormProps) {
     const [form, setForm] = useState<AgencyLoginFormState>({
         agencyId: '',
         email: '',
@@ -60,7 +64,10 @@ export default function AgencyLoginForm() {
     const validate = () => {
         const nextErrors: AgencyLoginFieldErrors = {};
 
-        if (!form.agencyId) {
+        if (agencies.length === 0) {
+            nextErrors.agencyId =
+                'No active agency accounts are available for login.';
+        } else if (!form.agencyId) {
             nextErrors.agencyId = 'Please choose your agency account.';
         }
 
@@ -176,6 +183,11 @@ export default function AgencyLoginForm() {
                                 ))}
                             </SelectContent>
                         </Select>
+                        {agencies.length === 0 ? (
+                            <p className="mt-2 text-sm text-[#6b7280]">
+                                No active agencies found.
+                            </p>
+                        ) : null}
                     </div>
                     <InputError message={errors.agencyId} />
                 </div>
@@ -199,8 +211,9 @@ export default function AgencyLoginForm() {
                         autoFocus
                         className="h-[42px] rounded-[10px] border-[#e5e7eb] bg-white px-4 text-sm shadow-none placeholder:text-[rgba(10,10,10,0.5)]"
                         placeholder={
-                            selectedAgency?.adminEmailHint ??
-                            'admin@agency.gov.ph'
+                            selectedAgency
+                                ? `Enter your ${selectedAgency.shortName} email`
+                                : 'Enter your agency email'
                         }
                     />
                     <InputError message={errors.email} />
@@ -248,7 +261,7 @@ export default function AgencyLoginForm() {
 
                 <Button
                     type="submit"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || agencies.length === 0}
                     className="h-12 w-full rounded-[10px] bg-[#1e3a8a] text-base font-semibold text-white hover:bg-[#1b347b]"
                 >
                     {isSubmitting ? <Spinner /> : null}

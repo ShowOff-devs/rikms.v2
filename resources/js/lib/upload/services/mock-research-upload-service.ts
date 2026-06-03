@@ -1,7 +1,7 @@
 import {
     getAccessLabel,
     getDisplayTitle,
-    mockExtractedMetadata,
+    metadataFieldsTemplate,
 } from '@/lib/agency/upload-research-service';
 import type {
     AgencyUploadState,
@@ -34,7 +34,7 @@ export async function mockRunResearchMetadataExtraction(
     await wait(850);
 
     return {
-        metadata: mockExtractedMetadata.map((field) =>
+        metadata: metadataFieldsTemplate.map((field) =>
             field.key === 'title' && state.manualTitle.trim()
                 ? { ...field, value: state.manualTitle.trim() }
                 : field,

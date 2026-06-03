@@ -14,14 +14,13 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import AgencyAdminLayout from '@/components/agency/AgencyAdminLayout';
-import { getAgencySession } from '@/lib/auth/agency-auth';
+import { useAgencySession } from '@/lib/auth/agency-auth';
 import {
     getAgencyNotifications,
     markAllAgencyNotificationsRead,
     updateAgencyNotificationReadState,
 } from '@/lib/notifications/notification-service';
 import { cn } from '@/lib/utils';
-import type { AgencyAuthSession } from '@/types/auth';
 import type {
     AgencyNotification,
     AgencyNotificationType,
@@ -79,10 +78,7 @@ const formatNotificationDate = (value: string) =>
     }).format(new Date(value));
 
 export default function AgencyNotificationsPage() {
-    const session = useMemo<AgencyAuthSession | null>(
-        () => getAgencySession(),
-        [],
-    );
+    const session = useAgencySession();
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState<NotificationFilter>('all');
     const [notifications, setNotifications] = useState<AgencyNotification[]>(

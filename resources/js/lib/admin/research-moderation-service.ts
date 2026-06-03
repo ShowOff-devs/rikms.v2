@@ -1,9 +1,4 @@
-import {
-    duplicateResearchMatches,
-    flaggedResearchRecords,
-    moderationActivities,
-    moderationIssueTypeLabels,
-} from '@/data/mock-research-moderation';
+import { moderationIssueTypeLabels } from '@/data/research-moderation-options';
 import {
     approveAdminResearch,
     archiveAdminResearch,
@@ -22,11 +17,6 @@ import type {
     ModerationReportExportResult,
     ModerationSummary,
 } from '@/types/research-moderation';
-
-const mockNetworkDelay = (duration = 220) =>
-    new Promise<void>((resolve) => {
-        window.setTimeout(resolve, duration);
-    });
 
 function isFilterActive(value?: string) {
     return Boolean(value && value !== 'all');
@@ -80,53 +70,39 @@ function matchesFilters(
 }
 
 export async function getModerationSummary(): Promise<ModerationSummary> {
-    await mockNetworkDelay();
+    const records = await getAdminModerationResearchRecords();
 
     return {
-        flaggedResearchRecords: flaggedResearchRecords.filter(
+        flaggedResearchRecords: records.filter(
             (record) => record.status !== 'resolved',
         ).length,
-        pendingReview: flaggedResearchRecords.filter(
+        pendingReview: records.filter(
             (record) => record.status === 'pending-review',
         ).length,
-        resolvedIssues: flaggedResearchRecords.filter(
-            (record) => record.status === 'resolved',
-        ).length,
-        duplicateResearchAlerts: duplicateResearchMatches.length,
+        resolvedIssues: records.filter((record) => record.status === 'resolved')
+            .length,
+        duplicateResearchAlerts: 0,
     };
 }
 
 export async function getFlaggedResearchRecords(
     filters: Partial<ModerationFilters> = {},
 ): Promise<FlaggedResearchRecord[]> {
-    try {
-        const records = await getAdminModerationResearchRecords();
+    const records = await getAdminModerationResearchRecords();
 
-        return records.filter((record) => matchesFilters(record, filters));
-    } catch {
-        // TODO Phase 5: Remove fallback when moderation queue UI is browser-verified with real admin data.
-        await mockNetworkDelay();
-
-        return flaggedResearchRecords.filter((record) =>
-            matchesFilters(record, filters),
-        );
-    }
+    return records.filter((record) => matchesFilters(record, filters));
 }
 
 export async function getDuplicateResearchMatches(): Promise<
     DuplicateResearchMatch[]
 > {
-    await mockNetworkDelay();
-
-    return duplicateResearchMatches;
+    return [];
 }
 
 export async function getModerationActivityLog(): Promise<
     ModerationActivity[]
 > {
-    await mockNetworkDelay();
-
-    return moderationActivities;
+    return [];
 }
 
 export async function markResearchIssueResolved(
@@ -149,7 +125,6 @@ export async function flagResearchForReview(
     } catch {
         return returnAdminResearch(id, payload);
     }
-
 }
 
 export async function archiveFlaggedResearch(
@@ -162,16 +137,20 @@ export async function archiveFlaggedResearch(
 export async function exportModerationReport(
     options: ModerationReportExportOptions,
 ): Promise<ModerationReportExportResult> {
-    await mockNetworkDelay(900);
+    const response = await fetch('/api/admin/reports/research/export', {
+        credentials: 'same-origin',
+        headers: { Accept: 'text/csv', 'X-Requested-With': 'XMLHttpRequest' },
+    });
 
-    const generatedAt = new Date().toISOString();
-    const dateStamp = generatedAt.slice(0, 10);
+    if (!response.ok) {
+        throw new Error('Unable to export moderation report.');
+    }
 
     return {
         id: `research-moderation-export-${Date.now()}`,
-        fileName: `rikms-moderation-report-${dateStamp}.${options.format}`,
+        fileName: `rikms-moderation-report-${new Date().toISOString().slice(0, 10)}.csv`,
         format: options.format,
-        generatedAt,
+        generatedAt: new Date().toISOString(),
         status: 'ready',
     };
 }

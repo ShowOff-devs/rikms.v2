@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Services\AiPipelineResultWriter;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 
@@ -16,8 +17,13 @@ class ClassifyResearchSdgJob implements ShouldQueue
         public ?int $uploadedByUserId,
     ) {}
 
-    public function handle(): void
+    public function handle(AiPipelineResultWriter $writer): void
     {
-        // Deferred: write SDG classification suggestions to MongoDB collection sdg_classifications.
+        $writer->writeSdgClassificationResult(
+            $this->researchId,
+            $this->fileId,
+            $this->agencyId,
+            $this->uploadedByUserId,
+        );
     }
 }

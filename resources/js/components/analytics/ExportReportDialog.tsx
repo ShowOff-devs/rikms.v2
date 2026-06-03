@@ -35,9 +35,8 @@ export function ExportReportDialog({
                         Export Analytics Report
                     </DialogTitle>
                     <DialogDescription>
-                        Generate a mock export using the active agency analytics
-                        filters. This is ready to connect to PDF or CSV
-                        endpoints later.
+                        Generate a CSV export using the active agency analytics
+                        filters.
                     </DialogDescription>
                 </DialogHeader>
 

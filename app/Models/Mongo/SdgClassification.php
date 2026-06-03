@@ -22,6 +22,9 @@ class SdgClassification extends Model
         'classification_source',
         'raw_ai_response',
         'review_status',
+        'processing_status',
+        'processing_errors',
+        'processed_at',
         'reviewed_by',
         'reviewed_at',
     ];
@@ -33,7 +36,9 @@ class SdgClassification extends Model
         'uploaded_by_user_id' => 'integer',
         'sdg_results' => 'array',
         'raw_ai_response' => 'array',
+        'processing_errors' => 'array',
         'confidence_score' => 'float',
+        'processed_at' => 'datetime',
         'reviewed_by' => 'integer',
         'reviewed_at' => 'datetime',
     ];

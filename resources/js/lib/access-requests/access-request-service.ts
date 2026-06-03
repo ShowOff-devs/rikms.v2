@@ -1,4 +1,3 @@
-import { mockAccessRequests } from '@/data/mock-access-requests';
 import {
     approveAgencyAccessRequest,
     denyAgencyAccessRequest,
@@ -13,10 +12,7 @@ import type {
 
 type AccessRequestApiRecord = Parameters<typeof mapAccessRequestFromApi>[0];
 
-let accessRequests = mockAccessRequests.map((request) => ({ ...request }));
-
-const mockNetworkDelay = (duration = 160) =>
-    new Promise((resolve) => window.setTimeout(resolve, duration));
+let accessRequests: AccessRequest[] = [];
 
 const cloneRequests = (requests: AccessRequest[]) =>
     requests.map((request) => ({ ...request }));
@@ -42,20 +38,13 @@ const matchesDateFilter = (
 };
 
 export async function getAccessRequests() {
-    try {
-        const { data } = await fetchApi<AccessRequestApiRecord[]>(
-            '/api/agency/access-requests?per_page=100',
-        );
+    const { data } = await fetchApi<AccessRequestApiRecord[]>(
+        '/api/agency/access-requests?per_page=100',
+    );
 
-        accessRequests = data.map(mapAccessRequestFromApi);
+    accessRequests = data.map(mapAccessRequestFromApi);
 
-        return cloneRequests(accessRequests);
-    } catch {
-        // TODO Phase 8/9: Replace this mock fallback after the real protected API and browser QA are complete.
-        await mockNetworkDelay();
-
-        return cloneRequests(accessRequests);
-    }
+    return cloneRequests(accessRequests);
 }
 
 export function searchAccessRequests(
@@ -119,8 +108,6 @@ export async function denyAccessRequest(id: string, reason?: string) {
 }
 
 export async function getAccessRequestById(id: string) {
-    await mockNetworkDelay(40);
-
     const request = accessRequests.find((item) => item.id === id);
 
     return request ? { ...request } : null;

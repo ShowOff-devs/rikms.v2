@@ -14,7 +14,7 @@ import {
     getAgencyDashboardData,
     updateAccessRequestStatus,
 } from '@/lib/agency/agency-dashboard-service';
-import { getAgencySession } from '@/lib/auth/agency-auth';
+import { useAgencySession } from '@/lib/auth/agency-auth';
 import type {
     AgencyAccessRequest,
     AgencyResearchRecord,
@@ -22,7 +22,6 @@ import type {
     ResearchCategoryPoint,
     ResearchYearPoint,
 } from '@/types/agency-dashboard';
-import type { AgencyAuthSession } from '@/types/auth';
 
 type DashboardState = {
     metrics: DashboardMetric[];
@@ -41,10 +40,7 @@ const emptyDashboardState: DashboardState = {
 };
 
 export default function AgencyDashboardPage() {
-    const session = useMemo<AgencyAuthSession | null>(
-        () => getAgencySession(),
-        [],
-    );
+    const session = useAgencySession();
     const [dashboard, setDashboard] =
         useState<DashboardState>(emptyDashboardState);
     const [isLoading, setIsLoading] = useState(true);

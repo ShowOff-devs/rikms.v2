@@ -9,7 +9,7 @@ import {
 import {
     systemResearchDocumentTypeLabels,
     systemResearchStatusLabels,
-} from '@/data/mock-system-research';
+} from '@/data/system-research-options';
 import type { SystemResearchFilters as SystemResearchFilterState } from '@/types/system-research';
 
 type SystemResearchFiltersProps = {

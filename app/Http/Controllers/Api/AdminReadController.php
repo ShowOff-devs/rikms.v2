@@ -75,6 +75,11 @@ class AdminReadController extends Controller
     public function agencies(Request $request): JsonResponse
     {
         $query = Agency::query()
+            ->with(['users' => function ($query): void {
+                $query->where('role', 'agency_admin')
+                    ->orWhereHas('roles', fn (Builder $query) => $query->where('slug', 'agency_admin'))
+                    ->with('roles');
+            }])
             ->withCount('research')
             ->when($request->filled('status'), fn (Builder $query) => $query->where('status', $request->string('status')))
             ->when($request->filled('keyword'), function (Builder $query) use ($request): void {

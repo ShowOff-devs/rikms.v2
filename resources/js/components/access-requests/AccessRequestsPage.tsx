@@ -13,12 +13,11 @@ import {
     filterAccessRequests,
     getAccessRequests,
 } from '@/lib/access-requests/access-request-service';
-import { getAgencySession } from '@/lib/auth/agency-auth';
+import { useAgencySession } from '@/lib/auth/agency-auth';
 import type {
     AccessRequest,
     AccessRequestFilters as AccessRequestFiltersValue,
 } from '@/types/access-request';
-import type { AgencyAuthSession } from '@/types/auth';
 
 type DecisionState = {
     request: AccessRequest;
@@ -33,10 +32,7 @@ const initialFilters: AccessRequestFiltersValue = {
 };
 
 export function AccessRequestsPage() {
-    const session = useMemo<AgencyAuthSession | null>(
-        () => getAgencySession(),
-        [],
-    );
+    const session = useAgencySession();
     const [requests, setRequests] = useState<AccessRequest[]>([]);
     const [filters, setFilters] =
         useState<AccessRequestFiltersValue>(initialFilters);

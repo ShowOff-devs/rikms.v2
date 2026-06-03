@@ -1,4 +1,3 @@
-import { systemResearchRecords } from '@/data/mock-system-research';
 import { fetchApi } from '@/lib/api-client';
 import type {
     SystemResearchExportOptions,
@@ -27,11 +26,6 @@ type AdminResearchApiRecord = {
     created_at?: string | null;
     published_at?: string | null;
 };
-
-const mockNetworkDelay = (duration = 220) =>
-    new Promise<void>((resolve) => {
-        window.setTimeout(resolve, duration);
-    });
 
 function isFilterActive(value?: string) {
     return Boolean(value && value !== 'all');
@@ -128,55 +122,42 @@ export function createSystemResearchSummary(
 export async function getSystemResearchRecords(
     filters: SystemResearchFilters = {},
 ): Promise<SystemResearchRecord[]> {
-    try {
-        const { data } = await fetchApi<AdminResearchApiRecord[]>(
-            '/api/admin/research?per_page=100',
-        );
+    const { data } = await fetchApi<AdminResearchApiRecord[]>(
+        '/api/admin/research?per_page=100',
+    );
 
-        return filterSystemResearchRecords(data.map(mapResearchFromApi), filters);
-    } catch {
-        await mockNetworkDelay();
-
-        return filterSystemResearchRecords(systemResearchRecords, filters);
-    }
+    return filterSystemResearchRecords(data.map(mapResearchFromApi), filters);
 }
 
 export async function getSystemResearchSummary(
     filters: SystemResearchFilters = {},
 ): Promise<SystemResearchSummary> {
-    try {
-        const records = await getSystemResearchRecords(filters);
+    const records = await getSystemResearchRecords(filters);
 
-        return createSystemResearchSummary(records);
-    } catch {
-        await mockNetworkDelay();
-
-        return createSystemResearchSummary(
-            filterSystemResearchRecords(systemResearchRecords, filters),
-        );
-    }
+    return createSystemResearchSummary(records);
 }
 
 export async function getSystemResearchRecordById(
     id: string,
 ): Promise<SystemResearchRecord | null> {
-    try {
-        const { data } = await fetchApi<AdminResearchApiRecord>(
-            `/api/admin/research/${id}`,
-        );
+    const { data } = await fetchApi<AdminResearchApiRecord>(
+        `/api/admin/research/${id}`,
+    );
 
-        return mapResearchFromApi(data);
-    } catch {
-        await mockNetworkDelay();
-
-        return systemResearchRecords.find((record) => record.id === id) ?? null;
-    }
+    return mapResearchFromApi(data);
 }
 
 export async function exportSystemResearchRecords(
     options: SystemResearchExportOptions,
 ): Promise<SystemResearchExportResult> {
-    await mockNetworkDelay(900);
+    const response = await fetch('/api/admin/reports/research/export', {
+        credentials: 'same-origin',
+        headers: { Accept: 'text/csv', 'X-Requested-With': 'XMLHttpRequest' },
+    });
+
+    if (!response.ok) {
+        throw new Error('Unable to export system research records.');
+    }
 
     const generatedAt = new Date().toISOString();
     const dateStamp = generatedAt.slice(0, 10);
@@ -190,7 +171,9 @@ export async function exportSystemResearchRecords(
     };
 }
 
-function mapResearchFromApi(record: AdminResearchApiRecord): SystemResearchRecord {
+function mapResearchFromApi(
+    record: AdminResearchApiRecord,
+): SystemResearchRecord {
     const authors = Array.isArray(record.authors)
         ? record.authors
         : record.authors
@@ -228,8 +211,14 @@ function mapResearchStatus(status: string): SystemResearchRecord['status'] {
     return 'under-review';
 }
 
-function mapAccessType(accessLevel?: string | null): SystemResearchRecord['accessType'] {
-    if (accessLevel === 'public' || accessLevel === 'restricted' || accessLevel === 'embargo') {
+function mapAccessType(
+    accessLevel?: string | null,
+): SystemResearchRecord['accessType'] {
+    if (
+        accessLevel === 'public' ||
+        accessLevel === 'restricted' ||
+        accessLevel === 'embargo'
+    ) {
         return accessLevel;
     }
 

@@ -7,7 +7,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { archiveStatusLabels } from '@/data/mock-admin-archive';
+import { archiveStatusLabels } from '@/data/admin-archive-options';
 import type { AdminArchivedRecord } from '@/types/admin-archive';
 import {
     getArchivedRecordDetails,

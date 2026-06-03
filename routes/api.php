@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Api\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\AdminAccessMonitoringController;
+use App\Http\Controllers\Api\AdminAgencyAdminUserController;
+use App\Http\Controllers\Api\AdminAgencyManagementController;
 use App\Http\Controllers\Api\AdminAnalyticsController;
 use App\Http\Controllers\Api\AdminArchiveController;
 use App\Http\Controllers\Api\AdminPlatformSettingController;
@@ -9,8 +11,11 @@ use App\Http\Controllers\Api\AdminRbacController;
 use App\Http\Controllers\Api\AdminReadController;
 use App\Http\Controllers\Api\AdminResearchModerationController;
 use App\Http\Controllers\Api\AdminSecurityController;
+use App\Http\Controllers\Api\AdminSystemActivityController;
 use App\Http\Controllers\Api\AgencyAccessRequestDecisionController;
+use App\Http\Controllers\Api\AgencyAnalyticsController;
 use App\Http\Controllers\Api\AgencyArchiveController;
+use App\Http\Controllers\Api\AgencyProfileSettingsController;
 use App\Http\Controllers\Api\AgencyReadController;
 use App\Http\Controllers\Api\AgencyResearchWriteController;
 use App\Http\Controllers\Api\AiResultController;
@@ -48,6 +53,19 @@ Route::prefix('agency')
     ->middleware(['auth:sanctum', 'role:agency_admin', 'agency.scope'])
     ->group(function () {
         Route::get('/dashboard', [AgencyReadController::class, 'dashboard'])->name('dashboard');
+        Route::get('/analytics', [AgencyAnalyticsController::class, 'show'])->name('analytics.show');
+        Route::get('/analytics/export', [AgencyAnalyticsController::class, 'export'])->name('analytics.export');
+        Route::get('/profile', [AgencyProfileSettingsController::class, 'profile'])->name('profile.show');
+        Route::patch('/profile', [AgencyProfileSettingsController::class, 'updateProfile'])->name('profile.update');
+        Route::post('/profile/logo', [AgencyProfileSettingsController::class, 'uploadLogo'])->name('profile.logo.upload');
+        Route::delete('/profile/logo', [AgencyProfileSettingsController::class, 'removeLogo'])->name('profile.logo.remove');
+        Route::get('/settings', [AgencyProfileSettingsController::class, 'settings'])->name('settings.show');
+        Route::patch('/settings/account', [AgencyProfileSettingsController::class, 'updateAccount'])->name('settings.account.update');
+        Route::patch('/settings/notifications', [AgencyProfileSettingsController::class, 'updateNotifications'])->name('settings.notifications.update');
+        Route::patch('/settings/security', [AgencyProfileSettingsController::class, 'updateSecurity'])->name('settings.security.update');
+        Route::post('/settings/profile-photo', [AgencyProfileSettingsController::class, 'uploadProfilePhoto'])->name('settings.profile-photo.upload');
+        Route::post('/settings/password', [AgencyProfileSettingsController::class, 'changePassword'])->name('settings.password.update');
+        Route::post('/settings/deactivation-request', [AgencyProfileSettingsController::class, 'requestDeactivation'])->name('settings.deactivation-request');
         Route::get('/research', [AgencyReadController::class, 'research'])->name('research.index');
         Route::post('/research', [AgencyResearchWriteController::class, 'store'])->name('research.store');
         Route::get('/research/{research}', [AgencyReadController::class, 'researchShow'])->name('research.show');
@@ -79,8 +97,22 @@ Route::prefix('admin')
     ->middleware(['auth:sanctum', 'role:super_admin'])
     ->group(function () {
         Route::get('/dashboard', AdminDashboardController::class)->name('dashboard');
+        Route::get('/agency-admin-users', [AdminAgencyAdminUserController::class, 'index'])->name('agency-admin-users.index');
+        Route::post('/agency-admin-users', [AdminAgencyAdminUserController::class, 'store'])->name('agency-admin-users.store');
+        Route::get('/agency-admin-users/{user}', [AdminAgencyAdminUserController::class, 'show'])->name('agency-admin-users.show');
+        Route::patch('/agency-admin-users/{user}', [AdminAgencyAdminUserController::class, 'update'])->name('agency-admin-users.update');
+        Route::post('/agency-admin-users/{user}/activate', [AdminAgencyAdminUserController::class, 'activate'])->name('agency-admin-users.activate');
+        Route::post('/agency-admin-users/{user}/deactivate', [AdminAgencyAdminUserController::class, 'deactivate'])->name('agency-admin-users.deactivate');
+        Route::post('/agency-admin-users/{user}/password-reset', [AdminAgencyAdminUserController::class, 'sendPasswordReset'])->name('agency-admin-users.password-reset');
+        Route::delete('/agency-admin-users/{user}', [AdminAgencyAdminUserController::class, 'destroy'])->name('agency-admin-users.destroy');
         Route::get('/agencies', [AdminReadController::class, 'agencies'])->name('agencies.index');
+        Route::post('/agencies', [AdminAgencyManagementController::class, 'store'])->name('agencies.store');
         Route::get('/agencies/{agency}', [AdminReadController::class, 'agencyShow'])->name('agencies.show');
+        Route::patch('/agencies/{agency}', [AdminAgencyManagementController::class, 'update'])->name('agencies.update');
+        Route::post('/agencies/{agency}/activate', [AdminAgencyManagementController::class, 'activate'])->name('agencies.activate');
+        Route::post('/agencies/{agency}/deactivate', [AdminAgencyManagementController::class, 'deactivate'])->name('agencies.deactivate');
+        Route::post('/agencies/{agency}/assign-admin', [AdminAgencyManagementController::class, 'assignAdmin'])->name('agencies.assign-admin');
+        Route::post('/agencies/{agency}/archive', [AdminAgencyManagementController::class, 'archive'])->name('agencies.archive');
         Route::get('/users', [AdminReadController::class, 'users'])->name('users.index');
         Route::get('/users/{user}', [AdminReadController::class, 'userShow'])->name('users.show');
         Route::get('/research', [AdminReadController::class, 'research'])->name('research.index');
@@ -118,6 +150,13 @@ Route::prefix('admin')
         Route::get('/security/events/{securityEvent}', [AdminSecurityController::class, 'show'])->name('security.events.show');
         Route::post('/security/events/{securityEvent}/resolve', [AdminSecurityController::class, 'resolve'])->name('security.events.resolve');
         Route::post('/security/events/{securityEvent}/reopen', [AdminSecurityController::class, 'reopen'])->name('security.events.reopen');
+        Route::get('/security/sessions', [AdminSecurityController::class, 'sessions'])->name('security.sessions');
+        Route::delete('/security/sessions/{sessionId}', [AdminSecurityController::class, 'revokeSession'])->name('security.sessions.revoke');
+        Route::get('/system-activity/notifications', [AdminSystemActivityController::class, 'notifications'])->name('system-activity.notifications');
+        Route::post('/system-activity/notifications/clear', [AdminSystemActivityController::class, 'clearNotifications'])->name('system-activity.notifications.clear');
+        Route::get('/system-activity/logs', [AdminSystemActivityController::class, 'activityLogs'])->name('system-activity.logs');
+        Route::get('/system-activity/timeline', [AdminSystemActivityController::class, 'timeline'])->name('system-activity.timeline');
+        Route::get('/system-activity/export', [AdminSystemActivityController::class, 'export'])->name('system-activity.export');
         Route::get('/platform-settings', [AdminReadController::class, 'platformSettings'])->name('platform-settings.index');
         Route::patch('/platform-settings/{setting}', [AdminPlatformSettingController::class, 'update'])->name('platform-settings.update');
         Route::post('/platform-settings/bulk-update', [AdminPlatformSettingController::class, 'bulkUpdate'])->name('platform-settings.bulk-update');

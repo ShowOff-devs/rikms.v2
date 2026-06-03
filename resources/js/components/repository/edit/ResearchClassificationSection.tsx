@@ -7,7 +7,7 @@ import {
 import {
     repositoryCategoryColors,
     repositorySdgColors,
-} from '@/data/mock-repository';
+} from '@/data/repository-display';
 import type { RepositoryUpdatePayload } from '@/types/repository';
 
 const sdgOptions = Array.from({ length: 17 }, (_, index) => `SDG ${index + 1}`);

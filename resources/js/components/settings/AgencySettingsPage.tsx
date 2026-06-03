@@ -11,7 +11,7 @@ import { NotificationSettingsPanel } from '@/components/settings/NotificationSet
 import { SecuritySettingsPanel } from '@/components/settings/SecuritySettingsPanel';
 import { SettingsSaveButton } from '@/components/settings/SettingsSaveButton';
 import { SettingsTabs } from '@/components/settings/SettingsTabs';
-import { getAgencySession } from '@/lib/auth/agency-auth';
+import { useAgencySession } from '@/lib/auth/agency-auth';
 import {
     changePassword,
     getAgencySettings,
@@ -21,7 +21,6 @@ import {
     updateSecuritySettings,
     uploadProfilePhoto,
 } from '@/lib/settings/settings-service';
-import type { AgencyAuthSession } from '@/types/auth';
 import type {
     AccountSettings,
     AgencySettings,
@@ -105,10 +104,7 @@ export function AgencySettingsPage() {
         resolver: zodResolver(accountSchema),
     });
 
-    const session = useMemo<AgencyAuthSession | null>(
-        () => getAgencySession(),
-        [],
-    );
+    const session = useAgencySession();
     const [search, setSearch] = useState('');
     const [activeTab, setActiveTab] = useState<SettingsTab>('account');
     const [settings, setSettings] = useState<AgencySettings | null>(null);

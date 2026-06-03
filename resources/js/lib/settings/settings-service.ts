@@ -1,5 +1,4 @@
-import { mockAgencySettings } from '@/data/mock-settings';
-// TODO Phase 8/9: Replace this mock fallback after the real protected API and browser QA are complete.
+import { fetchApi } from '@/lib/api-client';
 import type {
     AccountSettings,
     AgencySettings,
@@ -10,95 +9,95 @@ import type {
     SecuritySettings,
 } from '@/types/settings';
 
-let currentAgencySettings: AgencySettings = structuredClone(mockAgencySettings);
-
-const mockNetworkDelay = (duration = 240) =>
-    new Promise((resolve) => window.setTimeout(resolve, duration));
-
-const fileToDataUrl = (file: File) =>
-    new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () =>
-            reject(new Error('Unable to read profile photo.'));
-        reader.readAsDataURL(file);
-    });
-
 export async function getAgencySettings() {
-    await mockNetworkDelay();
+    const { data } = await fetchApi<AgencySettings>('/api/agency/settings');
 
-    return structuredClone(currentAgencySettings);
+    return structuredClone(data);
 }
 
 export async function updateAccountSettings(payload: AccountSettings) {
-    await mockNetworkDelay(320);
-
-    currentAgencySettings = {
-        ...currentAgencySettings,
-        account: {
-            ...payload,
+    const { data } = await fetchApi<AccountSettings>(
+        '/api/agency/settings/account',
+        {
+            method: 'PATCH',
+            body: JSON.stringify(payload),
         },
-    };
+    );
 
-    return structuredClone(currentAgencySettings.account);
+    return data;
 }
 
 export async function updateNotificationSettings(
     payload: NotificationSettings,
 ) {
-    await mockNetworkDelay(280);
-
-    currentAgencySettings = {
-        ...currentAgencySettings,
-        notifications: {
-            ...payload,
+    const { data } = await fetchApi<NotificationSettings>(
+        '/api/agency/settings/notifications',
+        {
+            method: 'PATCH',
+            body: JSON.stringify(payload),
         },
-    };
+    );
 
-    return structuredClone(currentAgencySettings.notifications);
+    return data;
 }
 
 export async function updateSecuritySettings(payload: SecuritySettings) {
-    await mockNetworkDelay(280);
-
-    currentAgencySettings = {
-        ...currentAgencySettings,
-        security: {
-            ...payload,
-            activeSessions: [...payload.activeSessions],
-        },
+    const securityPayload = {
+        twoFactorEnabled: payload.twoFactorEnabled,
+        sessionTimeout: payload.sessionTimeout,
     };
+    const { data } = await fetchApi<SecuritySettings>(
+        '/api/agency/settings/security',
+        {
+            method: 'PATCH',
+            body: JSON.stringify(securityPayload),
+        },
+    );
 
-    return structuredClone(currentAgencySettings.security);
+    return data;
 }
 
 export async function uploadProfilePhoto(
     file: File,
 ): Promise<ProfilePhotoUploadResult> {
-    await mockNetworkDelay(300);
+    const formData = new FormData();
 
-    return {
-        profilePhotoUrl: await fileToDataUrl(file),
-        fileName: file.name,
-        uploadedAt: new Date().toISOString(),
-    };
+    formData.append('photo', file);
+
+    const { data } = await fetchApi<ProfilePhotoUploadResult>(
+        '/api/agency/settings/profile-photo',
+        {
+            method: 'POST',
+            body: formData,
+        },
+    );
+
+    return data;
 }
 
 export async function changePassword(payload: PasswordChangePayload) {
-    await mockNetworkDelay(360);
+    const { data } = await fetchApi<{ success: boolean; changedAt: string }>(
+        '/api/agency/settings/password',
+        {
+            method: 'POST',
+            body: JSON.stringify({
+                currentPassword: payload.currentPassword,
+                newPassword: payload.newPassword,
+                newPassword_confirmation: payload.confirmNewPassword,
+            }),
+        },
+    );
 
-    return {
-        success: Boolean(payload.currentPassword && payload.newPassword),
-        changedAt: new Date().toISOString(),
-    };
+    return data;
 }
 
 export async function requestAccountDeactivation(): Promise<DeactivationRequestResult> {
-    await mockNetworkDelay(360);
+    const { data } = await fetchApi<DeactivationRequestResult>(
+        '/api/agency/settings/deactivation-request',
+        {
+            method: 'POST',
+        },
+    );
 
-    return {
-        status: 'submitted',
-        requestedAt: new Date().toISOString(),
-    };
+    return data;
 }

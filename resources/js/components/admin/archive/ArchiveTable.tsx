@@ -1,6 +1,6 @@
 import { Building2, CalendarDays, FileText, UserRound } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { archiveStatusLabels } from '@/data/mock-admin-archive';
+import { archiveStatusLabels } from '@/data/admin-archive-options';
 import { cn } from '@/lib/utils';
 import type {
     AdminArchivedRecord,

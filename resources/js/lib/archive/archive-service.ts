@@ -1,19 +1,9 @@
-import { mockArchiveActivity, mockArchivedResearch } from '@/data/mock-archive';
 import { fetchApi } from '@/lib/api-client';
-import {
-    getRepositoryItemsSnapshot,
-    updateRepositoryItem,
-} from '@/lib/repository/repository-service';
 import type {
     ArchiveActivity,
     ArchiveFilters,
     ArchivedResearch,
 } from '@/types/archive';
-import type { RepositoryStatus } from '@/types/repository';
-
-const archiveStorageKey = 'rikms.archive.records.v1';
-const activityStorageKey = 'rikms.archive.activity.v1';
-const deletedArchiveStorageKey = 'rikms.archive.deleted.v1';
 
 type ResearchApiRecord = {
     id: number;
@@ -28,116 +18,10 @@ type ResearchApiRecord = {
     archived_by_user?: { name?: string | null; email?: string | null } | null;
 };
 
-const mockNetworkDelay = (duration = 120) =>
-    new Promise((resolve) => {
-        if (typeof window === 'undefined') {
-            resolve(undefined);
-
-            return;
-        }
-
-        window.setTimeout(resolve, duration);
-    });
-
 const cloneArchivedResearch = (record: ArchivedResearch): ArchivedResearch => ({
     ...record,
     authors: [...record.authors],
 });
-
-const cloneActivity = (activity: ArchiveActivity): ArchiveActivity => ({
-    ...activity,
-});
-
-function readStoredRecords<T>(key: string): T[] | null {
-    if (typeof window === 'undefined') {
-        return null;
-    }
-
-    const stored = window.localStorage.getItem(key);
-
-    if (!stored) {
-        return null;
-    }
-
-    try {
-        return JSON.parse(stored) as T[];
-    } catch {
-        window.localStorage.removeItem(key);
-
-        return null;
-    }
-}
-
-function writeStoredRecords<T>(key: string, records: T[]) {
-    if (typeof window === 'undefined') {
-        return;
-    }
-
-    window.localStorage.setItem(key, JSON.stringify(records));
-}
-
-function readDeletedArchiveIds() {
-    return readStoredRecords<string>(deletedArchiveStorageKey) ?? [];
-}
-
-function addDeletedArchiveIds(ids: string[]) {
-    writeStoredRecords(
-        deletedArchiveStorageKey,
-        Array.from(new Set([...readDeletedArchiveIds(), ...ids])),
-    );
-}
-
-function getStoredOrSeededArchivedResearch() {
-    return (
-        readStoredRecords<ArchivedResearch>(archiveStorageKey) ??
-        mockArchivedResearch
-    );
-}
-
-function getRepositoryArchivedResearch() {
-    const deletedIds = readDeletedArchiveIds();
-
-    return getRepositoryItemsSnapshot()
-        .filter((item) => item.status === 'archived')
-        .map<ArchivedResearch>((item) => ({
-            id: `repository-${item.id}`,
-            title: item.title,
-            authors: item.authors.map((author) => author.name),
-            year: item.year,
-            archiveDate: item.updatedAt,
-            archivedBy: 'Agency Admin',
-            status: 'archived',
-            originalStatus:
-                item.accessType === 'restricted' ? 'restricted' : 'published',
-            documentType: item.documentType,
-            agency: item.agency,
-            repositoryItemId: item.id,
-        }))
-        .filter(
-            (item) =>
-                !deletedIds.includes(item.id) &&
-                !deletedIds.includes(item.repositoryItemId ?? ''),
-        );
-}
-
-function getArchivedResearchSnapshot() {
-    const storedRecords = getStoredOrSeededArchivedResearch();
-    const repositoryRecords = getRepositoryArchivedResearch();
-    const repositoryIds = new Set(
-        storedRecords.map((record) => record.repositoryItemId).filter(Boolean),
-    );
-
-    return [
-        ...storedRecords,
-        ...repositoryRecords.filter(
-            (record) => !repositoryIds.has(record.repositoryItemId),
-        ),
-    ].map(cloneArchivedResearch);
-}
-
-function writeArchivedResearchSnapshot(records: ArchivedResearch[]) {
-    writeStoredRecords(archiveStorageKey, records.map(cloneArchivedResearch));
-}
 
 function normalize(value: string | number) {
     return String(value).toLowerCase();
@@ -182,19 +66,11 @@ export function createArchiveActivity(
 }
 
 export async function getArchivedResearch(): Promise<ArchivedResearch[]> {
-    try {
-        const { data } = await fetchApi<ResearchApiRecord[]>(
-            '/api/agency/archive/research?per_page=100',
-        );
+    const { data } = await fetchApi<ResearchApiRecord[]>(
+        '/api/agency/archive/research?per_page=100',
+    );
 
-        return data.map(mapApiArchivedResearch);
-    } catch {
-        // TODO Phase 6: Replace this mock fallback after agency archive listing is verified with real Sanctum authentication.
-    }
-
-    await mockNetworkDelay();
-
-    return getArchivedResearchSnapshot();
+    return data.map(mapApiArchivedResearch);
 }
 
 export function searchArchivedResearch(
@@ -255,81 +131,33 @@ export async function restoreArchivedResearch(
     const researchId = apiResearchId(id);
 
     if (researchId) {
-        try {
-            const { data } = await fetchApi<ResearchApiRecord>(
-                `/api/agency/research/${researchId}/restore`,
-                {
-                    method: 'POST',
-                },
-            );
-
-            return mapApiArchivedResearch({
-                ...data,
-                status: 'archived',
-                archived_at: data.archived_at ?? new Date().toISOString(),
-            });
-        } catch {
-            // TODO Phase 6: Replace this mock fallback after agency archive restore is verified with real Sanctum authentication.
-        }
-    }
-
-    await mockNetworkDelay(220);
-
-    const records = getArchivedResearchSnapshot();
-    const restoredRecord = records.find((record) => record.id === id) ?? null;
-
-    if (!restoredRecord) {
-        return null;
-    }
-
-    writeArchivedResearchSnapshot(records.filter((record) => record.id !== id));
-    addDeletedArchiveIds([id, restoredRecord.repositoryItemId ?? '']);
-
-    if (restoredRecord.repositoryItemId) {
-        const repositoryItem = getRepositoryItemsSnapshot().find(
-            (item) => item.id === restoredRecord.repositoryItemId,
+        const { data } = await fetchApi<ResearchApiRecord>(
+            `/api/agency/research/${researchId}/restore`,
+            {
+                method: 'POST',
+            },
         );
-        const restoredStatus = (restoredRecord.originalStatus ??
-            'published') as RepositoryStatus;
 
-        if (repositoryItem) {
-            await updateRepositoryItem(restoredRecord.repositoryItemId, {
-                ...repositoryItem,
-                status: restoredStatus,
-            });
-        }
+        return mapApiArchivedResearch({
+            ...data,
+            status: 'archived',
+            archived_at: data.archived_at ?? new Date().toISOString(),
+        });
     }
 
-    return cloneArchivedResearch(restoredRecord);
+    throw new Error('Archived research restore requires a persisted API record.');
 }
 
 export async function permanentlyDeleteArchivedResearch(
     id: string,
 ): Promise<ArchivedResearch | null> {
-    // TODO Phase 6: Replace this mock fallback after a protected permanent-delete API/flow is verified with real Sanctum authentication.
-    await mockNetworkDelay(260);
+    void id;
 
-    const records = getArchivedResearchSnapshot();
-    const deletedRecord = records.find((record) => record.id === id) ?? null;
-
-    if (!deletedRecord) {
-        return null;
-    }
-
-    writeArchivedResearchSnapshot(records.filter((record) => record.id !== id));
-    addDeletedArchiveIds([id, deletedRecord.repositoryItemId ?? '']);
-
-    return cloneArchivedResearch(deletedRecord);
+    throw new Error('Permanent archive deletion is not configured for production.');
 }
 
 export async function getArchiveActivity(): Promise<ArchiveActivity[]> {
-    // TODO Phase 6: Replace this mock fallback after agency archive activity API/flow is verified with real Sanctum authentication.
-    await mockNetworkDelay();
-
-    return (
-        readStoredRecords<ArchiveActivity>(activityStorageKey) ??
-        mockArchiveActivity
-    ).map(cloneActivity);
+    return [];
 }
 
 function apiResearchId(id: string) {
@@ -363,16 +191,4 @@ function mapApiArchivedResearch(record: ResearchApiRecord): ArchivedResearch {
             'Agency Repository',
         repositoryItemId: String(record.id),
     };
-}
-
-export function addArchiveActivity(activity: ArchiveActivity) {
-    const nextActivities = [
-        cloneActivity(activity),
-        ...(readStoredRecords<ArchiveActivity>(activityStorageKey) ??
-            mockArchiveActivity),
-    ];
-
-    writeStoredRecords(activityStorageKey, nextActivities);
-
-    return nextActivities.map(cloneActivity);
 }

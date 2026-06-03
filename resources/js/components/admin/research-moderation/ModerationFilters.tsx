@@ -9,7 +9,7 @@ import {
 import {
     moderationIssueTypeLabels,
     moderationStatusLabels,
-} from '@/data/mock-research-moderation';
+} from '@/data/research-moderation-options';
 import type {
     ModerationFilters as ModerationFiltersType,
     ModerationIssueType,

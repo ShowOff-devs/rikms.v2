@@ -10,7 +10,7 @@ import {
 import {
     systemResearchAccessTypeLabels,
     systemResearchDocumentTypeLabels,
-} from '@/data/mock-system-research';
+} from '@/data/system-research-options';
 import type { SystemResearchRecord } from '@/types/system-research';
 import { SystemResearchStatusBadge } from './SystemResearchItem';
 

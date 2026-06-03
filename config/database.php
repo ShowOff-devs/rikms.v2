@@ -66,7 +66,7 @@ return [
 
         'mongodb' => [
             'driver' => 'mongodb',
-            'dsn' => env('MONGODB_URI', 'mongodb+srv://rikms_db_user:20252026rikmS@rikms.yji8cbt.mongodb.net/?appName=rikms'),
+            'dsn' => env('MONGODB_URI'),
             'database' => env('MONGODB_DATABASE', 'rikms_ai'),
         ],
 

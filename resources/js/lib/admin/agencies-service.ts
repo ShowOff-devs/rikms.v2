@@ -1,10 +1,5 @@
-import {
-    mockAdminAgencies,
-    mockAgencyAdminOptions,
-} from '@/data/mock-admin-agencies';
 import { fetchApi } from '@/lib/api-client';
 import type {
-    AgencyAdminAssignment,
     AgencyAdminOption,
     CreateAgencyPayload,
     ManagedAgency,
@@ -39,263 +34,127 @@ type AdminUserApiRecord = {
     status: string;
 };
 
-const mockNetworkDelay = (duration = 180) =>
-    new Promise<void>((resolve) => {
-        window.setTimeout(resolve, duration);
-    });
-
-let agencies = mockAdminAgencies.map((agency) => ({ ...agency }));
-let agencyAdmins = mockAgencyAdminOptions.map((admin) => ({ ...admin }));
-
-function cloneAgency(agency: ManagedAgency): ManagedAgency {
-    return {
-        ...agency,
-        agencyAdmin: agency.agencyAdmin ? { ...agency.agencyAdmin } : undefined,
-    };
-}
-
-function cloneAgencies() {
-    return agencies.map(cloneAgency);
-}
-
-function normalizeSlug(value: string) {
-    return value
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '');
-}
-
-function getAdminAssignment(
-    adminUserId: string | undefined,
-    agencyId: string,
-): AgencyAdminAssignment | undefined {
-    if (!adminUserId) {
-        return undefined;
-    }
-
-    const admin = agencyAdmins.find(
-        (item) => item.id === adminUserId && item.status === 'active',
-    );
-
-    if (!admin) {
-        throw new Error('Selected agency admin is not available.');
-    }
-
-    if (admin.assignedAgencyId && admin.assignedAgencyId !== agencyId) {
-        throw new Error('Selected agency admin is already assigned.');
-    }
-
-    return {
-        id: admin.id,
-        fullName: admin.fullName,
-        email: admin.email,
-    };
-}
-
-function setAssignedAgency(adminUserId: string | undefined, agencyId: string) {
-    agencyAdmins = agencyAdmins.map((admin) =>
-        admin.id === adminUserId
-            ? { ...admin, assignedAgencyId: agencyId }
-            : admin.assignedAgencyId === agencyId
-              ? { ...admin, assignedAgencyId: undefined }
-              : admin,
-    );
-}
+type ArchiveAgencyApiRecord = {
+    id: number;
+    archived_at: string;
+};
 
 export async function getAgencies() {
-    try {
-        const { data } =
-            await fetchApi<AdminAgencyApiRecord[]>('/api/admin/agencies');
+    const { data } = await fetchApi<AdminAgencyApiRecord[]>(
+        '/api/admin/agencies?per_page=100',
+    );
 
-        return data.map(mapAgencyFromApi);
-    } catch {
-        await mockNetworkDelay();
-
-        return cloneAgencies();
-    }
+    return data.map(mapAgencyFromApi);
 }
 
 export async function getAgencyById(id: string) {
-    try {
-        const { data } = await fetchApi<AdminAgencyApiRecord>(
-            `/api/admin/agencies/${id}`,
-        );
+    const { data } = await fetchApi<AdminAgencyApiRecord>(
+        `/api/admin/agencies/${id}`,
+    );
 
-        return mapAgencyFromApi(data);
-    } catch {
-        await mockNetworkDelay();
-
-        const agency = agencies.find((item) => item.id === id);
-
-        return agency ? cloneAgency(agency) : null;
-    }
+    return mapAgencyFromApi(data);
 }
 
 export async function getAgencyAdminOptions(): Promise<AgencyAdminOption[]> {
-    try {
-        const { data } = await fetchApi<AdminUserApiRecord[]>(
-            '/api/admin/users?role=agency_admin&per_page=100',
-        );
+    const { data } = await fetchApi<AdminUserApiRecord[]>(
+        '/api/admin/agency-admin-users?per_page=100',
+    );
 
-        return data.map((admin) => ({
-            id: String(admin.id),
-            fullName: admin.name,
-            email: admin.email,
-            status: admin.status === 'active' ? 'active' : 'inactive',
-            assignedAgencyId: admin.agency_id ? String(admin.agency_id) : undefined,
-        }));
-    } catch {
-        await mockNetworkDelay();
-
-        return agencyAdmins.map((admin) => ({ ...admin }));
-    }
+    return data.map((admin) => ({
+        id: String(admin.id),
+        fullName: admin.name,
+        email: admin.email,
+        status: admin.status === 'active' ? 'active' : 'inactive',
+        assignedAgencyId: admin.agency_id ? String(admin.agency_id) : undefined,
+    }));
 }
 
 export async function createAgency(
     payload: CreateAgencyPayload,
 ): Promise<ManagedAgency> {
-    await mockNetworkDelay(260);
+    const { data } = await fetchApi<AdminAgencyApiRecord>(
+        '/api/admin/agencies',
+        {
+            method: 'POST',
+            body: JSON.stringify(toAgencyPayload(payload)),
+        },
+    );
 
-    const now = new Date().toISOString();
-    const idBase = normalizeSlug(payload.shortName || payload.name);
-    const id = agencies.some((agency) => agency.id === idBase)
-        ? `${idBase}-${Date.now()}`
-        : idBase;
-    const agencyAdmin = getAdminAssignment(payload.agencyAdminId, id);
-
-    const createdAgency: ManagedAgency = {
-        id,
-        name: payload.name.trim(),
-        shortName: payload.shortName.trim().toUpperCase(),
-        type: payload.type,
-        description: payload.description?.trim() || undefined,
-        website: payload.website?.trim() || undefined,
-        contactEmail: payload.contactEmail?.trim().toLowerCase() || undefined,
-        officeAddress: payload.officeAddress?.trim() || undefined,
-        agencyAdmin,
-        totalResearch: 0,
-        status: payload.status,
-        lastUpdated: now,
-        createdAt: now,
-        updatedAt: now,
-    };
-
-    agencies = [createdAgency, ...agencies];
-    setAssignedAgency(payload.agencyAdminId, createdAgency.id);
-
-    return cloneAgency(createdAgency);
+    return mapAgencyFromApi(data);
 }
 
 export async function updateAgency(
     id: string,
     payload: UpdateAgencyPayload,
 ): Promise<ManagedAgency> {
-    await mockNetworkDelay(240);
-
-    const existingAgency = agencies.find((agency) => agency.id === id);
-
-    if (!existingAgency) {
-        throw new Error('Agency could not be updated.');
-    }
-
-    const agencyAdmin = getAdminAssignment(payload.agencyAdminId, id);
-    const updatedAgency: ManagedAgency = {
-        ...existingAgency,
-        name: payload.name.trim(),
-        shortName: payload.shortName.trim().toUpperCase(),
-        type: payload.type,
-        description: payload.description?.trim() || undefined,
-        website: payload.website?.trim() || undefined,
-        contactEmail: payload.contactEmail?.trim().toLowerCase() || undefined,
-        officeAddress: payload.officeAddress?.trim() || undefined,
-        agencyAdmin,
-        status: payload.status,
-        lastUpdated: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-    };
-
-    agencies = agencies.map((agency) =>
-        agency.id === id ? updatedAgency : agency,
+    const { data } = await fetchApi<AdminAgencyApiRecord>(
+        `/api/admin/agencies/${id}`,
+        {
+            method: 'PATCH',
+            body: JSON.stringify(toAgencyPayload(payload)),
+        },
     );
-    setAssignedAgency(payload.agencyAdminId, id);
 
-    return cloneAgency(updatedAgency);
+    return mapAgencyFromApi(data);
 }
 
 export async function activateAgency(id: string) {
-    const agency = await getAgencyById(id);
+    const { data } = await fetchApi<AdminAgencyApiRecord>(
+        `/api/admin/agencies/${id}/activate`,
+        { method: 'POST' },
+    );
 
-    if (!agency) {
-        throw new Error('Agency was not found.');
-    }
-
-    const updatedAgency = {
-        ...agency,
-        status: 'active' as const,
-        lastUpdated: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-    };
-
-    agencies = agencies.map((item) => (item.id === id ? updatedAgency : item));
-
-    return cloneAgency(updatedAgency);
+    return mapAgencyFromApi(data);
 }
 
 export async function deactivateAgency(id: string) {
-    const agency = await getAgencyById(id);
+    const { data } = await fetchApi<AdminAgencyApiRecord>(
+        `/api/admin/agencies/${id}/deactivate`,
+        { method: 'POST' },
+    );
 
-    if (!agency) {
-        throw new Error('Agency was not found.');
-    }
-
-    const updatedAgency = {
-        ...agency,
-        status: 'inactive' as const,
-        lastUpdated: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-    };
-
-    agencies = agencies.map((item) => (item.id === id ? updatedAgency : item));
-
-    return cloneAgency(updatedAgency);
+    return mapAgencyFromApi(data);
 }
 
 export async function assignAgencyAdmin(agencyId: string, adminUserId: string) {
-    const agency = await getAgencyById(agencyId);
-
-    if (!agency) {
-        throw new Error('Agency was not found.');
-    }
-
-    const agencyAdmin = getAdminAssignment(adminUserId, agencyId);
-    const updatedAgency = {
-        ...agency,
-        agencyAdmin,
-        lastUpdated: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-    };
-
-    agencies = agencies.map((item) =>
-        item.id === agencyId ? updatedAgency : item,
+    const { data } = await fetchApi<AdminAgencyApiRecord>(
+        `/api/admin/agencies/${agencyId}/assign-admin`,
+        {
+            method: 'POST',
+            body: JSON.stringify({
+                admin_user_id: Number(adminUserId),
+            }),
+        },
     );
-    setAssignedAgency(adminUserId, agencyId);
 
-    return cloneAgency(updatedAgency);
+    return mapAgencyFromApi(data);
 }
 
 export async function archiveAgency(id: string) {
-    await mockNetworkDelay(260);
-
-    const agency = agencies.find((item) => item.id === id);
-
-    if (!agency) {
-        throw new Error('Agency was not found.');
-    }
+    const { data } = await fetchApi<ArchiveAgencyApiRecord>(
+        `/api/admin/agencies/${id}/archive`,
+        { method: 'POST' },
+    );
 
     return {
-        id,
-        archivedAt: new Date().toISOString(),
+        id: String(data.id),
+        archivedAt: data.archived_at,
+    };
+}
+
+function toAgencyPayload(payload: CreateAgencyPayload | UpdateAgencyPayload) {
+    return {
+        name: payload.name.trim(),
+        short_name: payload.shortName.trim(),
+        type: payload.type,
+        description: payload.description?.trim() || null,
+        website: payload.website?.trim() || null,
+        email: payload.contactEmail?.trim().toLowerCase() || null,
+        address: payload.officeAddress?.trim() || null,
+        agency_admin_id: payload.agencyAdminId
+            ? Number(payload.agencyAdminId)
+            : null,
+        status: payload.status,
     };
 }
 
@@ -320,7 +179,8 @@ function mapAgencyFromApi(agency: AdminAgencyApiRecord): ManagedAgency {
             : undefined,
         totalResearch: agency.total_research,
         status: agency.status === 'active' ? 'active' : 'inactive',
-        lastUpdated: agency.updated_at ?? agency.created_at ?? new Date().toISOString(),
+        lastUpdated:
+            agency.updated_at ?? agency.created_at ?? new Date().toISOString(),
         createdAt: agency.created_at ?? new Date().toISOString(),
         updatedAt: agency.updated_at ?? undefined,
     };

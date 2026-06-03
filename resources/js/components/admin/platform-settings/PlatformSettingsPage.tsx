@@ -246,43 +246,15 @@ export function PlatformSettingsPage() {
         }
 
         setIsBackupRunning(true);
-        updateSection('backup', { backupStatus: 'running' });
 
         try {
-            const updatedSettings = await runSystemBackup();
-
-            setSettings((currentSettings) => {
-                if (!currentSettings) {
-                    return currentSettings;
-                }
-
-                return {
-                    ...currentSettings,
-                    backup: {
-                        ...currentSettings.backup,
-                        lastBackupAt: updatedSettings.backup.lastBackupAt,
-                        backupStatus: updatedSettings.backup.backupStatus,
-                    },
-                };
-            });
-            setInitialSettings((currentSettings) => {
-                if (!currentSettings) {
-                    return currentSettings;
-                }
-
-                return {
-                    ...currentSettings,
-                    backup: {
-                        ...currentSettings.backup,
-                        lastBackupAt: updatedSettings.backup.lastBackupAt,
-                        backupStatus: updatedSettings.backup.backupStatus,
-                    },
-                };
-            });
-            setFeedback('System backup completed successfully.');
-        } catch {
-            updateSection('backup', { backupStatus: 'failed' });
-            setError('Unable to complete the system backup.');
+            await runSystemBackup();
+        } catch (backupError) {
+            setError(
+                backupError instanceof Error
+                    ? backupError.message
+                    : 'System backup jobs are not configured for this environment.',
+            );
         } finally {
             setIsBackupRunning(false);
         }

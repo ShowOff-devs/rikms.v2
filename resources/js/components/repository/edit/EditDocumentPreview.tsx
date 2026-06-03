@@ -5,7 +5,7 @@ import {
     repositoryDocumentTypeLabels,
     repositorySdgColors,
     repositoryStatusLabels,
-} from '@/data/mock-repository';
+} from '@/data/repository-display';
 import type { RepositoryUpdatePayload } from '@/types/repository';
 
 export function EditDocumentPreview({

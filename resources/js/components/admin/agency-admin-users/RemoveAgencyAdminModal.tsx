@@ -30,8 +30,9 @@ export function RemoveAgencyAdminModal({
                         Remove User?
                     </DialogTitle>
                     <DialogDescription className="text-[#6a7282]">
-                        This removes the agency admin account from this mock
-                        governance list. Confirm before continuing.
+                        This removes agency admin access and archives the
+                        account from active administration. Confirm before
+                        continuing.
                     </DialogDescription>
                 </DialogHeader>
 

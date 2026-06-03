@@ -1,5 +1,5 @@
 import { RotateCcw, Search } from 'lucide-react';
-import { archiveDocumentTypeLabels } from '@/data/mock-archive';
+import { archiveDocumentTypeLabels } from '@/data/archive-display';
 import type {
     ArchiveDateFilter,
     ArchiveDocumentTypeFilter,

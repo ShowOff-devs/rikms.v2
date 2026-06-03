@@ -1,12 +1,11 @@
 import {
-    mockRepositoryItems,
     repositoryAccessTypeLabels,
     repositoryCategoryColors,
     repositoryDocumentTypeColors,
     repositoryDocumentTypeLabels,
     repositorySdgColors,
     repositoryStatusLabels,
-} from '@/data/mock-repository';
+} from '@/data/repository-display';
 import {
     mapRepositoryPayloadToResearchPayload,
     submitAgencyResearch,
@@ -47,19 +46,6 @@ type AgencyResearchApiRecord = {
     updated_at?: string | null;
 };
 
-const repositoryStorageKey = 'rikms.repository.items.v1';
-
-const mockNetworkDelay = (duration = 120) =>
-    new Promise((resolve) => {
-        if (typeof window === 'undefined') {
-            resolve(undefined);
-
-            return;
-        }
-
-        window.setTimeout(resolve, duration);
-    });
-
 const normalize = (value: string | number) => String(value).toLowerCase();
 
 const uniqueSorted = <T extends string | number>(values: T[]) =>
@@ -92,78 +78,22 @@ const countBy = <T extends string>(
         .sort((first, second) => second.value - first.value);
 };
 
-const cloneRepositoryItem = (item: RepositoryItem): RepositoryItem => ({
-    ...item,
-    authors: item.authors.map((author) => ({ ...author })),
-    sdgs: [...item.sdgs],
-    keywords: [...item.keywords],
-    file: { ...item.file },
-    versions: item.versions.map((version) => ({ ...version })),
-});
-
-function readStoredRepositoryItems(): RepositoryItem[] | null {
-    if (typeof window === 'undefined') {
-        return null;
-    }
-
-    const stored = window.localStorage.getItem(repositoryStorageKey);
-
-    if (!stored) {
-        return null;
-    }
-
-    try {
-        return JSON.parse(stored) as RepositoryItem[];
-    } catch {
-        window.localStorage.removeItem(repositoryStorageKey);
-
-        return null;
-    }
-}
-
-function writeStoredRepositoryItems(items: RepositoryItem[]) {
-    if (typeof window === 'undefined') {
-        return;
-    }
-
-    window.localStorage.setItem(repositoryStorageKey, JSON.stringify(items));
-}
-
 export function getRepositoryItemsSnapshot() {
-    return (readStoredRepositoryItems() ?? mockRepositoryItems).map(
-        cloneRepositoryItem,
-    );
+    return [];
 }
 
 export async function getRepositoryItems(): Promise<RepositoryItem[]> {
-    try {
-        const records = await getApiRepositoryItems();
+    const records = await getApiRepositoryItems();
 
-        return records.filter((item) => item.status !== 'archived');
-    } catch {
-        await mockNetworkDelay();
-
-        return getRepositoryItemsSnapshot().filter(
-            (item) => item.status !== 'archived',
-        );
-    }
+    return records.filter((item) => item.status !== 'archived');
 }
 
 export async function getArchivedRepositoryItems(): Promise<RepositoryItem[]> {
-    await mockNetworkDelay();
-
-    return getRepositoryItemsSnapshot().filter(
-        (item) => item.status === 'archived',
+    const { data } = await fetchApi<AgencyResearchApiRecord[]>(
+        '/api/agency/archive/research?per_page=100',
     );
-}
 
-function updateRepositoryItems(
-    updater: (items: RepositoryItem[]) => RepositoryItem[],
-) {
-    const nextItems = updater(getRepositoryItemsSnapshot());
-    writeStoredRepositoryItems(nextItems);
-
-    return nextItems;
+    return data.map(mapRepositoryItemFromApi);
 }
 
 export function getRepositoryFacets(
@@ -360,76 +290,38 @@ export function getRepositoryAnalytics(
 export async function searchRepository(
     query: RepositoryQuery,
 ): Promise<RepositorySearchResult> {
-    try {
-        const records = await getRepositoryItems();
-        const filteredItems = sortRepositoryItems(
-            filterRepositoryItems(records, query),
-            query,
-        );
-        const totalPages = Math.max(
-            1,
-            Math.ceil(filteredItems.length / query.perPage),
-        );
-        const page = Math.min(Math.max(query.page, 1), totalPages);
-        const start = (page - 1) * query.perPage;
+    const records = await getRepositoryItems();
+    const filteredItems = sortRepositoryItems(
+        filterRepositoryItems(records, query),
+        query,
+    );
+    const totalPages = Math.max(
+        1,
+        Math.ceil(filteredItems.length / query.perPage),
+    );
+    const page = Math.min(Math.max(query.page, 1), totalPages);
+    const start = (page - 1) * query.perPage;
 
-        return {
-            items: filteredItems.slice(start, start + query.perPage),
-            filteredItems,
-            total: filteredItems.length,
-            page,
-            perPage: query.perPage,
-            totalPages,
-            facets: getRepositoryFacets(records),
-            analytics: getRepositoryAnalytics(filteredItems),
-        };
-    } catch {
-        await mockNetworkDelay();
-
-        const records = getRepositoryItemsSnapshot().filter(
-            (item) => item.status !== 'archived',
-        );
-        const filteredItems = sortRepositoryItems(
-            filterRepositoryItems(records, query),
-            query,
-        );
-        const totalPages = Math.max(
-            1,
-            Math.ceil(filteredItems.length / query.perPage),
-        );
-        const page = Math.min(Math.max(query.page, 1), totalPages);
-        const start = (page - 1) * query.perPage;
-
-        return {
-            items: filteredItems.slice(start, start + query.perPage),
-            filteredItems,
-            total: filteredItems.length,
-            page,
-            perPage: query.perPage,
-            totalPages,
-            facets: getRepositoryFacets(records),
-            analytics: getRepositoryAnalytics(filteredItems),
-        };
-    }
+    return {
+        items: filteredItems.slice(start, start + query.perPage),
+        filteredItems,
+        total: filteredItems.length,
+        page,
+        perPage: query.perPage,
+        totalPages,
+        facets: getRepositoryFacets(records),
+        analytics: getRepositoryAnalytics(filteredItems),
+    };
 }
 
 export async function getRepositoryItemById(
     id: string,
 ): Promise<RepositoryItem | null> {
-    try {
-        const { data } = await fetchApi<AgencyResearchApiRecord>(
-            `/api/agency/research/${id}`,
-        );
+    const { data } = await fetchApi<AgencyResearchApiRecord>(
+        `/api/agency/research/${id}`,
+    );
 
-        return mapRepositoryItemFromApi(data);
-    } catch {
-        await mockNetworkDelay(160);
-
-        return (
-            getRepositoryItemsSnapshot().find((record) => record.id === id) ??
-            null
-        );
-    }
+    return mapRepositoryItemFromApi(data);
 }
 
 export async function updateRepositoryItem(
@@ -463,128 +355,52 @@ export async function publishRepositoryItem(
 export async function archiveRepositoryItem(
     id: string,
 ): Promise<RepositoryItem | null> {
-    try {
-        const { data } = await fetchApi<AgencyResearchApiRecord>(
-            `/api/agency/research/${id}/archive`,
-            {
-                method: 'POST',
-                body: JSON.stringify({
-                    reason: 'Archived from agency repository editor.',
-                }),
-            },
-        );
-
-        return mapRepositoryItemFromApi(data);
-    } catch {
-        // TODO Phase 6: Replace this mock fallback after agency repository archive is verified with real Sanctum authentication.
-    }
-
-    const item = await getRepositoryItemById(id);
-
-    if (!item) {
-        return null;
-    }
-
-    let archivedItem: RepositoryItem | null = null;
-
-    updateRepositoryItems((items) =>
-        items.map((currentItem) => {
-            if (currentItem.id !== id) {
-                return currentItem;
-            }
-
-            archivedItem = {
-                ...currentItem,
-                status: 'archived',
-                updatedAt: new Date().toISOString(),
-            };
-
-            return archivedItem;
-        }),
+    const { data } = await fetchApi<AgencyResearchApiRecord>(
+        `/api/agency/research/${id}/archive`,
+        {
+            method: 'POST',
+            body: JSON.stringify({
+                reason: 'Archived from agency repository editor.',
+            }),
+        },
     );
 
-    return archivedItem ? cloneRepositoryItem(archivedItem) : null;
+    return mapRepositoryItemFromApi(data);
 }
 
 export async function restoreRepositoryItem(
     id: string,
 ): Promise<RepositoryItem | null> {
-    try {
-        const { data } = await fetchApi<AgencyResearchApiRecord>(
-            `/api/agency/research/${id}/restore`,
-            {
-                method: 'POST',
-            },
-        );
-
-        return mapRepositoryItemFromApi(data);
-    } catch {
-        // TODO Phase 6: Replace this mock fallback after agency repository restore is verified with real Sanctum authentication.
-    }
-
-    const item = await getRepositoryItemById(id);
-
-    if (!item) {
-        return null;
-    }
-
-    let restoredItem: RepositoryItem | null = null;
-
-    updateRepositoryItems((items) =>
-        items.map((currentItem) => {
-            if (currentItem.id !== id) {
-                return currentItem;
-            }
-
-            restoredItem = {
-                ...currentItem,
-                status: 'draft',
-                updatedAt: new Date().toISOString(),
-            };
-
-            return restoredItem;
-        }),
+    const { data } = await fetchApi<AgencyResearchApiRecord>(
+        `/api/agency/research/${id}/restore`,
+        {
+            method: 'POST',
+        },
     );
 
-    return restoredItem ? cloneRepositoryItem(restoredItem) : null;
+    return mapRepositoryItemFromApi(data);
 }
 
 export async function replaceRepositoryFile(
     id: string,
     file: RepositoryFileReplacement,
 ): Promise<RepositoryItem | null> {
-    // TODO Phase 6: Replace this mock fallback after repository file replacement API/flow is verified with real Sanctum authentication.
-    const item = await getRepositoryItemById(id);
-
-    if (!item) {
-        return null;
+    if (!file.file) {
+        throw new Error('A selected file is required for repository file upload.');
     }
 
-    let replacedItem: RepositoryItem | null = null;
+    const formData = new FormData();
+    formData.append('file', file.file);
+    formData.append('file_type', 'research_document');
+    formData.append('visibility', 'private');
+    formData.append('access_level', 'restricted');
 
-    updateRepositoryItems((items) =>
-        items.map((currentItem) => {
-            if (currentItem.id !== id) {
-                return currentItem;
-            }
+    await fetchApi(`/api/agency/research/${id}/files`, {
+        method: 'POST',
+        body: formData,
+    });
 
-            replacedItem = {
-                ...currentItem,
-                file: {
-                    name: file.name,
-                    size: file.size,
-                    type: file.type,
-                    pages: file.pages ?? item.file.pages,
-                    uploadedAt: new Date().toISOString(),
-                },
-                updatedAt: new Date().toISOString(),
-            };
-
-            return replacedItem;
-        }),
-    );
-
-    return replacedItem ? cloneRepositoryItem(replacedItem) : null;
+    return getRepositoryItemById(id);
 }
 
 async function getApiRepositoryItems() {

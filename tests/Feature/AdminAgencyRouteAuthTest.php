@@ -160,6 +160,7 @@ test('portal login endpoints redirect by role and reject wrong portal users', fu
     $superAdmin = portalAuditUser('super_admin');
 
     $this->post('/agency/login', [
+        'agency' => $agency->slug,
         'email' => $agencyAdmin->email,
         'password' => 'password',
     ])->assertRedirect('/agency/dashboard');
@@ -174,6 +175,35 @@ test('portal login endpoints redirect by role and reject wrong portal users', fu
     $this->post('/logout');
 
     $this->post('/admin/login', [
+        'email' => $agencyAdmin->email,
+        'password' => 'password',
+    ])->assertSessionHasErrors('email');
+
+    $this->assertGuest();
+});
+
+test('agency login renders active agencies from the database', function () {
+    $activeAgency = portalAuditAgency('active-login-agency');
+    $inactiveAgency = portalAuditAgency('inactive-login-agency');
+    $inactiveAgency->update(['status' => 'inactive']);
+
+    $this->get('/agency/login')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('agency/login')
+            ->has('agencies', 1)
+            ->where('agencies.0.id', $activeAgency->slug)
+            ->where('agencies.0.shortName', $activeAgency->short_name)
+        );
+});
+
+test('agency login rejects credentials for a different selected agency', function () {
+    $ownAgency = portalAuditAgency('own-login-agency');
+    $otherAgency = portalAuditAgency('other-login-agency');
+    $agencyAdmin = portalAuditUser('agency_admin', $ownAgency);
+
+    $this->post('/agency/login', [
+        'agency' => $otherAgency->slug,
         'email' => $agencyAdmin->email,
         'password' => 'password',
     ])->assertSessionHasErrors('email');

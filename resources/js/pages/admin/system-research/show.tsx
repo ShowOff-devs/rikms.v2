@@ -6,7 +6,7 @@ import { SystemResearchStatusBadge } from '@/components/admin/system-research/Sy
 import {
     systemResearchAccessTypeLabels,
     systemResearchDocumentTypeLabels,
-} from '@/data/mock-system-research';
+} from '@/data/system-research-options';
 import { getSystemResearchRecordById } from '@/lib/admin/system-research-service';
 import type { SystemResearchRecord } from '@/types/system-research';
 

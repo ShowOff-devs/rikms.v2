@@ -20,6 +20,7 @@ use App\Support\AuditLogger;
 use App\Support\Statuses;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -140,6 +141,7 @@ class AgencyResearchWriteController extends Controller
         $uploadedFile = $request->file('file');
         $checksum = hash_file('sha256', $uploadedFile->getRealPath());
         $storedName = (string) Str::uuid().'.'.$uploadedFile->getClientOriginalExtension();
+        // TODO Phase 9: Move production uploads through quarantine/scanning storage before final private storage.
         $path = $uploadedFile->storeAs('research/'.$research->id, $storedName, 'local');
 
         $researchFile = DB::transaction(function () use ($request, $research, $uploadedFile, $checksum, $storedName, $path): ResearchFile {
@@ -180,9 +182,11 @@ class AgencyResearchWriteController extends Controller
             return $researchFile;
         });
 
-        ParsePdfDocumentJob::dispatch($research->id, $researchFile->id, $research->agency_id, $request->user()->id);
-        ExtractResearchMetadataJob::dispatch($research->id, $researchFile->id, $research->agency_id, $request->user()->id);
-        ClassifyResearchSdgJob::dispatch($research->id, $researchFile->id, $research->agency_id, $request->user()->id);
+        Bus::chain([
+            new ParsePdfDocumentJob($research->id, $researchFile->id, $research->agency_id, $request->user()->id),
+            new ExtractResearchMetadataJob($research->id, $researchFile->id, $research->agency_id, $request->user()->id),
+            new ClassifyResearchSdgJob($research->id, $researchFile->id, $research->agency_id, $request->user()->id),
+        ])->dispatch();
 
         return ApiResponse::success(
             'Research file uploaded and AI processing jobs queued.',

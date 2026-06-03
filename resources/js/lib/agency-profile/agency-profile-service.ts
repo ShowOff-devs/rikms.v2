@@ -1,5 +1,4 @@
-import { mockAgencyProfile } from '@/data/mock-agency-profile';
-// TODO Phase 8/9: Replace this mock fallback after the real protected API and browser QA are complete.
+import { fetchApi } from '@/lib/api-client';
 import type {
     AgencyLogoUploadResult,
     AgencyProfile,
@@ -7,68 +6,60 @@ import type {
     AgencyResearchSummary,
 } from '@/types/agency-profile';
 
-let currentAgencyProfile: AgencyProfile = mockAgencyProfile;
-
-const mockNetworkDelay = (duration = 220) =>
-    new Promise((resolve) => window.setTimeout(resolve, duration));
-
-const fileToDataUrl = (file: File) =>
-    new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () => reject(new Error('Unable to read logo file.'));
-        reader.readAsDataURL(file);
-    });
-
 export async function getAgencyProfile(agencyId?: string) {
-    await mockNetworkDelay();
+    const { data } = await fetchApi<AgencyProfile>('/api/agency/profile');
 
-    if (agencyId && agencyId !== currentAgencyProfile.id) {
+    if (agencyId && data.slug !== agencyId && data.id !== agencyId) {
         return null;
     }
 
-    return currentAgencyProfile;
+    return data;
 }
 
 export async function updateAgencyProfile(payload: AgencyProfileUpdatePayload) {
-    await mockNetworkDelay(320);
+    const { data } = await fetchApi<AgencyProfile>('/api/agency/profile', {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+    });
 
-    currentAgencyProfile = {
-        ...currentAgencyProfile,
-        name: payload.agencyName,
-        shortName: payload.agencyShortName,
-        description: payload.agencyDescription,
-        website: payload.agencyWebsite,
-        contactEmail: payload.agencyContactEmail,
-        officeAddress: payload.agencyOfficeAddress,
-        logoUrl: payload.logoUrl,
-        updatedAt: new Date().toISOString(),
-    };
-
-    return currentAgencyProfile;
+    return data;
 }
 
 export async function uploadAgencyLogo(
     file: File,
 ): Promise<AgencyLogoUploadResult> {
-    await mockNetworkDelay(280);
+    const formData = new FormData();
 
-    return {
-        logoUrl: await fileToDataUrl(file),
-        fileName: file.name,
-        uploadedAt: new Date().toISOString(),
-    };
+    formData.append('logo', file);
+
+    const { data } = await fetchApi<AgencyLogoUploadResult>(
+        '/api/agency/profile/logo',
+        {
+            method: 'POST',
+            body: formData,
+        },
+    );
+
+    return data;
 }
 
 export async function removeAgencyLogo() {
-    await mockNetworkDelay(180);
+    const { data } = await fetchApi<{ success: boolean }>(
+        '/api/agency/profile/logo',
+        {
+            method: 'DELETE',
+        },
+    );
 
-    return { success: true };
+    return data;
 }
 
 export async function getAgencyResearchSummary(): Promise<AgencyResearchSummary> {
-    await mockNetworkDelay();
+    const profile = await getAgencyProfile();
 
-    return currentAgencyProfile.researchSummary;
+    if (!profile) {
+        throw new Error('Unable to load agency research summary.');
+    }
+
+    return profile.researchSummary;
 }

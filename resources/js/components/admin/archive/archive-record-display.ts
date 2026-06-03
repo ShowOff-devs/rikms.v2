@@ -1,4 +1,4 @@
-import { archiveRecordTypeLabels } from '@/data/mock-admin-archive';
+import { archiveRecordTypeLabels } from '@/data/admin-archive-options';
 import type { AdminArchivedRecord } from '@/types/admin-archive';
 
 const dateFormatter = new Intl.DateTimeFormat('en-US', {

@@ -1,8 +1,13 @@
 import { Head } from '@inertiajs/react';
 import AgencyLoginForm from '@/components/auth/agency-login-form';
 import AgencyPortalShell from '@/components/auth/agency-portal-shell';
+import type { AgencyOption } from '@/types/auth';
 
-export default function AgencyLoginPage() {
+type AgencyLoginPageProps = {
+    agencies: AgencyOption[];
+};
+
+export default function AgencyLoginPage({ agencies }: AgencyLoginPageProps) {
     return (
         <>
             <Head title="Agency Admin Portal" />
@@ -12,7 +17,7 @@ export default function AgencyLoginPage() {
                 heroTitle="Regionwide Integrated Knowledge Management System"
                 heroDescription="Discover research publications, articles, and knowledge outputs contributed by government agencies and institutions in the Davao Region."
             >
-                <AgencyLoginForm />
+                <AgencyLoginForm agencies={agencies} />
             </AgencyPortalShell>
         </>
     );

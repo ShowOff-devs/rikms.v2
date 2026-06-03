@@ -1,16 +1,12 @@
 import { Head, router } from '@inertiajs/react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import AgencyAdminLayout from '@/components/agency/AgencyAdminLayout';
 import UploadWizard from '@/components/upload/wizard/UploadWizard';
 import { projectAccomplishmentUploadConfig } from '@/config/upload/projectAccomplishmentUploadConfig';
-import { getAgencySession } from '@/lib/auth/agency-auth';
-import type { AgencyAuthSession } from '@/types/auth';
+import { useAgencySession } from '@/lib/auth/agency-auth';
 
 export default function ProjectAccomplishmentUploadPage() {
-    const session = useMemo<AgencyAuthSession | null>(
-        () => getAgencySession(),
-        [],
-    );
+    const session = useAgencySession();
     const [search, setSearch] = useState('');
 
     useEffect(() => {

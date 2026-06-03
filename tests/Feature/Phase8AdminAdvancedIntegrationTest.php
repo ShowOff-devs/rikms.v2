@@ -3,12 +3,16 @@
 use App\Models\AccessRequest;
 use App\Models\Agency;
 use App\Models\AuditLog;
+use App\Models\Notification as SystemNotification;
 use App\Models\Permission;
 use App\Models\PlatformSetting;
 use App\Models\Research;
 use App\Models\Role;
 use App\Models\SecurityEvent;
 use App\Models\User;
+use Illuminate\Auth\Notifications\ResetPassword;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 
 function createPhase8Role(string $slug): Role
 {
@@ -135,6 +139,208 @@ test('rbac writes assign remove permissions and protect the last super admin', f
             'confirm_self_removal' => true,
         ])
         ->assertUnprocessable();
+});
+
+test('agency admin user management APIs use relational users instead of mock records', function () {
+    Notification::fake();
+
+    $agency = createPhase8Agency('agency-admin-users-agency');
+    $superAdmin = createPhase8User('super_admin');
+    $agencyAdmin = createPhase8User('agency_admin', $agency);
+
+    $this->actingAs($agencyAdmin)
+        ->getJson('/api/admin/agency-admin-users')
+        ->assertForbidden();
+
+    $createdId = $this->actingAs($superAdmin)
+        ->postJson('/api/admin/agency-admin-users', [
+            'full_name' => 'Database Backed Admin',
+            'email' => 'database-backed-admin@example.test',
+            'agency_id' => $agency->id,
+            'status' => 'active',
+            'temporary_password' => 'temporary-password',
+            'send_invite' => true,
+        ])
+        ->assertCreated()
+        ->assertJsonPath('data.name', 'Database Backed Admin')
+        ->assertJsonPath('data.email', 'database-backed-admin@example.test')
+        ->assertJsonPath('data.agency.id', $agency->id)
+        ->json('data.id');
+
+    $createdUser = User::query()->findOrFail($createdId);
+
+    expect($createdUser->isAgencyAdmin())->toBeTrue();
+    Notification::assertSentTo($createdUser, ResetPassword::class);
+
+    $this->actingAs($superAdmin)
+        ->getJson('/api/admin/agency-admin-users?per_page=100')
+        ->assertOk()
+        ->assertJsonFragment(['email' => 'database-backed-admin@example.test']);
+
+    $this->actingAs($superAdmin)
+        ->patchJson("/api/admin/agency-admin-users/{$createdId}", [
+            'full_name' => 'Updated Database Admin',
+            'email' => 'updated-database-admin@example.test',
+            'agency_id' => $agency->id,
+            'status' => 'inactive',
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.name', 'Updated Database Admin')
+        ->assertJsonPath('data.status', 'inactive');
+
+    $this->actingAs($superAdmin)
+        ->postJson("/api/admin/agency-admin-users/{$createdId}/activate")
+        ->assertOk()
+        ->assertJsonPath('data.status', 'active');
+
+    $this->actingAs($superAdmin)
+        ->postJson("/api/admin/agency-admin-users/{$createdId}/password-reset")
+        ->assertOk()
+        ->assertJsonPath('data.sent_to', 'updated-database-admin@example.test');
+
+    $this->actingAs($superAdmin)
+        ->deleteJson("/api/admin/agency-admin-users/{$createdId}")
+        ->assertOk();
+
+    $removedUser = User::query()->findOrFail($createdId);
+
+    expect($removedUser->archived_at)->not->toBeNull()
+        ->and($removedUser->isAgencyAdmin())->toBeFalse()
+        ->and(AuditLog::query()->where('event', 'agency_admin_user.removed')->exists())->toBeTrue();
+});
+
+test('agency management can assign a real agency admin user to an agency', function () {
+    $agency = createPhase8Agency('assign-admin-agency');
+    $superAdmin = createPhase8User('super_admin');
+    $previousAdmin = createPhase8User('agency_admin', $agency);
+    $newAdmin = createPhase8User('agency_admin');
+
+    $this->actingAs($previousAdmin)
+        ->postJson("/api/admin/agencies/{$agency->id}/assign-admin", [
+            'admin_user_id' => $newAdmin->id,
+        ])
+        ->assertForbidden();
+
+    $this->actingAs($superAdmin)
+        ->postJson("/api/admin/agencies/{$agency->id}/assign-admin", [
+            'admin_user_id' => $newAdmin->id,
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.agency_admins.0.id', $newAdmin->id)
+        ->assertJsonPath('data.agency_admins.0.email', $newAdmin->email);
+
+    expect($newAdmin->fresh()->agency_id)->toBe($agency->id)
+        ->and($previousAdmin->fresh()->agency_id)->toBeNull()
+        ->and(AuditLog::query()->where('event', 'agency.admin_assigned')->exists())->toBeTrue();
+
+    $this->actingAs($superAdmin)
+        ->getJson('/api/admin/agencies?per_page=100')
+        ->assertOk()
+        ->assertJsonFragment(['email' => $newAdmin->email]);
+});
+
+test('agency management create update status and archive write relational agencies', function () {
+    $superAdmin = createPhase8User('super_admin');
+    $agencyAdmin = createPhase8User('agency_admin');
+
+    $createdId = $this->actingAs($superAdmin)
+        ->postJson('/api/admin/agencies', [
+            'name' => 'Relational Agency Management Office',
+            'short_name' => 'RAMO',
+            'type' => 'government-agency',
+            'description' => 'Created through relational API.',
+            'website' => 'https://ramo.example.test',
+            'email' => 'contact@ramo.example.test',
+            'address' => 'Davao City',
+            'status' => 'active',
+            'agency_admin_id' => $agencyAdmin->id,
+        ])
+        ->assertCreated()
+        ->assertJsonPath('data.short_name', 'RAMO')
+        ->assertJsonPath('data.agency_admins.0.id', $agencyAdmin->id)
+        ->json('data.id');
+
+    $this->actingAs($superAdmin)
+        ->patchJson("/api/admin/agencies/{$createdId}", [
+            'name' => 'Relational Agency Management Office Updated',
+            'short_name' => 'RAMOU',
+            'type' => 'research-consortium',
+            'description' => 'Updated through relational API.',
+            'website' => 'https://ramou.example.test',
+            'email' => 'contact@ramou.example.test',
+            'address' => 'Davao City',
+            'status' => 'inactive',
+            'agency_admin_id' => $agencyAdmin->id,
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.short_name', 'RAMOU')
+        ->assertJsonPath('data.status', 'inactive');
+
+    $this->actingAs($superAdmin)
+        ->postJson("/api/admin/agencies/{$createdId}/activate")
+        ->assertOk()
+        ->assertJsonPath('data.status', 'active');
+
+    $this->actingAs($superAdmin)
+        ->postJson("/api/admin/agencies/{$createdId}/archive")
+        ->assertOk();
+
+    $agency = Agency::query()->findOrFail($createdId);
+
+    expect($agency->archived_at)->not->toBeNull()
+        ->and($agencyAdmin->fresh()->agency_id)->toBeNull()
+        ->and(AuditLog::query()->where('event', 'agency.archived')->exists())->toBeTrue();
+});
+
+test('system activity and security session APIs read relational data', function () {
+    $superAdmin = createPhase8User('super_admin');
+    $agency = createPhase8Agency('activity-agency');
+
+    SystemNotification::query()->create([
+        'user_id' => $superAdmin->id,
+        'type' => 'system.update',
+        'title' => 'Relational notification',
+        'message' => 'This notification is stored in the database.',
+        'priority' => 'normal',
+        'status' => 'unread',
+    ]);
+
+    AuditLog::query()->create([
+        'user_id' => $superAdmin->id,
+        'agency_id' => $agency->id,
+        'event' => 'agency.updated',
+        'created_at' => now(),
+    ]);
+
+    DB::table('sessions')->insert([
+        'id' => 'phase8-admin-session',
+        'user_id' => $superAdmin->id,
+        'ip_address' => '127.0.0.1',
+        'user_agent' => 'Feature test browser',
+        'payload' => '',
+        'last_activity' => now()->timestamp,
+    ]);
+
+    $this->actingAs($superAdmin)
+        ->getJson('/api/admin/system-activity/notifications')
+        ->assertOk()
+        ->assertJsonFragment(['title' => 'Relational notification']);
+
+    $this->actingAs($superAdmin)
+        ->getJson('/api/admin/system-activity/logs')
+        ->assertOk()
+        ->assertJsonFragment(['event' => 'agency.updated']);
+
+    $this->actingAs($superAdmin)
+        ->getJson('/api/admin/security/sessions')
+        ->assertOk()
+        ->assertJsonFragment(['id' => 'phase8-admin-session']);
+
+    $this->actingAs($superAdmin)
+        ->deleteJson('/api/admin/security/sessions/phase8-admin-session')
+        ->assertOk();
+
+    expect(DB::table('sessions')->where('id', 'phase8-admin-session')->exists())->toBeFalse();
 });
 
 test('platform setting writes validate update mask encrypted values and audit changes', function () {

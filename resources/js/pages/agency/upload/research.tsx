@@ -1,15 +1,11 @@
 import { Head, router } from '@inertiajs/react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import AgencyAdminLayout from '@/components/agency/AgencyAdminLayout';
 import UploadResearchWizard from '@/components/agency/UploadResearchWizard';
-import { getAgencySession } from '@/lib/auth/agency-auth';
-import type { AgencyAuthSession } from '@/types/auth';
+import { useAgencySession } from '@/lib/auth/agency-auth';
 
 export default function ResearchUploadPage() {
-    const session = useMemo<AgencyAuthSession | null>(
-        () => getAgencySession(),
-        [],
-    );
+    const session = useAgencySession();
     const [search, setSearch] = useState('');
 
     useEffect(() => {

@@ -3,7 +3,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
     moderationIssueTypeLabels,
     moderationStatusLabels,
-} from '@/data/mock-research-moderation';
+} from '@/data/research-moderation-options';
 import { cn } from '@/lib/utils';
 import type {
     FlaggedResearchRecord,

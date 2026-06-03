@@ -32,6 +32,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { getAgencyAiResults } from '@/lib/agency/agency-ai-results-service';
 import {
     saveAgencyResearchDraft,
     submitAgencyResearch,
@@ -43,13 +44,10 @@ import {
     getAccessLabel,
     getDisplayTitle,
     getDocumentTypeLabel,
+    metadataFieldsTemplate,
     sdgOptions,
 } from '@/lib/agency/upload-research-service';
 import { apiMessage } from '@/lib/api-client';
-import {
-    mockRunResearchMetadataExtraction,
-    mockValidateResearchSubmission,
-} from '@/lib/upload/services/mock-research-upload-service';
 import { cn } from '@/lib/utils';
 import type {
     AccessType,
@@ -618,6 +616,51 @@ function UploadStep({
     );
 }
 
+async function runResearchMetadataExtraction(state: AgencyUploadState) {
+    if (!state.researchId) {
+        return {
+            metadata: metadataFieldsTemplate.map((field) =>
+                field.key === 'title' && state.manualTitle.trim()
+                    ? { ...field, value: state.manualTitle.trim() }
+                    : { ...field },
+            ),
+            aiSuggestedSDGs: [],
+        };
+    }
+
+    const results = await getAgencyAiResults(state.researchId);
+    const metadata = results.ai_metadata;
+    const sdgClassification = results.sdg_classification;
+
+    return {
+        metadata: metadataFieldsTemplate.map((field) => {
+            const valueMap: Record<string, string> = {
+                title:
+                    metadata.extracted_title ??
+                    state.manualTitle.trim() ??
+                    '',
+                abstract: metadata.extracted_abstract ?? '',
+                keywords: metadata.extracted_keywords?.join(', ') ?? '',
+                authors: metadata.extracted_authors?.join(', ') ?? '',
+            };
+
+            return {
+                ...field,
+                value: valueMap[field.key] ?? '',
+            };
+        }),
+        aiSuggestedSDGs:
+            sdgClassification.suggested_sdg_tags
+                ?.map((item) =>
+                    Number(
+                        String(typeof item === 'string' ? item : item.sdg)
+                            .match(/\d+/u)?.[0],
+                    ),
+                )
+                .filter((sdg) => Number.isFinite(sdg) && sdg > 0) ?? [],
+    };
+}
+
 function MetadataStep({
     state,
     setState,
@@ -631,7 +674,7 @@ function MetadataStep({
         setIsExtracting(true);
 
         try {
-            const result = await mockRunResearchMetadataExtraction(state);
+            const result = await runResearchMetadataExtraction(state);
 
             setState((current) => ({
                 ...current,
@@ -1577,6 +1620,37 @@ function canContinue(currentStep: number, state: AgencyUploadState) {
     return true;
 }
 
+function validateResearchSubmission(state: AgencyUploadState) {
+    const checks = [
+        state.documentType === 'research' ? 'Document type confirmed' : '',
+        state.file && state.uploadStatus === 'uploaded' ? 'File uploaded' : '',
+        state.aiHasRun && state.metadata.some((field) => field.isPublic)
+            ? 'Public metadata selected'
+            : '',
+        state.selectedSdgs.length > 0 ? 'SDG tags selected' : '',
+        canUseAccessSettings(state)
+            ? `Access set to ${getAccessLabel(state.accessType)}`
+            : '',
+    ].filter(Boolean);
+
+    return {
+        passed: checks.length === 5,
+        checks,
+    };
+}
+
+function canUseAccessSettings(state: AgencyUploadState) {
+    if (state.accessType === 'embargo') {
+        return Boolean(state.embargoDate);
+    }
+
+    if (state.accessType === 'external-link') {
+        return Boolean(state.externalUrl.trim());
+    }
+
+    return Boolean(state.accessType);
+}
+
 export default function UploadResearchWizard() {
     const [state, setState] = useState<AgencyUploadState>(
         createInitialUploadState,
@@ -1595,7 +1669,7 @@ export default function UploadResearchWizard() {
 
     const goNext = async () => {
         if (currentStep === 5) {
-            const validation = await mockValidateResearchSubmission(state);
+            const validation = validateResearchSubmission(state);
 
             setState((current) => ({
                 ...current,
@@ -1658,7 +1732,7 @@ export default function UploadResearchWizard() {
         }));
 
         try {
-            const validation = await mockValidateResearchSubmission(state);
+            const validation = validateResearchSubmission(state);
 
             if (!validation.passed) {
                 throw new Error('Research submission is incomplete.');

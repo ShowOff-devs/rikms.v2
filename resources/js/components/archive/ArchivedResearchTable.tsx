@@ -1,5 +1,5 @@
 import { Archive } from 'lucide-react';
-import { archiveDocumentTypeLabels } from '@/data/mock-archive';
+import { archiveDocumentTypeLabels } from '@/data/archive-display';
 import type { ArchivedResearch } from '@/types/archive';
 import { ArchivedResearchActions } from './ArchivedResearchActions';
 import { ArchiveEmptyState } from './ArchiveEmptyState';

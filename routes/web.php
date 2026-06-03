@@ -1,10 +1,22 @@
 <?php
 
+use App\Models\Agency;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Http\Controllers\AuthenticatedSessionController;
+
+$agencyLoginOptions = fn (): array => Agency::query()
+    ->where('status', 'active')
+    ->orderBy('name')
+    ->get(['slug', 'name', 'short_name', 'full_name'])
+    ->map(fn (Agency $agency): array => [
+        'id' => $agency->slug,
+        'shortName' => $agency->short_name ?: $agency->name,
+        'fullName' => $agency->full_name ?: $agency->name,
+    ])
+    ->all();
 
 Route::inertia('/', 'welcome', [
     'canRegister' => Features::enabled(Features::registration()),
@@ -36,7 +48,7 @@ Route::get('/submission-guidelines', fn () => Inertia::render('public-policy', [
 Route::get('/login', function () {
     return redirect()->route('agency.login');
 })->name('login');
-Route::get('/agency/login', function (Request $request) {
+Route::get('/agency/login', function (Request $request) use ($agencyLoginOptions) {
     $user = $request->user();
 
     if ($user?->isAgencyAdmin()) {
@@ -47,10 +59,14 @@ Route::get('/agency/login', function (Request $request) {
         return redirect('/admin/dashboard');
     }
 
-    return Inertia::render('agency/login');
+    return Inertia::render('agency/login', [
+        'agencies' => $agencyLoginOptions(),
+    ]);
 })->name('agency.login');
 Route::post('/agency/login', [AuthenticatedSessionController::class, 'store'])->name('agency.login.store');
-Route::inertia('/agency/forgot-password', 'agency/forgot-password')->name('agency.forgot-password');
+Route::get('/agency/forgot-password', fn () => Inertia::render('agency/forgot-password', [
+    'agencies' => $agencyLoginOptions(),
+]))->name('agency.forgot-password');
 Route::middleware(['auth', 'role:agency_admin'])->group(function () {
     Route::inertia('/agency/dashboard', 'agency/dashboard')->name('agency.dashboard');
     Route::inertia('/agency/research', 'agency/research-repository')->name('agency.research');

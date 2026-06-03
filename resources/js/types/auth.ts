@@ -27,7 +27,6 @@ export type AgencyOption = {
     id: string;
     shortName: string;
     fullName: string;
-    adminEmailHint: string;
 };
 
 export type AgencyLoginPayload = {

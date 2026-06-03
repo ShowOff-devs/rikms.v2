@@ -64,53 +64,53 @@ export const accessOptions: Array<{
     },
 ];
 
-export const mockExtractedMetadata: MetadataField[] = [
+export const metadataFieldsTemplate: MetadataField[] = [
     {
         key: 'title',
         label: 'Title',
-        value: 'Advancing Digital Innovation in Region XI: A Comprehensive Assessment of STI Programs and Institutional Capacities',
+        value: '',
         isPublic: true,
     },
     {
         key: 'abstract',
         label: 'Abstract',
-        value: 'This study examines the current landscape of Science, Technology, and Innovation (STI) programs in Davao Region (Region XI), assessing institutional readiness and program effectiveness. Through mixed-methods research involving 142 respondents across 9 agencies, the study identifies key enablers and barriers to STI adoption and proposes a regional framework for accelerating digital transformation.',
+        value: '',
         isPublic: true,
     },
     {
         key: 'methodology',
         label: 'Methodology',
-        value: 'A convergent parallel mixed-methods design was employed combining structured surveys (n=142), key informant interviews (n=18), and document analysis across all Region XI agencies. Quantitative data were analyzed using descriptive statistics, regression analysis, and structural equation modeling.',
+        value: '',
         isPublic: true,
     },
     {
         key: 'reviewOfRelatedLiterature',
         label: 'Review of Related Literature',
-        value: 'Literature reviewed includes national STI policy frameworks, regional digital transformation indices, and comparative analyses of Philippine agency digitalization efforts.',
+        value: '',
         isPublic: false,
     },
     {
         key: 'theoreticalFramework',
         label: 'Theoretical Framework',
-        value: 'The study is anchored on the Technology Acceptance Model and the Diffusion of Innovations Theory.',
+        value: '',
         isPublic: false,
     },
     {
         key: 'resultsAndDiscussion',
         label: 'Results and Discussion',
-        value: 'Findings indicate that 67.3% of agencies report moderate-to-high digital readiness, but only 34.5% have formalized STI integration plans.',
+        value: '',
         isPublic: true,
     },
     {
         key: 'keywords',
         label: 'Keywords',
-        value: 'Digital Innovation, STI Programs, Region XI, Davao Region, Institutional Capacity, Digital Transformation, Government Agencies, Mixed Methods',
+        value: '',
         isPublic: false,
     },
     {
         key: 'authors',
         label: 'Authors',
-        value: 'Dr. Maria Santos, Dr. Jose Reyes, Engr. Ana Pascual, Dr. Roberto Cruz',
+        value: '',
         isPublic: false,
     },
 ];
@@ -122,7 +122,7 @@ export const createInitialUploadState = (): AgencyUploadState => ({
     uploadStatus: 'idle',
     aiHasRun: false,
     metadata: [],
-    aiSuggestedSdgs: [9, 8, 17],
+    aiSuggestedSdgs: [],
     selectedSdgs: [],
     accessType: 'public',
     embargoDate: '',

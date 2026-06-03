@@ -1,4 +1,4 @@
-import { CheckCircle2, Clock3, DatabaseBackup, RotateCw } from 'lucide-react';
+import { AlertTriangle, Clock3, DatabaseBackup, RotateCw } from 'lucide-react';
 import type { PlatformSettings } from '@/types/platform-settings';
 import { Field, SectionCard } from './platform-settings-controls';
 
@@ -40,12 +40,7 @@ export function BackupRecoverySettings({
     onChange,
     onRunBackup,
 }: BackupRecoverySettingsProps) {
-    const statusText =
-        settings.backupStatus === 'running'
-            ? 'Backup running'
-            : settings.backupStatus === 'failed'
-              ? 'Backup failed'
-              : 'Completed successfully';
+    const statusText = 'Backup job not configured';
 
     return (
         <SectionCard
@@ -65,8 +60,11 @@ export function BackupRecoverySettings({
                     <p className="mt-3 text-sm leading-5 font-medium text-[#364153]">
                         {formatBackupDate(settings.lastBackupAt)}
                     </p>
-                    <div className="mt-1 flex items-center gap-1.5 text-xs leading-4 font-medium text-[#00a63e]">
-                        <CheckCircle2 className="size-3.5" aria-hidden="true" />
+                    <div className="mt-1 flex items-center gap-1.5 text-xs leading-4 font-medium text-[#b45309]">
+                        <AlertTriangle
+                            className="size-3.5"
+                            aria-hidden="true"
+                        />
                         {statusText}
                     </div>
                 </div>
@@ -99,14 +97,14 @@ export function BackupRecoverySettings({
                 <button
                     type="button"
                     onClick={onRunBackup}
-                    disabled={isRunning}
+                    disabled
                     className="inline-flex h-10 items-center justify-center gap-2 rounded-[14px] bg-[#1e3a8a] px-5 text-sm font-semibold text-white shadow-[0_1px_1.5px_rgba(0,0,0,0.1),0_1px_1px_rgba(0,0,0,0.1)] transition hover:bg-[#172f70] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                     <RotateCw
                         className={isRunning ? 'size-4 animate-spin' : 'size-4'}
                         aria-hidden="true"
                     />
-                    {isRunning ? 'Running Backup...' : 'Run System Backup'}
+                    {isRunning ? 'Running Backup...' : 'Backup Not Configured'}
                 </button>
             </div>
         </SectionCard>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AdminLayout } from '@/components/admin/layout/AdminLayout';
-import { moderationIssueTypeLabels } from '@/data/mock-research-moderation';
+import { moderationIssueTypeLabels } from '@/data/research-moderation-options';
 import {
     archiveFlaggedResearch,
     exportModerationReport,
@@ -325,10 +325,7 @@ export function ResearchModerationPage() {
                 const exists = current.some((item) => item.id === record.id);
 
                 if (!exists) {
-                    return [
-                        { ...record, ...updatedRecord },
-                        ...current,
-                    ];
+                    return [{ ...record, ...updatedRecord }, ...current];
                 }
 
                 return current.map((item) =>

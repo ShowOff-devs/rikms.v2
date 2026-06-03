@@ -34,15 +34,14 @@ import {
     repositoryDocumentTypeLabels,
     repositorySdgColors,
     repositoryStatusLabels,
-} from '@/data/mock-repository';
-import { getAgencySession } from '@/lib/auth/agency-auth';
+} from '@/data/repository-display';
+import { useAgencySession } from '@/lib/auth/agency-auth';
 import {
     archiveRepositoryItem,
     getRepositoryFacets,
     searchRepository,
 } from '@/lib/repository/repository-service';
 import { cn } from '@/lib/utils';
-import type { AgencyAuthSession } from '@/types/auth';
 import type {
     RepositoryAccessType,
     RepositoryAnalytics,
@@ -121,10 +120,7 @@ function updateQueryPage(
 }
 
 export default function AgencyResearchRepositoryPage() {
-    const session = useMemo<AgencyAuthSession | null>(
-        () => getAgencySession(),
-        [],
-    );
+    const session = useAgencySession();
     const analyticsRef = useRef<HTMLElement | null>(null);
     const [query, setQuery] = useState<RepositoryQuery>(
         getInitialRepositoryQuery,

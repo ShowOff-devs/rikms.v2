@@ -18,13 +18,12 @@ import {
     getAgencyAnalytics,
     getAnalyticsFilterOptions,
 } from '@/lib/analytics/analytics-service';
-import { getAgencySession } from '@/lib/auth/agency-auth';
+import { useAgencySession } from '@/lib/auth/agency-auth';
 import type {
     AgencyAnalyticsPayload,
     AnalyticsFilters as AnalyticsFiltersValue,
     MostAccessedResearch,
 } from '@/types/analytics';
-import type { AgencyAuthSession } from '@/types/auth';
 
 const initialFilters: AnalyticsFiltersValue = {
     year: 'all',
@@ -36,10 +35,7 @@ const initialFilters: AnalyticsFiltersValue = {
 };
 
 export function AgencyAnalyticsPage() {
-    const session = useMemo<AgencyAuthSession | null>(
-        () => getAgencySession(),
-        [],
-    );
+    const session = useAgencySession();
     const [filters, setFilters] =
         useState<AnalyticsFiltersValue>(initialFilters);
     const [analytics, setAnalytics] = useState<AgencyAnalyticsPayload | null>(

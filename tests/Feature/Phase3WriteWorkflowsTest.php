@@ -12,7 +12,7 @@ use App\Models\ResearchApproval;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Storage;
 
 function createPhase3Agency(string $slug): Agency
@@ -197,7 +197,7 @@ test('agency admin cannot write research for another agency or submit invalid tr
 
 test('agency admin can upload valid pdf and jobs are queued', function () {
     Storage::fake('local');
-    Queue::fake();
+    Bus::fake();
 
     $agency = createPhase3Agency('upload-agency');
     $user = createPhase3User('agency_admin', $agency);
@@ -222,9 +222,11 @@ test('agency admin can upload valid pdf and jobs are queued', function () {
         'mime_type' => 'application/pdf',
     ]);
 
-    Queue::assertPushed(ParsePdfDocumentJob::class, fn (ParsePdfDocumentJob $job): bool => $job->researchId === $research->id && $job->fileId === $fileId);
-    Queue::assertPushed(ExtractResearchMetadataJob::class);
-    Queue::assertPushed(ClassifyResearchSdgJob::class);
+    Bus::assertChained([
+        new ParsePdfDocumentJob($research->id, $fileId, $agency->id, $user->id),
+        new ExtractResearchMetadataJob($research->id, $fileId, $agency->id, $user->id),
+        new ClassifyResearchSdgJob($research->id, $fileId, $agency->id, $user->id),
+    ]);
 });
 
 test('invalid upload file type is rejected and cross agency upload is forbidden', function () {

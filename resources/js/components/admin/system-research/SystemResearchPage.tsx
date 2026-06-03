@@ -1,7 +1,6 @@
 import { router } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
 import { AdminLayout } from '@/components/admin/layout/AdminLayout';
-import { systemResearchRecords } from '@/data/mock-system-research';
 import {
     createSystemResearchSummary,
     exportSystemResearchRecords,
@@ -93,29 +92,27 @@ export function SystemResearchPage() {
         return () => window.clearTimeout(timeout);
     }, [feedback]);
 
-    const allRecords = records.length > 0 ? records : systemResearchRecords;
-
     const agencies = useMemo(
-        () => uniqueSorted(allRecords.map((record) => record.agencyShortName)),
-        [allRecords],
+        () => uniqueSorted(records.map((record) => record.agencyShortName)),
+        [records],
     );
 
     const years = useMemo(
         () =>
-            uniqueSorted(allRecords.map((record) => String(record.year))).sort(
+            uniqueSorted(records.map((record) => String(record.year))).sort(
                 (left, right) => Number(right) - Number(left),
             ),
-        [allRecords],
+        [records],
     );
 
     const categories = useMemo(
-        () => uniqueSorted(allRecords.map((record) => record.category)),
-        [allRecords],
+        () => uniqueSorted(records.map((record) => record.category)),
+        [records],
     );
 
     const sdgs = useMemo(
-        () => uniqueSorted(allRecords.flatMap((record) => record.sdgs)),
-        [allRecords],
+        () => uniqueSorted(records.flatMap((record) => record.sdgs)),
+        [records],
     );
 
     const filteredRecords = useMemo(() => {

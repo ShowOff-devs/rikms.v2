@@ -1,6 +1,6 @@
 import { CheckCircle2, Clock3, XCircle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { accessRequestStatusLabels } from '@/data/mock-access-request-monitor';
+import { accessRequestStatusLabels } from '@/data/access-request-monitor-options';
 import { cn } from '@/lib/utils';
 import type { AccessRequestStatus } from '@/types/access-request-monitor';
 

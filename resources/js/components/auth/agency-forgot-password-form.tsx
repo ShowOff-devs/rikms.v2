@@ -15,16 +15,21 @@ import {
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import {
-    getAgencyOptions,
     requestAgencyPasswordReset,
 } from '@/lib/auth/agency-auth';
+import type { AgencyOption } from '@/types/auth';
 
 type ForgotPasswordErrors = Partial<Record<'agencyId' | 'email', string>>;
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export default function AgencyForgotPasswordForm() {
-    const agencies = getAgencyOptions();
+type AgencyForgotPasswordFormProps = {
+    agencies: AgencyOption[];
+};
+
+export default function AgencyForgotPasswordForm({
+    agencies,
+}: AgencyForgotPasswordFormProps) {
     const [agencyId, setAgencyId] = useState('');
     const [email, setEmail] = useState('');
     const [errors, setErrors] = useState<ForgotPasswordErrors>({});
@@ -35,7 +40,10 @@ export default function AgencyForgotPasswordForm() {
     const validate = () => {
         const nextErrors: ForgotPasswordErrors = {};
 
-        if (!agencyId) {
+        if (agencies.length === 0) {
+            nextErrors.agencyId =
+                'No active agency accounts are available for password reset.';
+        } else if (!agencyId) {
             nextErrors.agencyId =
                 'Please choose the agency account you need help with.';
         }
@@ -140,6 +148,11 @@ export default function AgencyForgotPasswordForm() {
                             ))}
                         </SelectContent>
                     </Select>
+                    {agencies.length === 0 ? (
+                        <p className="mt-2 text-sm text-[#6b7280]">
+                            No active agencies found.
+                        </p>
+                    ) : null}
                     <InputError message={errors.agencyId} />
                 </div>
 
@@ -170,7 +183,7 @@ export default function AgencyForgotPasswordForm() {
 
                 <Button
                     type="submit"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || agencies.length === 0}
                     className="h-12 w-full rounded-[10px] bg-[#1e3a8a] text-base font-semibold text-white hover:bg-[#1b347b]"
                 >
                     {isSubmitting ? <Spinner /> : <Mail className="size-4.5" />}

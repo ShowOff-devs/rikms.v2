@@ -412,6 +412,12 @@ export function AdminArchivePage() {
             const exportResult = await exportArchiveReport(options);
             setFeedback(`${exportResult.fileName} is ready for download.`);
             setIsExportModalOpen(false);
+        } catch (exportError) {
+            setError(
+                exportError instanceof Error
+                    ? exportError.message
+                    : 'Archive report export is not configured for production.',
+            );
         } finally {
             setIsExporting(false);
         }

@@ -10,7 +10,6 @@ import { ArchiveStats } from '@/components/archive/ArchiveStats';
 import { DeleteArchivedResearchModal } from '@/components/archive/DeleteArchivedResearchModal';
 import { RestoreResearchModal } from '@/components/archive/RestoreResearchModal';
 import {
-    addArchiveActivity,
     createArchiveActivity,
     filterArchivedResearch,
     getArchiveActivity,
@@ -18,13 +17,12 @@ import {
     permanentlyDeleteArchivedResearch,
     restoreArchivedResearch,
 } from '@/lib/archive/archive-service';
-import { getAgencySession } from '@/lib/auth/agency-auth';
+import { useAgencySession } from '@/lib/auth/agency-auth';
 import type {
     ArchiveActivity,
     ArchiveFilters as ArchiveFiltersValue,
     ArchivedResearch,
 } from '@/types/archive';
-import type { AgencyAuthSession } from '@/types/auth';
 
 const initialFilters: ArchiveFiltersValue = {
     search: '',
@@ -47,10 +45,7 @@ function countRecentlyArchived(records: ArchivedResearch[]) {
 }
 
 export function ArchivePage() {
-    const session = useMemo<AgencyAuthSession | null>(
-        () => getAgencySession(),
-        [],
-    );
+    const session = useAgencySession();
     const [records, setRecords] = useState<ArchivedResearch[]>([]);
     const [activities, setActivities] = useState<ArchiveActivity[]>([]);
     const [filters, setFilters] = useState<ArchiveFiltersValue>(initialFilters);
@@ -74,8 +69,8 @@ export function ArchivePage() {
     useEffect(() => {
         let isCurrent = true;
 
-        Promise.all([getArchivedResearch(), getArchiveActivity()]).then(
-            ([nextRecords, nextActivities]) => {
+        Promise.all([getArchivedResearch(), getArchiveActivity()])
+            .then(([nextRecords, nextActivities]) => {
                 if (!isCurrent) {
                     return;
                 }
@@ -83,8 +78,13 @@ export function ArchivePage() {
                 setRecords(nextRecords);
                 setActivities(nextActivities);
                 setIsLoading(false);
-            },
-        );
+            })
+            .catch(() => {
+                if (isCurrent) {
+                    setIsLoading(false);
+                    setFeedback('Unable to load archived research records.');
+                }
+            });
 
         return () => {
             isCurrent = false;
@@ -154,7 +154,7 @@ export function ArchivePage() {
     };
 
     const addActivityToState = (activity: ArchiveActivity) => {
-        setActivities(addArchiveActivity(activity));
+        setActivities((current) => [activity, ...current]);
     };
 
     const handleRestoreConfirm = async () => {
@@ -164,22 +164,30 @@ export function ArchivePage() {
 
         setIsRestoring(true);
 
-        const restoredRecord = await restoreArchivedResearch(
-            selectedRestore.id,
-        );
+        try {
+            const restoredRecord = await restoreArchivedResearch(
+                selectedRestore.id,
+            );
 
-        if (restoredRecord) {
-            setRecords((current) =>
-                current.filter((record) => record.id !== restoredRecord.id),
-            );
-            addActivityToState(
-                createArchiveActivity(
-                    'research-restored',
-                    restoredRecord.title,
-                ),
-            );
+            if (restoredRecord) {
+                setRecords((current) =>
+                    current.filter((record) => record.id !== restoredRecord.id),
+                );
+                addActivityToState(
+                    createArchiveActivity(
+                        'research-restored',
+                        restoredRecord.title,
+                    ),
+                );
+                setFeedback(
+                    `${restoredRecord.title} was restored to the active Research Repository.`,
+                );
+            }
+        } catch (restoreError) {
             setFeedback(
-                `${restoredRecord.title} was restored to the active Research Repository.`,
+                restoreError instanceof Error
+                    ? restoreError.message
+                    : 'Unable to restore archived research.',
             );
         }
 
@@ -194,21 +202,29 @@ export function ArchivePage() {
 
         setIsDeleting(true);
 
-        const deletedRecord = await permanentlyDeleteArchivedResearch(
-            selectedDelete.id,
-        );
+        try {
+            const deletedRecord = await permanentlyDeleteArchivedResearch(
+                selectedDelete.id,
+            );
 
-        if (deletedRecord) {
-            setRecords((current) =>
-                current.filter((record) => record.id !== deletedRecord.id),
+            if (deletedRecord) {
+                setRecords((current) =>
+                    current.filter((record) => record.id !== deletedRecord.id),
+                );
+                addActivityToState(
+                    createArchiveActivity(
+                        'research-permanently-deleted',
+                        deletedRecord.title,
+                    ),
+                );
+                setFeedback(`${deletedRecord.title} was permanently deleted.`);
+            }
+        } catch (deleteError) {
+            setFeedback(
+                deleteError instanceof Error
+                    ? deleteError.message
+                    : 'Unable to permanently delete archived research.',
             );
-            addActivityToState(
-                createArchiveActivity(
-                    'research-permanently-deleted',
-                    deletedRecord.title,
-                ),
-            );
-            setFeedback(`${deletedRecord.title} was permanently deleted.`);
         }
 
         setSelectedDelete(null);

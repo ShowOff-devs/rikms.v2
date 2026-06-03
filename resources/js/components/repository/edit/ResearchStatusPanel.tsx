@@ -13,7 +13,7 @@ import {
 import {
     repositoryAccessTypeLabels,
     repositoryStatusLabels,
-} from '@/data/mock-repository';
+} from '@/data/repository-display';
 import { cn } from '@/lib/utils';
 import type {
     RepositoryAccessType,

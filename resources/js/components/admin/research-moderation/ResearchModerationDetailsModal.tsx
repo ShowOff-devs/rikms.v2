@@ -10,7 +10,7 @@ import {
 import {
     moderationIssueTypeLabels,
     moderationStatusLabels,
-} from '@/data/mock-research-moderation';
+} from '@/data/research-moderation-options';
 import type { FlaggedResearchRecord } from '@/types/research-moderation';
 
 type ResearchModerationDetailsModalProps = {

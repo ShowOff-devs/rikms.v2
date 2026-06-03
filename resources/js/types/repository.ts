@@ -74,6 +74,7 @@ export type RepositoryFileReplacement = {
     size: string;
     type: string;
     pages?: number;
+    file?: File;
 };
 
 export type RepositorySortKey =

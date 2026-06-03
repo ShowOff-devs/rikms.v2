@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Head, Link, router } from '@inertiajs/react';
 import { ChevronRight } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import AgencyAdminLayout from '@/components/agency/AgencyAdminLayout';
@@ -17,13 +17,12 @@ import {
     updateAgencyProfile,
     uploadAgencyLogo,
 } from '@/lib/agency-profile/agency-profile-service';
-import { getAgencySession } from '@/lib/auth/agency-auth';
+import { useAgencySession } from '@/lib/auth/agency-auth';
 import type {
     AgencyLogoState,
     AgencyProfile,
     AgencyProfileFormValues,
 } from '@/types/agency-profile';
-import type { AgencyAuthSession } from '@/types/auth';
 
 const maxLogoFileSize = 5 * 1024 * 1024;
 const validLogoTypes = ['image/png', 'image/svg+xml', 'image/jpeg'];
@@ -67,10 +66,7 @@ const emptyLogoState: AgencyLogoState = {
 };
 
 export function AgencyProfilePage() {
-    const session = useMemo<AgencyAuthSession | null>(
-        () => getAgencySession(),
-        [],
-    );
+    const session = useAgencySession();
     const [search, setSearch] = useState('');
     const [profile, setProfile] = useState<AgencyProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);

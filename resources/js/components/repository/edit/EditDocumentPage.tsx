@@ -5,7 +5,7 @@ import {
     CheckCircle2,
     LoaderCircle,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import AgencyAdminLayout from '@/components/agency/AgencyAdminLayout';
 import { BasicInformationSection } from '@/components/repository/edit/BasicInformationSection';
 import { EditDocumentActions } from '@/components/repository/edit/EditDocumentActions';
@@ -21,7 +21,7 @@ import {
     
 } from '@/lib/agency/agency-ai-results-service';
 import type {AgencyAiResults} from '@/lib/agency/agency-ai-results-service';
-import { getAgencySession } from '@/lib/auth/agency-auth';
+import { useAgencySession } from '@/lib/auth/agency-auth';
 import {
     archiveRepositoryItem,
     getRepositoryItemById,
@@ -30,7 +30,6 @@ import {
     saveRepositoryItemAsDraft,
     updateRepositoryItem,
 } from '@/lib/repository/repository-service';
-import type { AgencyAuthSession } from '@/types/auth';
 import type {
     RepositoryAccessType,
     RepositoryItem,
@@ -147,10 +146,7 @@ const hasErrors = (errors: EditDocumentErrors) =>
     );
 
 export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
-    const session = useMemo<AgencyAuthSession | null>(
-        () => getAgencySession(),
-        [],
-    );
+    const session = useAgencySession();
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [search, setSearch] = useState('');
     const [item, setItem] = useState<RepositoryItem | null>(null);
@@ -304,12 +300,13 @@ export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
             name: file.name,
             size: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
             type: file.type || 'PDF Document',
+            file,
         });
 
         if (replaced) {
             setItem(replaced);
             setForm(emptyPayload(replaced));
-            setMessage('Document file replaced in the mock repository.');
+            setMessage('Document file uploaded to the repository.');
         }
     };
 
@@ -347,7 +344,7 @@ export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
                             </h1>
                             <p className="mt-1 text-sm text-[#6a7282]">
                                 The selected repository record does not exist in
-                                the mock dataset.
+                                your agency repository.
                             </p>
                         </div>
                     ) : null}
@@ -416,7 +413,7 @@ export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
                                         onReplaceFile={handleReplaceFile}
                                         onDownload={() =>
                                             setMessage(
-                                                'Mock download prepared for the current document file.',
+                                                'File download is not available from this screen yet.',
                                             )
                                         }
                                     />
@@ -467,8 +464,8 @@ export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
                             Archive research record?
                         </h2>
                         <p className="mt-2 text-sm leading-5 text-[#6a7282]">
-                            This keeps the document in the mock repository but
-                            marks it as archived for agency management.
+                            This marks the document as archived for agency
+                            repository management.
                         </p>
                         <div className="mt-5 flex justify-end gap-2">
                             <button

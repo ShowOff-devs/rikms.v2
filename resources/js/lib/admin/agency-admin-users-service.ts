@@ -1,27 +1,42 @@
-import {
-    mockAgencies,
-    mockAgencyAdminUsers,
-} from '@/data/mock-agency-admin-users';
+import { fetchApi } from '@/lib/api-client';
 import type {
+    Agency,
     AgencyAdminUser,
     CreateAgencyAdminUserPayload,
     UpdateAgencyAdminUserPayload,
 } from '@/types/admin-users';
 
-const mockNetworkDelay = (duration = 180) =>
-    new Promise<void>((resolve) => {
-        window.setTimeout(resolve, duration);
-    });
+type AdminAgencyApiRecord = {
+    id: number;
+    name: string;
+    short_name?: string | null;
+};
 
-let agencyAdminUsers = mockAgencyAdminUsers.map((user) => ({ ...user }));
+type AdminAgencyAdminUserApiRecord = {
+    id: number;
+    agency_id?: number | null;
+    name: string;
+    first_name?: string | null;
+    last_name?: string | null;
+    email: string;
+    role: string;
+    roles?: string[];
+    status: string;
+    agency?: AdminAgencyApiRecord | null;
+    created_at?: string | null;
+    updated_at?: string | null;
+};
 
-function cloneUsers() {
-    return agencyAdminUsers.map((user) => ({ ...user }));
-}
+type PasswordResetApiRecord = {
+    id: number;
+    sent_to: string;
+    sent_at: string;
+};
 
-function getAgency(agencyId: string) {
-    return mockAgencies.find((agency) => agency.id === agencyId);
-}
+type RemovedAgencyAdminApiRecord = {
+    id: number;
+    removed_at: string;
+};
 
 function getInitials(fullName: string) {
     return fullName
@@ -32,153 +47,141 @@ function getInitials(fullName: string) {
         .join('');
 }
 
-export async function getAgencies() {
-    await mockNetworkDelay();
+export async function getAgencies(): Promise<Agency[]> {
+    const { data } = await fetchApi<AdminAgencyApiRecord[]>(
+        '/api/admin/agencies?per_page=100',
+    );
 
-    return mockAgencies.map((agency) => ({ ...agency }));
+    return data.map((agency) => ({
+        id: String(agency.id),
+        name: agency.name,
+        shortName: agency.short_name ?? agency.name,
+    }));
 }
 
-export async function getAgencyAdminUsers() {
-    await mockNetworkDelay();
+export async function getAgencyAdminUsers(): Promise<AgencyAdminUser[]> {
+    const { data } = await fetchApi<AdminAgencyAdminUserApiRecord[]>(
+        '/api/admin/agency-admin-users?per_page=100',
+    );
 
-    return cloneUsers();
+    return data.map(mapAgencyAdminUserFromApi);
 }
 
-export async function getAgencyAdminUserById(id: string) {
-    await mockNetworkDelay();
+export async function getAgencyAdminUserById(
+    id: string,
+): Promise<AgencyAdminUser | null> {
+    const { data } = await fetchApi<AdminAgencyAdminUserApiRecord>(
+        `/api/admin/agency-admin-users/${id}`,
+    );
 
-    const user = agencyAdminUsers.find((item) => item.id === id);
-
-    return user ? { ...user } : null;
+    return mapAgencyAdminUserFromApi(data);
 }
 
 export async function createAgencyAdminUser(
     payload: CreateAgencyAdminUserPayload,
 ): Promise<AgencyAdminUser> {
-    await mockNetworkDelay(260);
+    const { data } = await fetchApi<AdminAgencyAdminUserApiRecord>(
+        '/api/admin/agency-admin-users',
+        {
+            method: 'POST',
+            body: JSON.stringify({
+                full_name: payload.fullName.trim(),
+                email: payload.email.trim().toLowerCase(),
+                agency_id: Number(payload.agencyId),
+                status: payload.status,
+                send_invite: payload.sendInvite,
+                temporary_password:
+                    payload.temporaryPassword?.trim() || undefined,
+            }),
+        },
+    );
 
-    const agency = getAgency(payload.agencyId);
-
-    if (!agency) {
-        throw new Error('Assigned agency does not exist.');
-    }
-
-    const now = new Date().toISOString();
-
-    const createdUser: AgencyAdminUser = {
-        id: `agency-admin-${Date.now()}`,
-        fullName: payload.fullName.trim(),
-        email: payload.email.trim().toLowerCase(),
-        agencyId: agency.id,
-        agencyName: agency.name,
-        agencyShortName: agency.shortName,
-        role: 'Agency Admin',
-        status: payload.status,
-        avatarInitials: getInitials(payload.fullName),
-        createdAt: now,
-        updatedAt: now,
-    };
-
-    agencyAdminUsers = [createdUser, ...agencyAdminUsers];
-
-    return { ...createdUser };
+    return mapAgencyAdminUserFromApi(data);
 }
 
 export async function updateAgencyAdminUser(
     id: string,
     payload: UpdateAgencyAdminUserPayload,
 ): Promise<AgencyAdminUser> {
-    await mockNetworkDelay(240);
-
-    const existingUser = agencyAdminUsers.find((user) => user.id === id);
-    const agency = getAgency(payload.agencyId);
-
-    if (!existingUser || !agency) {
-        throw new Error('Agency admin user could not be updated.');
-    }
-
-    const updatedUser = {
-        ...existingUser,
-        fullName: payload.fullName.trim(),
-        email: payload.email.trim().toLowerCase(),
-        agencyId: agency.id,
-        agencyName: agency.name,
-        agencyShortName: agency.shortName,
-        status: payload.status,
-        avatarInitials: getInitials(payload.fullName),
-        updatedAt: new Date().toISOString(),
-    };
-
-    agencyAdminUsers = agencyAdminUsers.map((user) =>
-        user.id === id ? updatedUser : user,
+    const { data } = await fetchApi<AdminAgencyAdminUserApiRecord>(
+        `/api/admin/agency-admin-users/${id}`,
+        {
+            method: 'PATCH',
+            body: JSON.stringify({
+                full_name: payload.fullName.trim(),
+                email: payload.email.trim().toLowerCase(),
+                agency_id: Number(payload.agencyId),
+                status: payload.status,
+            }),
+        },
     );
 
-    return { ...updatedUser };
+    return mapAgencyAdminUserFromApi(data);
 }
 
 export async function activateAgencyAdminUser(id: string) {
-    const user = await getAgencyAdminUserById(id);
-
-    if (!user) {
-        throw new Error('Agency admin user was not found.');
-    }
-
-    const updatedUser = {
-        ...user,
-        status: 'active' as const,
-        updatedAt: new Date().toISOString(),
-    };
-
-    agencyAdminUsers = agencyAdminUsers.map((item) =>
-        item.id === id ? updatedUser : item,
+    const { data } = await fetchApi<AdminAgencyAdminUserApiRecord>(
+        `/api/admin/agency-admin-users/${id}/activate`,
+        { method: 'POST' },
     );
 
-    return updatedUser;
+    return mapAgencyAdminUserFromApi(data);
 }
 
 export async function deactivateAgencyAdminUser(id: string) {
-    const user = await getAgencyAdminUserById(id);
-
-    if (!user) {
-        throw new Error('Agency admin user was not found.');
-    }
-
-    const updatedUser = {
-        ...user,
-        status: 'inactive' as const,
-        updatedAt: new Date().toISOString(),
-    };
-
-    agencyAdminUsers = agencyAdminUsers.map((item) =>
-        item.id === id ? updatedUser : item,
+    const { data } = await fetchApi<AdminAgencyAdminUserApiRecord>(
+        `/api/admin/agency-admin-users/${id}/deactivate`,
+        { method: 'POST' },
     );
 
-    return updatedUser;
+    return mapAgencyAdminUserFromApi(data);
 }
 
 export async function resetAgencyAdminPassword(id: string) {
-    await mockNetworkDelay(320);
-
-    const user = agencyAdminUsers.find((item) => item.id === id);
-
-    if (!user) {
-        throw new Error('Agency admin user was not found.');
-    }
+    const { data } = await fetchApi<PasswordResetApiRecord>(
+        `/api/admin/agency-admin-users/${id}/password-reset`,
+        { method: 'POST' },
+    );
 
     return {
-        id,
-        sentTo: user.email,
-        sentAt: new Date().toISOString(),
+        id: String(data.id),
+        sentTo: data.sent_to,
+        sentAt: data.sent_at,
     };
 }
 
 export async function removeAgencyAdminUser(id: string) {
-    await mockNetworkDelay(260);
-
-    agencyAdminUsers = agencyAdminUsers.filter((user) => user.id !== id);
+    const { data } = await fetchApi<RemovedAgencyAdminApiRecord>(
+        `/api/admin/agency-admin-users/${id}`,
+        { method: 'DELETE' },
+    );
 
     return {
-        id,
-        removedAt: new Date().toISOString(),
+        id: String(data.id),
+        removedAt: data.removed_at,
+    };
+}
+
+function mapAgencyAdminUserFromApi(
+    user: AdminAgencyAdminUserApiRecord,
+): AgencyAdminUser {
+    const fullName =
+        user.name ||
+        [user.first_name, user.last_name].filter(Boolean).join(' ');
+    const agencyName = user.agency?.name ?? 'Unassigned Agency';
+    const agencyShortName = user.agency?.short_name ?? agencyName;
+
+    return {
+        id: String(user.id),
+        fullName,
+        email: user.email,
+        agencyId: user.agency_id ? String(user.agency_id) : '',
+        agencyName,
+        agencyShortName,
+        role: 'Agency Admin',
+        status: user.status === 'active' ? 'active' : 'inactive',
+        avatarInitials: getInitials(fullName),
+        createdAt: user.created_at ?? new Date().toISOString(),
+        updatedAt: user.updated_at ?? undefined,
     };
 }

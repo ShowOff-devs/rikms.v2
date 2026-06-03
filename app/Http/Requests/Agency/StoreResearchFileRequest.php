@@ -22,6 +22,8 @@ class StoreResearchFileRequest extends FormRequest
     public function rules(): array
     {
         return [
+            // TODO Phase 9: Add production upload hardening: malware scan/quarantine, MIME sniffing beyond extension,
+            // configurable size limits, checksum verification, and audited rejection/failure events.
             'file' => ['required', 'file', 'mimes:pdf', 'mimetypes:application/pdf', 'max:20480'],
             'file_type' => ['nullable', 'string', 'max:80'],
             'visibility' => ['nullable', Rule::in(['private', 'agency', 'public'])],

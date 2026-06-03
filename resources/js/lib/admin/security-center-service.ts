@@ -1,4 +1,3 @@
-import { mockActiveAdminSessions } from '@/data/mock-security-center';
 import { fetchApi } from '@/lib/api-client';
 import type {
     AdminSession,
@@ -21,6 +20,16 @@ type ApiSecurityEvent = {
     created_at?: string;
 };
 
+type ApiAdminSession = {
+    id: string;
+    user: string;
+    role: AdminSession['role'];
+    device: string;
+    ip_address: string;
+    last_activity: string;
+    status: AdminSession['status'];
+};
+
 let cachedEvents: ApiSecurityEvent[] = [];
 
 function title(value: string) {
@@ -31,28 +40,28 @@ function title(value: string) {
 
 function eventType(value: string): SecurityEvent['type'] {
     if (value.includes('failed')) {
-return 'login-failed';
-}
+        return 'login-failed';
+    }
 
     if (value.includes('password')) {
-return 'password-reset';
-}
+        return 'password-reset';
+    }
 
     if (value.includes('rbac')) {
-return 'rbac-updated';
-}
+        return 'rbac-updated';
+    }
 
     if (value.includes('policy')) {
-return 'policy-updated';
-}
+        return 'policy-updated';
+    }
 
     if (value.includes('session')) {
-return 'session-timeout-updated';
-}
+        return 'session-timeout-updated';
+    }
 
     if (value.includes('admin')) {
-return 'admin-created';
-}
+        return 'admin-created';
+    }
 
     return 'login-success';
 }
@@ -61,8 +70,11 @@ function toAlert(event: ApiSecurityEvent): SecurityAlert {
     return {
         id: String(event.id),
         title: title(event.event_type),
-        description:
-            String(event.metadata?.description ?? event.metadata?.message ?? title(event.event_type)),
+        description: String(
+            event.metadata?.description ??
+                event.metadata?.message ??
+                title(event.event_type),
+        ),
         severity: event.severity,
         status: event.resolved_at ? 'resolved' : 'open',
         timestamp: event.created_at ?? '',
@@ -71,7 +83,10 @@ function toAlert(event: ApiSecurityEvent): SecurityAlert {
         affectedResource: String(event.metadata?.resource ?? ''),
         sourceIp: String(event.metadata?.ip_address ?? ''),
         device: String(event.metadata?.user_agent ?? ''),
-        recommendedAction: String(event.metadata?.recommended_action ?? 'Review the event and resolve it when verified.'),
+        recommendedAction: String(
+            event.metadata?.recommended_action ??
+                'Review the event and resolve it when verified.',
+        ),
     };
 }
 
@@ -79,7 +94,11 @@ function toTimelineEvent(event: ApiSecurityEvent): SecurityEvent {
     return {
         id: String(event.id),
         title: title(event.event_type),
-        description: String(event.metadata?.description ?? event.metadata?.message ?? title(event.event_type)),
+        description: String(
+            event.metadata?.description ??
+                event.metadata?.message ??
+                title(event.event_type),
+        ),
         timestamp: event.created_at ?? '',
         severity: event.severity,
         actor: event.user?.name ?? 'System',
@@ -88,7 +107,9 @@ function toTimelineEvent(event: ApiSecurityEvent): SecurityEvent {
 }
 
 async function loadEvents() {
-    const response = await fetchApi<ApiSecurityEvent[]>('/api/admin/security/events?per_page=100');
+    const response = await fetchApi<ApiSecurityEvent[]>(
+        '/api/admin/security/events?per_page=100',
+    );
     cachedEvents = response.data;
 
     return cachedEvents;
@@ -96,13 +117,17 @@ async function loadEvents() {
 
 export async function getSecuritySummary(): Promise<SecuritySummary> {
     const events = cachedEvents.length ? cachedEvents : await loadEvents();
-    const failedLoginAttempts = events.filter((event) => event.event_type.includes('failed')).length;
+    const failedLoginAttempts = events.filter((event) =>
+        event.event_type.includes('failed'),
+    ).length;
 
     return {
         mfaEnabledAdminAccounts: 0,
         mfaEligibleAdminAccounts: 0,
         failedLoginAttempts,
-        lockedAccounts: events.filter((event) => event.event_type.includes('locked')).length,
+        lockedAccounts: events.filter((event) =>
+            event.event_type.includes('locked'),
+        ).length,
         activeAdminSessions: 0,
         securityAlerts: events.filter((event) => !event.resolved_at).length,
     };
@@ -138,7 +163,10 @@ export async function getLoginActivity(): Promise<LoginActivity[]> {
         .map((event) => ({
             id: String(event.id),
             user: event.user?.name ?? 'Unknown',
-            role: event.user?.role === 'super_admin' ? 'Super Admin' : 'Agency Admin',
+            role:
+                event.user?.role === 'super_admin'
+                    ? 'Super Admin'
+                    : 'Agency Admin',
             ipAddress: String(event.metadata?.ip_address ?? ''),
             location: event.location ?? 'Unknown',
             device: String(event.metadata?.user_agent ?? ''),
@@ -148,21 +176,30 @@ export async function getLoginActivity(): Promise<LoginActivity[]> {
 }
 
 export async function getActiveAdminSessions(): Promise<AdminSession[]> {
-    // TODO Phase 9: Replace this mock fallback after a real session tracking/revoke API and authenticated browser automation pass.
-    return mockActiveAdminSessions.map((session) => ({ ...session }));
+    const response = await fetchApi<ApiAdminSession[]>(
+        '/api/admin/security/sessions',
+    );
+
+    return response.data.map((session) => ({
+        id: session.id,
+        user: session.user,
+        role: session.role,
+        device: session.device,
+        ipAddress: session.ip_address,
+        lastActivity: session.last_activity,
+        status: session.status,
+    }));
 }
 
 export async function revokeAdminSession(id: string) {
-    // TODO Phase 9: Replace this mock fallback after a real session tracking/revoke API and authenticated browser automation pass.
-    const session = mockActiveAdminSessions.find((item) => item.id === id);
-
-    if (!session) {
-        throw new Error('Admin session was not found.');
-    }
+    const response = await fetchApi<{ id: string; revoked_at: string }>(
+        `/api/admin/security/sessions/${id}`,
+        { method: 'DELETE' },
+    );
 
     return {
-        id,
-        revokedAt: new Date().toISOString(),
+        id: response.data.id,
+        revokedAt: response.data.revoked_at,
     };
 }
 

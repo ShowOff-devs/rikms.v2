@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AdminLayout } from '@/components/admin/layout/AdminLayout';
-import { accessRequestAgencyOptions } from '@/data/mock-access-request-monitor';
 import {
     auditAccessDecision,
     buildAccessRequestMonitorSummary,
@@ -46,9 +45,7 @@ function buildAgencyChartData(records: AccessRequestMonitorRecord[]) {
         {},
     );
 
-    const agencies = Array.from(
-        new Set([...accessRequestAgencyOptions, ...Object.keys(counts)]),
-    );
+    const agencies = Array.from(new Set(Object.keys(counts)));
 
     return agencies
         .map((agency) => ({
@@ -123,6 +120,14 @@ export function AccessRequestMonitorPage() {
         () =>
             Array.from(
                 new Set(records.map((record) => record.organization)),
+            ).sort((left, right) => left.localeCompare(right)),
+        [records],
+    );
+
+    const agencies = useMemo(
+        () =>
+            Array.from(
+                new Set(records.map((record) => record.agencyShortName)),
             ).sort((left, right) => left.localeCompare(right)),
         [records],
     );
@@ -251,7 +256,7 @@ export function AccessRequestMonitorPage() {
                     <section className="overflow-hidden rounded-[14px] border border-[#e5e7eb] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_-1px_rgba(0,0,0,0.1)]">
                         <AccessRequestFilters
                             filters={filters}
-                            agencies={accessRequestAgencyOptions}
+                            agencies={agencies}
                             organizations={organizations}
                             onFiltersChange={setFilters}
                             onClearFilters={() => setFilters(initialFilters)}

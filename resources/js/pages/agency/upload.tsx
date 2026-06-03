@@ -15,11 +15,10 @@ import {
     Sparkles,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import AgencyAdminLayout from '@/components/agency/AgencyAdminLayout';
-import { getAgencySession } from '@/lib/auth/agency-auth';
+import { useAgencySession } from '@/lib/auth/agency-auth';
 import { cn } from '@/lib/utils';
-import type { AgencyAuthSession } from '@/types/auth';
 
 type UploadTypeId =
     | 'research-study'
@@ -251,10 +250,7 @@ function getPreviewTheme(config: UploadTypeConfig | null) {
 }
 
 export default function AgencyUploadPage() {
-    const session = useMemo<AgencyAuthSession | null>(
-        () => getAgencySession(),
-        [],
-    );
+    const session = useAgencySession();
     const [search, setSearch] = useState('');
     const [selectedTypeId, setSelectedTypeId] = useState<UploadTypeId | null>(
         null,

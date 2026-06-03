@@ -1,10 +1,3 @@
-import {
-    mockAdminArchiveSummary,
-    mockArchiveActivityTimeline,
-    mockArchivedAgencyRecords,
-    mockArchivedResearchRecords,
-    mockArchivedUserRecords,
-} from '@/data/mock-admin-archive';
 import { fetchApi } from '@/lib/api-client';
 import type {
     AdminArchiveSummary,
@@ -30,38 +23,6 @@ type ResearchApiRecord = {
     archived_by_user?: { name?: string | null; email?: string | null } | null;
 };
 
-const mockNetworkDelay = (duration = 180) =>
-    new Promise<void>((resolve) => {
-        if (typeof window === 'undefined') {
-            resolve();
-
-            return;
-        }
-
-        window.setTimeout(resolve, duration);
-    });
-
-const cloneResearchRecord = (
-    record: ArchivedResearchRecord,
-): ArchivedResearchRecord => ({
-    ...record,
-    authors: [...record.authors],
-});
-
-const cloneAgencyRecord = (
-    record: ArchivedAgencyRecord,
-): ArchivedAgencyRecord => ({
-    ...record,
-});
-
-const cloneUserRecord = (record: ArchivedUserRecord): ArchivedUserRecord => ({
-    ...record,
-});
-
-const cloneActivity = (activity: ArchiveActivity): ArchiveActivity => ({
-    ...activity,
-});
-
 export function createArchiveActivity(
     type: ArchiveActivity['type'],
     record: AdminArchivedRecord,
@@ -84,66 +45,41 @@ export function createArchiveActivity(
 }
 
 export async function getAdminArchiveSummary(): Promise<AdminArchiveSummary> {
-    try {
-        const { meta } = await fetchApi<ResearchApiRecord[]>(
-            '/api/admin/archive/research?per_page=1',
-        );
-        const pagination = meta.pagination as
-            | { total?: number }
-            | undefined;
+    const { meta } = await fetchApi<ResearchApiRecord[]>(
+        '/api/admin/archive/research?per_page=1',
+    );
+    const pagination = meta.pagination as { total?: number } | undefined;
 
-        return {
-            ...mockAdminArchiveSummary,
-            archivedResearchRecords: pagination?.total ?? 0,
-        };
-    } catch {
-        // TODO Phase 6: Replace this mock fallback after admin archive summary API/flow is verified with real Sanctum authentication.
-    }
-
-    await mockNetworkDelay();
-
-    return { ...mockAdminArchiveSummary };
+    return {
+        archivedResearchRecords: pagination?.total ?? 0,
+        archivedAgencies: 0,
+        archivedUserAccounts: 0,
+        recentlyRestored: 0,
+    };
 }
 
 export async function getArchivedResearchRecords(): Promise<
     ArchivedResearchRecord[]
 > {
-    try {
-        const { data } = await fetchApi<ResearchApiRecord[]>(
-            '/api/admin/archive/research?per_page=100',
-        );
+    const { data } = await fetchApi<ResearchApiRecord[]>(
+        '/api/admin/archive/research?per_page=100',
+    );
 
-        return data.map(mapApiResearchRecord);
-    } catch {
-        // TODO Phase 6: Replace this mock fallback after admin archive listing is verified with real Sanctum authentication.
-    }
-
-    await mockNetworkDelay();
-
-    return mockArchivedResearchRecords.map(cloneResearchRecord);
+    return data.map(mapApiResearchRecord);
 }
 
 export async function getArchivedAgencyRecords(): Promise<
     ArchivedAgencyRecord[]
 > {
-    // TODO Phase 6: Replace this mock fallback after admin archived agencies API/flow is verified with real Sanctum authentication.
-    await mockNetworkDelay();
-
-    return mockArchivedAgencyRecords.map(cloneAgencyRecord);
+    return [];
 }
 
 export async function getArchivedUserRecords(): Promise<ArchivedUserRecord[]> {
-    // TODO Phase 6: Replace this mock fallback after admin archived users API/flow is verified with real Sanctum authentication.
-    await mockNetworkDelay();
-
-    return mockArchivedUserRecords.map(cloneUserRecord);
+    return [];
 }
 
 export async function getArchiveActivityTimeline(): Promise<ArchiveActivity[]> {
-    // TODO Phase 6: Replace this mock fallback after admin archive activity API/flow is verified with real Sanctum authentication.
-    await mockNetworkDelay();
-
-    return mockArchiveActivityTimeline.map(cloneActivity);
+    return [];
 }
 
 export async function restoreArchivedRecord(
@@ -154,64 +90,40 @@ export async function restoreArchivedRecord(
         const researchId = apiResearchId(id);
 
         if (researchId) {
-            try {
-                await fetchApi<ResearchApiRecord>(
-                    `/api/admin/research/${researchId}/restore`,
-                    {
-                        method: 'POST',
-                    },
-                );
+            await fetchApi<ResearchApiRecord>(
+                `/api/admin/research/${researchId}/restore`,
+                {
+                    method: 'POST',
+                },
+            );
 
-                return {
-                    recordType,
-                    id,
-                    restoredAt: new Date().toISOString(),
-                };
-            } catch {
-                // TODO Phase 6: Replace this mock fallback after admin archive restore is verified with real Sanctum authentication.
-            }
+            return {
+                recordType,
+                id,
+                restoredAt: new Date().toISOString(),
+            };
         }
     }
 
-    await mockNetworkDelay(420);
-
-    return {
-        recordType,
-        id,
-        restoredAt: new Date().toISOString(),
-    };
+    throw new Error('Admin archive restore is only configured for persisted research records.');
 }
 
 export async function permanentlyDeleteArchivedRecord(
     recordType: ArchiveRecordType,
     id: string,
 ): Promise<{ recordType: ArchiveRecordType; id: string; deletedAt: string }> {
-    // TODO Phase 6: Replace this mock fallback after protected archive permanent delete APIs/flows are verified with real Sanctum authentication.
-    await mockNetworkDelay(460);
+    void recordType;
+    void id;
 
-    return {
-        recordType,
-        id,
-        deletedAt: new Date().toISOString(),
-    };
+    throw new Error('Permanent archive deletion is not configured for production.');
 }
 
 export async function exportArchiveReport(
     options: ArchiveExportOptions,
 ): Promise<GeneratedArchiveReport> {
-    // TODO Phase 6: Replace this mock fallback after admin archive export API/flow is verified with real Sanctum authentication.
-    await mockNetworkDelay(900);
+    void options;
 
-    const generatedAt = new Date().toISOString();
-    const extension = options.format === 'excel' ? 'xlsx' : options.format;
-
-    return {
-        id: `archive-report-${Date.now()}`,
-        fileName: `rikms-archive-report-${generatedAt.slice(0, 10)}.${extension}`,
-        format: options.format,
-        generatedAt,
-        status: 'ready',
-    };
+    throw new Error('Archive report export is not configured for production.');
 }
 
 function apiResearchId(id: string) {

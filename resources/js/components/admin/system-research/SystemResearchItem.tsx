@@ -6,7 +6,7 @@ import {
     Tag,
     Upload,
 } from 'lucide-react';
-import { systemResearchStatusLabels } from '@/data/mock-system-research';
+import { systemResearchStatusLabels } from '@/data/system-research-options';
 import { cn } from '@/lib/utils';
 import type {
     SystemResearchRecord,
