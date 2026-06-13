@@ -80,8 +80,10 @@ export function NotificationSettingsPanel({
                     />
                     <ToggleRow
                         label="Weekly digest"
-                        description="Summarize new activity across your agency workspace."
+                        description="Scheduled delivery is not configured yet."
                         checked={notifications.weeklyDigest}
+                        disabled
+                        disabledReason="Not configured"
                         onCheckedChange={(checked) =>
                             onNotificationChange('weeklyDigest', checked)
                         }
@@ -89,8 +91,10 @@ export function NotificationSettingsPanel({
                     <ToggleRow
                         icon={FileBarChart}
                         label="Monthly analytics report"
-                        description="Send monthly research performance and access analytics."
+                        description="Scheduled analytics email delivery is not configured yet."
                         checked={notifications.monthlyAnalyticsReport}
+                        disabled
+                        disabledReason="Not configured"
                         onCheckedChange={(checked) =>
                             onNotificationChange(
                                 'monthlyAnalyticsReport',
@@ -141,6 +145,7 @@ function ToggleRow({
     description,
     checked,
     disabled,
+    disabledReason,
     onCheckedChange,
 }: {
     icon?: typeof Bell;
@@ -148,6 +153,7 @@ function ToggleRow({
     description: string;
     checked: boolean;
     disabled?: boolean;
+    disabledReason?: string;
     onCheckedChange: (checked: boolean) => void;
 }) {
     return (
@@ -165,6 +171,11 @@ function ToggleRow({
                     <span className="mt-0.5 block text-xs leading-4 text-[#6a7282]">
                         {description}
                     </span>
+                    {disabledReason ? (
+                        <span className="mt-1 inline-flex rounded-full bg-[#f3f4f6] px-2 py-0.5 text-[10px] leading-4 font-semibold text-[#6a7282]">
+                            {disabledReason}
+                        </span>
+                    ) : null}
                 </span>
             </div>
             <ToggleSwitch

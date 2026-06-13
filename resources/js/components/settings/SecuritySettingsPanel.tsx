@@ -6,10 +6,12 @@ type SecuritySettingsPanelProps = {
     security: SecuritySettings;
     errors: Record<string, string>;
     deactivationRequested: boolean;
+    revokingSessionId?: string | null;
     onSecurityChange: (
         field: keyof SecuritySettings,
         value: boolean | number | undefined,
     ) => void;
+    onRevokeSession: (sessionId: string) => void;
     onRequestDeactivation: () => void;
 };
 
@@ -17,7 +19,9 @@ export function SecuritySettingsPanel({
     security,
     errors,
     deactivationRequested,
+    revokingSessionId,
     onSecurityChange,
+    onRevokeSession,
     onRequestDeactivation,
 }: SecuritySettingsPanelProps) {
     return (
@@ -27,7 +31,14 @@ export function SecuritySettingsPanel({
                 errors={errors}
                 onSecurityChange={onSecurityChange}
             />
-            <ActiveSessionsCard sessions={security.activeSessions} />
+            <ActiveSessionsCard
+                sessions={security.activeSessions}
+                sessionManagementAvailable={
+                    security.sessionManagementAvailable
+                }
+                revokingSessionId={revokingSessionId}
+                onRevokeSession={onRevokeSession}
+            />
             <DangerZoneCard
                 deactivationRequested={deactivationRequested}
                 onRequestDeactivation={onRequestDeactivation}
@@ -64,31 +75,25 @@ function SecuritySettingsCard({
                             Add an extra verification step when signing in.
                         </p>
                     </div>
-                    <button
-                        type="button"
-                        role="switch"
-                        aria-checked={security.twoFactorEnabled}
-                        aria-label="Two-Factor Authentication"
-                        onClick={() =>
-                            onSecurityChange(
-                                'twoFactorEnabled',
-                                !security.twoFactorEnabled,
-                            )
-                        }
-                        className={`relative h-6 w-11 shrink-0 rounded-full transition ${
-                            security.twoFactorEnabled
-                                ? 'bg-[#1e3a8a]'
-                                : 'bg-[#d1d5dc]'
-                        }`}
-                    >
+                    <div className="flex shrink-0 items-center gap-3">
                         <span
-                            className={`absolute top-0.5 size-5 rounded-full bg-white shadow-sm transition ${
+                            className={`rounded-full px-2.5 py-1 text-xs leading-4 font-semibold ${
                                 security.twoFactorEnabled
-                                    ? 'left-[22px]'
-                                    : 'left-0.5'
+                                    ? 'bg-[#dcfce7] text-[#008236]'
+                                    : 'bg-[#fee2e2] text-[#c10007]'
                             }`}
-                        />
-                    </button>
+                        >
+                            {security.twoFactorEnabled
+                                ? 'Enabled'
+                                : 'Disabled'}
+                        </span>
+                        <a
+                            href="/agency/settings/two-factor"
+                            className="inline-flex h-9 items-center justify-center rounded-[10px] border border-[#e5e7eb] bg-white px-3 text-sm leading-5 font-medium text-[#364153] hover:bg-[#f9fafb]"
+                        >
+                            Manage
+                        </a>
+                    </div>
                 </div>
 
                 <label className="block">
@@ -97,6 +102,7 @@ function SecuritySettingsCard({
                     </span>
                     <div className="flex items-center gap-3">
                         <input
+                            data-field="sessionTimeout"
                             value={security.sessionTimeout ?? ''}
                             onChange={(event) =>
                                 onSecurityChange(

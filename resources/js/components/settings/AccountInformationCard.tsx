@@ -87,6 +87,7 @@ export function AccountInformationCard({
                     />
                     <button
                         type="button"
+                        data-field="profilePhoto"
                         onClick={() => fileInputRef.current?.click()}
                         className="mt-3 inline-flex h-9 items-center gap-2 rounded-[10px] border border-[#e5e7eb] bg-white px-3 text-sm leading-5 font-medium text-[#364153] hover:bg-[#f9fafb]"
                     >
@@ -104,6 +105,7 @@ export function AccountInformationCard({
             <div className="mt-6 grid gap-5 md:grid-cols-2">
                 <Field label="Full Name" required error={errors.fullName}>
                     <input
+                        data-field="fullName"
                         value={account.fullName}
                         onChange={(event) =>
                             onAccountChange('fullName', event.target.value)
@@ -119,6 +121,7 @@ export function AccountInformationCard({
                     error={errors.emailAddress}
                 >
                     <input
+                        data-field="emailAddress"
                         value={account.emailAddress}
                         onChange={(event) =>
                             onAccountChange('emailAddress', event.target.value)

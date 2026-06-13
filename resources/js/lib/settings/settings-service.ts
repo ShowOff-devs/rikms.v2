@@ -7,12 +7,13 @@ import type {
     PasswordChangePayload,
     ProfilePhotoUploadResult,
     SecuritySettings,
+    SessionRevocationResult,
 } from '@/types/settings';
 
 export async function getAgencySettings() {
     const { data } = await fetchApi<AgencySettings>('/api/agency/settings');
 
-    return structuredClone(data);
+    return normalizeAgencySettings(data);
 }
 
 export async function updateAccountSettings(payload: AccountSettings) {
@@ -24,7 +25,7 @@ export async function updateAccountSettings(payload: AccountSettings) {
         },
     );
 
-    return data;
+    return normalizeAccountSettings(data);
 }
 
 export async function updateNotificationSettings(
@@ -43,7 +44,6 @@ export async function updateNotificationSettings(
 
 export async function updateSecuritySettings(payload: SecuritySettings) {
     const securityPayload = {
-        twoFactorEnabled: payload.twoFactorEnabled,
         sessionTimeout: payload.sessionTimeout,
     };
     const { data } = await fetchApi<SecuritySettings>(
@@ -55,6 +55,20 @@ export async function updateSecuritySettings(payload: SecuritySettings) {
     );
 
     return data;
+}
+
+function normalizeAgencySettings(settings: AgencySettings): AgencySettings {
+    return {
+        ...settings,
+        account: normalizeAccountSettings(settings.account),
+    };
+}
+
+function normalizeAccountSettings(account: AccountSettings): AccountSettings {
+    return {
+        ...account,
+        profilePhotoUrl: account.profilePhotoUrl ?? null,
+    };
 }
 
 export async function uploadProfilePhoto(
@@ -96,6 +110,19 @@ export async function requestAccountDeactivation(): Promise<DeactivationRequestR
         '/api/agency/settings/deactivation-request',
         {
             method: 'POST',
+        },
+    );
+
+    return data;
+}
+
+export async function revokeAgencySession(
+    sessionId: string,
+): Promise<SessionRevocationResult> {
+    const { data } = await fetchApi<SessionRevocationResult>(
+        `/api/agency/settings/sessions/${encodeURIComponent(sessionId)}`,
+        {
+            method: 'DELETE',
         },
     );
 

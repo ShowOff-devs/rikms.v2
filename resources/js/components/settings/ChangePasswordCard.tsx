@@ -41,6 +41,7 @@ export function ChangePasswordCard({
 
             <div className="mt-5 grid gap-5">
                 <PasswordField
+                    field="currentPassword"
                     label="Current Password"
                     value={password.currentPassword}
                     visible={Boolean(visibleFields.currentPassword)}
@@ -52,6 +53,7 @@ export function ChangePasswordCard({
                 />
                 <div className="grid gap-5 md:grid-cols-2">
                     <PasswordField
+                        field="newPassword"
                         label="New Password"
                         value={password.newPassword}
                         visible={Boolean(visibleFields.newPassword)}
@@ -62,6 +64,7 @@ export function ChangePasswordCard({
                         }
                     />
                     <PasswordField
+                        field="confirmNewPassword"
                         label="Confirm New Password"
                         value={password.confirmNewPassword}
                         visible={Boolean(visibleFields.confirmNewPassword)}
@@ -80,6 +83,7 @@ export function ChangePasswordCard({
 }
 
 function PasswordField({
+    field,
     label,
     value,
     visible,
@@ -87,6 +91,7 @@ function PasswordField({
     onChange,
     onToggleVisible,
 }: {
+    field: keyof PasswordChangePayload;
     label: string;
     value: string;
     visible: boolean;
@@ -101,6 +106,7 @@ function PasswordField({
             </span>
             <span className="relative block">
                 <input
+                    data-field={field}
                     value={value}
                     onChange={(event) => onChange(event.target.value)}
                     type={visible ? 'text' : 'password'}

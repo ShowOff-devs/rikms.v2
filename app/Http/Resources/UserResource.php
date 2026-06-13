@@ -24,6 +24,7 @@ class UserResource extends JsonResource
             'status' => $this->status,
             'agency' => new AgencyResource($this->whenLoaded('agency')),
             'email_verified_at' => $this->email_verified_at?->toISOString(),
+            'deactivation_requested_at' => $this->deactivation_requested_at?->toISOString(),
             'archived_at' => $this->archived_at?->toISOString(),
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),

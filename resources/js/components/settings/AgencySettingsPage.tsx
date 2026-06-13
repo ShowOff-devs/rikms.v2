@@ -1,8 +1,6 @@
-import { zodResolver } from '@hookform/resolvers/zod';
 import { Head, Link, router } from '@inertiajs/react';
 import { ChevronRight } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import AgencyAdminLayout from '@/components/agency/AgencyAdminLayout';
 import { AccountSettingsPanel } from '@/components/settings/AccountSettingsPanel';
@@ -16,6 +14,7 @@ import {
     changePassword,
     getAgencySettings,
     requestAccountDeactivation,
+    revokeAgencySession,
     updateAccountSettings,
     updateNotificationSettings,
     updateSecuritySettings,
@@ -60,6 +59,7 @@ const emptyPassword: PasswordChangePayload = {
 };
 
 const validPhotoTypes = ['image/png', 'image/svg+xml', 'image/jpeg'];
+const maxProfilePhotoBytes = 5 * 1024 * 1024;
 
 const accountSchema = z.object({
     fullName: z.string().trim().min(1, 'Full Name is required.'),
@@ -68,9 +68,7 @@ const accountSchema = z.object({
         .trim()
         .min(1, 'Email Address is required.')
         .email('Enter a valid email address.'),
-    role: z.string(),
-    agency: z.string(),
-    profilePhotoUrl: z.string().optional(),
+    profilePhotoUrl: z.string().nullable().optional(),
 });
 
 const passwordSchema = z
@@ -99,11 +97,46 @@ const securitySchema = z.object({
     activeSessions: z.array(z.unknown()),
 });
 
-export function AgencySettingsPage() {
-    useForm({
-        resolver: zodResolver(accountSchema),
-    });
+const fieldLabels: Record<string, string> = {
+    fullName: 'Full Name',
+    emailAddress: 'Email Address',
+    currentPassword: 'Current Password',
+    newPassword: 'New Password',
+    confirmNewPassword: 'Confirm New Password',
+    profilePhoto: 'Profile Photo',
+    sessionTimeout: 'Session Timeout',
+};
 
+const passwordFieldOrder: Array<keyof PasswordChangePayload> = [
+    'currentPassword',
+    'newPassword',
+    'confirmNewPassword',
+];
+
+const accountFieldOrder = ['fullName', 'emailAddress', 'profilePhoto'];
+
+function errorLabelsFor(fields: string[]) {
+    return fields.map((field) => fieldLabels[field] ?? field).join(', ');
+}
+
+function focusFirstError(errors: Record<string, string>, fieldOrder: string[]) {
+    window.setTimeout(() => {
+        const firstField = fieldOrder.find((field) => errors[field]);
+
+        if (!firstField) {
+            return;
+        }
+
+        const element = document.querySelector<HTMLElement>(
+            `[data-field="${firstField}"]`,
+        );
+
+        element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        element?.focus({ preventScroll: true });
+    }, 0);
+}
+
+export function AgencySettingsPage() {
     const session = useAgencySession();
     const [search, setSearch] = useState('');
     const [activeTab, setActiveTab] = useState<SettingsTab>('account');
@@ -123,6 +156,10 @@ export function AgencySettingsPage() {
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [feedback, setFeedback] = useState('');
     const [saveError, setSaveError] = useState('');
+    const [loadError, setLoadError] = useState('');
+    const [revokingSessionId, setRevokingSessionId] = useState<string | null>(
+        null,
+    );
     const [deactivationModalOpen, setDeactivationModalOpen] = useState(false);
     const [deactivationStatus, setDeactivationStatus] =
         useState<DeactivationRequestStatus>('idle');
@@ -140,17 +177,39 @@ export function AgencySettingsPage() {
 
         let isCurrent = true;
 
-        getAgencySettings().then((loadedSettings) => {
-            if (!isCurrent) {
-                return;
-            }
+        getAgencySettings()
+            .then((loadedSettings) => {
+                if (!isCurrent) {
+                    return;
+                }
 
-            setSettings(loadedSettings);
-            setAccount(loadedSettings.account);
-            setNotifications(loadedSettings.notifications);
-            setSecurity(loadedSettings.security);
-            setIsLoading(false);
-        });
+                setSettings(loadedSettings);
+                setAccount(loadedSettings.account);
+                setNotifications(loadedSettings.notifications);
+                setSecurity(loadedSettings.security);
+                setDeactivationStatus(
+                    loadedSettings.security.deactivationRequested
+                        ? 'submitted'
+                        : 'idle',
+                );
+                setLoadError('');
+            })
+            .catch((error) => {
+                if (!isCurrent) {
+                    return;
+                }
+
+                setLoadError(
+                    error instanceof Error
+                        ? error.message
+                        : 'Unable to load agency settings.',
+                );
+            })
+            .finally(() => {
+                if (isCurrent) {
+                    setIsLoading(false);
+                }
+            });
 
         return () => {
             isCurrent = false;
@@ -225,10 +284,25 @@ export function AgencySettingsPage() {
         clearFieldError('profilePhoto');
 
         if (!validPhotoTypes.includes(file.type)) {
-            setErrors((current) => ({
-                ...current,
+            const nextErrors = {
+                ...errors,
                 profilePhoto: 'Please upload a PNG, SVG, JPG, or JPEG image.',
-            }));
+            };
+            setErrors(nextErrors);
+            focusFirstError(nextErrors, ['profilePhoto']);
+            setProfilePhotoFile(null);
+            setProfilePhotoPreviewUrl(undefined);
+
+            return;
+        }
+
+        if (file.size > maxProfilePhotoBytes) {
+            const nextErrors = {
+                ...errors,
+                profilePhoto: 'Please upload an image no larger than 5 MB.',
+            };
+            setErrors(nextErrors);
+            focusFirstError(nextErrors, ['profilePhoto']);
             setProfilePhotoFile(null);
             setProfilePhotoPreviewUrl(undefined);
 
@@ -239,12 +313,39 @@ export function AgencySettingsPage() {
         setProfilePhotoPreviewUrl(await readFilePreview(file));
     };
 
-    const handleNotificationChange = (
+    const handleNotificationChange = async (
         field: keyof NotificationSettings,
         value: boolean,
     ) => {
         setFeedback('');
         setSaveError('');
+
+        if (field === 'browserNotifications' && value) {
+            if (
+                typeof window === 'undefined' ||
+                !('Notification' in window)
+            ) {
+                setSaveError(
+                    'Browser notifications are not supported in this browser.',
+                );
+
+                return;
+            }
+
+            const permission =
+                Notification.permission === 'default'
+                    ? await Notification.requestPermission()
+                    : Notification.permission;
+
+            if (permission !== 'granted') {
+                setSaveError(
+                    'Browser notification permission was not granted.',
+                );
+
+                return;
+            }
+        }
+
         setNotifications((current) => ({
             ...current,
             [field]: value,
@@ -307,10 +408,11 @@ export function AgencySettingsPage() {
 
     const saveAccountSettings = async () => {
         const accountResult = accountSchema.safeParse(account);
-        const nextErrors: Record<string, string> = {};
+        const accountErrors: Record<string, string> = {};
+        const passwordErrors: Record<string, string> = {};
 
         if (!accountResult.success) {
-            Object.assign(nextErrors, zodErrorsToRecord(accountResult.error));
+            Object.assign(accountErrors, zodErrorsToRecord(accountResult.error));
         }
 
         if (hasPasswordChange) {
@@ -318,16 +420,42 @@ export function AgencySettingsPage() {
 
             if (!passwordResult.success) {
                 Object.assign(
-                    nextErrors,
+                    passwordErrors,
                     zodErrorsToRecord(passwordResult.error),
                 );
             }
         }
 
-        if (Object.keys(nextErrors).length > 0) {
+        if (Object.keys(accountErrors).length > 0) {
+            const nextErrors = { ...accountErrors, ...passwordErrors };
             setErrors(nextErrors);
+            focusFirstError(nextErrors, accountFieldOrder);
 
-            throw new Error('Please fix the highlighted account fields.');
+            throw new Error(
+                `Please fix the highlighted account fields: ${errorLabelsFor(
+                    Object.keys(accountErrors),
+                )}.`,
+            );
+        }
+
+        if (Object.keys(passwordErrors).length > 0) {
+            const nextErrors = { ...passwordErrors };
+            const hasIncompletePasswordChange = passwordFieldOrder.some(
+                (field) => !password[field].trim(),
+            );
+
+            setErrors(nextErrors);
+            focusFirstError(nextErrors, passwordFieldOrder);
+
+            if (hasIncompletePasswordChange) {
+                throw new Error('Complete all password fields or clear them.');
+            }
+
+            throw new Error(
+                `Please fix the highlighted password fields: ${errorLabelsFor(
+                    Object.keys(passwordErrors),
+                )}.`,
+            );
         }
 
         let nextAccount = account;
@@ -367,9 +495,15 @@ export function AgencySettingsPage() {
         const securityResult = securitySchema.safeParse(security);
 
         if (!securityResult.success) {
-            setErrors(zodErrorsToRecord(securityResult.error));
+            const nextErrors = zodErrorsToRecord(securityResult.error);
+            setErrors(nextErrors);
+            focusFirstError(nextErrors, ['sessionTimeout']);
 
-            throw new Error('Please fix the highlighted security fields.');
+            throw new Error(
+                `Please fix the highlighted security fields: ${errorLabelsFor(
+                    Object.keys(nextErrors),
+                )}.`,
+            );
         }
 
         const updatedSecurity = await updateSecuritySettings(security);
@@ -393,8 +527,25 @@ export function AgencySettingsPage() {
         setSaveError('');
 
         try {
-            await requestAccountDeactivation();
+            const result = await requestAccountDeactivation();
             setDeactivationStatus('submitted');
+            setSecurity((current) => ({
+                ...current,
+                deactivationRequested: true,
+                deactivationRequestedAt: result.requestedAt,
+            }));
+            setSettings((current) =>
+                current
+                    ? {
+                          ...current,
+                          security: {
+                              ...current.security,
+                              deactivationRequested: true,
+                              deactivationRequestedAt: result.requestedAt,
+                          },
+                      }
+                    : current,
+            );
             setDeactivationModalOpen(false);
             setFeedback(
                 'Account deactivation request has been submitted for Super Admin review.',
@@ -406,6 +557,46 @@ export function AgencySettingsPage() {
                     ? error.message
                     : 'Unable to submit deactivation request.',
             );
+        }
+    };
+
+    const handleRevokeSession = async (sessionId: string) => {
+        setRevokingSessionId(sessionId);
+        setFeedback('');
+        setSaveError('');
+
+        try {
+            await revokeAgencySession(sessionId);
+            setSecurity((current) => ({
+                ...current,
+                activeSessions: current.activeSessions.filter(
+                    (sessionItem) => sessionItem.id !== sessionId,
+                ),
+            }));
+            setSettings((current) =>
+                current
+                    ? {
+                          ...current,
+                          security: {
+                              ...current.security,
+                              activeSessions:
+                                  current.security.activeSessions.filter(
+                                      (sessionItem) =>
+                                          sessionItem.id !== sessionId,
+                                  ),
+                          },
+                      }
+                    : current,
+            );
+            setFeedback('Session has been revoked.');
+        } catch (error) {
+            setSaveError(
+                error instanceof Error
+                    ? error.message
+                    : 'Unable to revoke session.',
+            );
+        } finally {
+            setRevokingSessionId(null);
         }
     };
 
@@ -468,9 +659,18 @@ export function AgencySettingsPage() {
                             </div>
                         ) : null}
 
+                        {loadError ? (
+                            <div
+                                role="alert"
+                                className="mt-5 rounded-[10px] border border-[#ffc9c9] bg-[#fef2f2] px-4 py-3 text-sm font-medium text-[#e7000b]"
+                            >
+                                {loadError}
+                            </div>
+                        ) : null}
+
                         {isLoading ? (
                             <SettingsLoadingState />
-                        ) : (
+                        ) : !loadError ? (
                             <section className="mt-5 grid items-start gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
                                 <SettingsTabs
                                     activeTab={activeTab}
@@ -518,10 +718,19 @@ export function AgencySettingsPage() {
                                             errors={errors}
                                             deactivationRequested={
                                                 deactivationStatus ===
-                                                'submitted'
+                                                    'submitted' ||
+                                                Boolean(
+                                                    security.deactivationRequested,
+                                                )
+                                            }
+                                            revokingSessionId={
+                                                revokingSessionId
                                             }
                                             onSecurityChange={
                                                 handleSecurityChange
+                                            }
+                                            onRevokeSession={
+                                                handleRevokeSession
                                             }
                                             onRequestDeactivation={() =>
                                                 setDeactivationModalOpen(true)
@@ -530,7 +739,7 @@ export function AgencySettingsPage() {
                                     ) : null}
                                 </div>
                             </section>
-                        )}
+                        ) : null}
                     </div>
                 </main>
             </AgencyAdminLayout>

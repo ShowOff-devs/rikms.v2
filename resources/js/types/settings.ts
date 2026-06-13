@@ -3,7 +3,7 @@ export type AccountSettings = {
     emailAddress: string;
     role: string;
     agency: string;
-    profilePhotoUrl?: string;
+    profilePhotoUrl?: string | null;
 };
 
 export type NotificationSettings = {
@@ -28,7 +28,10 @@ export type ActiveSession = {
 export type SecuritySettings = {
     twoFactorEnabled: boolean;
     sessionTimeout?: number;
+    sessionManagementAvailable?: boolean;
     activeSessions: ActiveSession[];
+    deactivationRequested?: boolean;
+    deactivationRequestedAt?: string | null;
 };
 
 export type AgencySettings = {
@@ -60,4 +63,9 @@ export type DeactivationRequestStatus =
 export type DeactivationRequestResult = {
     status: Exclude<DeactivationRequestStatus, 'idle' | 'failed'>;
     requestedAt: string;
+};
+
+export type SessionRevocationResult = {
+    id: string;
+    revokedAt: string;
 };

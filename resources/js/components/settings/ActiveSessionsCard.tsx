@@ -1,11 +1,19 @@
-import { CheckCircle2, Laptop } from 'lucide-react';
+import { CheckCircle2, Laptop, LogOut } from 'lucide-react';
 import type { ActiveSession } from '@/types/settings';
 
 type ActiveSessionsCardProps = {
     sessions: ActiveSession[];
+    sessionManagementAvailable?: boolean;
+    revokingSessionId?: string | null;
+    onRevokeSession: (sessionId: string) => void;
 };
 
-export function ActiveSessionsCard({ sessions }: ActiveSessionsCardProps) {
+export function ActiveSessionsCard({
+    sessions,
+    sessionManagementAvailable = true,
+    revokingSessionId,
+    onRevokeSession,
+}: ActiveSessionsCardProps) {
     return (
         <section className="rounded-[14px] border border-[#e5e7eb] bg-white px-[25px] pt-[25px] pb-5 shadow-[0px_1px_3px_rgba(0,0,0,0.1),0px_1px_2px_-1px_rgba(0,0,0,0.1)]">
             <h2 className="border-b border-[#f3f4f6] pb-2 text-[14.4px] leading-[21.6px] font-bold text-[#1e3a8a]">
@@ -13,6 +21,19 @@ export function ActiveSessionsCard({ sessions }: ActiveSessionsCardProps) {
             </h2>
 
             <div className="mt-5 space-y-3">
+                {!sessionManagementAvailable ? (
+                    <p className="rounded-[12px] border border-[#fee685] bg-[#fffbeb] px-4 py-3 text-sm leading-5 text-[#92400e]">
+                        Session management is unavailable because the database
+                        session driver is not enabled.
+                    </p>
+                ) : null}
+
+                {sessionManagementAvailable && sessions.length === 0 ? (
+                    <p className="rounded-[12px] border border-[#e5e7eb] bg-[#f9fafb] px-4 py-3 text-sm leading-5 text-[#6a7282]">
+                        No active sessions are available for this account.
+                    </p>
+                ) : null}
+
                 {sessions.map((session) => (
                     <article
                         key={session.id}
@@ -36,20 +57,36 @@ export function ActiveSessionsCard({ sessions }: ActiveSessionsCardProps) {
                             </div>
                         </div>
 
-                        <span
-                            className={`inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-xs leading-4 font-semibold ${
-                                session.status === 'active'
-                                    ? 'bg-[#dcfce7] text-[#008236]'
-                                    : 'bg-[#f3f4f6] text-[#6a7282]'
-                            }`}
-                        >
-                            {session.isCurrent ? (
-                                <CheckCircle2 className="size-3.5" />
+                        <div className="flex shrink-0 items-center gap-2">
+                            <span
+                                className={`inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-xs leading-4 font-semibold ${
+                                    session.status === 'active'
+                                        ? 'bg-[#dcfce7] text-[#008236]'
+                                        : 'bg-[#f3f4f6] text-[#6a7282]'
+                                }`}
+                            >
+                                {session.isCurrent ? (
+                                    <CheckCircle2 className="size-3.5" />
+                                ) : null}
+                                {session.isCurrent
+                                    ? 'Current Session'
+                                    : session.status}
+                            </span>
+
+                            {!session.isCurrent ? (
+                                <button
+                                    type="button"
+                                    onClick={() => onRevokeSession(session.id)}
+                                    disabled={revokingSessionId === session.id}
+                                    className="inline-flex h-8 items-center justify-center gap-1.5 rounded-[8px] border border-[#ffc9c9] bg-white px-2.5 text-xs leading-4 font-semibold text-[#c10007] hover:bg-[#fef2f2] disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    <LogOut className="size-3.5" />
+                                    {revokingSessionId === session.id
+                                        ? 'Revoking'
+                                        : 'Revoke'}
+                                </button>
                             ) : null}
-                            {session.isCurrent
-                                ? 'Current Session'
-                                : session.status}
-                        </span>
+                        </div>
                     </article>
                 ))}
             </div>
