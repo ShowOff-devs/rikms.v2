@@ -16,12 +16,20 @@ export function getArchivedRecordTitle(record: AdminArchivedRecord) {
         return record.name;
     }
 
+    if (record.type === 'file') {
+        return record.fileName;
+    }
+
     return record.fullName;
 }
 
 export function getArchivedRecordAgency(record: AdminArchivedRecord) {
     if (record.type === 'agency') {
         return record.shortName;
+    }
+
+    if (record.type === 'file') {
+        return record.agency;
     }
 
     return record.agency;
@@ -58,6 +66,16 @@ export function getArchivedRecordDetails(record: AdminArchivedRecord) {
             ['Agency Name', record.name],
             ['Short Name', record.shortName],
             ['Agency Type', record.agencyType],
+            ...shared,
+        ];
+    }
+
+    if (record.type === 'file') {
+        return [
+            ['File Name', record.fileName],
+            ['Research', record.researchTitle],
+            ['Agency', record.agency],
+            ['File Type', record.fileType],
             ...shared,
         ];
     }

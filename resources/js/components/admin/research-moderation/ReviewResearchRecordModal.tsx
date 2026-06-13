@@ -3,6 +3,7 @@ import {
     CheckCircle2,
     Flag,
     Loader2,
+    Send,
     SearchCheck,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -20,7 +21,12 @@ import {
 } from '@/data/research-moderation-options';
 import type { FlaggedResearchRecord } from '@/types/research-moderation';
 
-type ReviewAction = 'resolved' | 'flagged' | 'archived';
+type ReviewAction =
+    | 'approved'
+    | 'published'
+    | 'approved-published'
+    | 'flagged'
+    | 'archived';
 
 type ReviewResearchRecordModalProps = {
     record: FlaggedResearchRecord | null;
@@ -56,7 +62,7 @@ export function ReviewResearchRecordModal({
     const handleSave = async (action: ReviewAction) => {
         const trimmedNote = note.trim();
 
-        if ((action === 'resolved' || action === 'archived') && !trimmedNote) {
+        if (action === 'archived' && !trimmedNote) {
             setError('Moderation note is required for this action.');
 
             return;
@@ -66,6 +72,11 @@ export function ReviewResearchRecordModal({
 
         await onSave(action, trimmedNote);
     };
+
+    const canApprove = ['submitted', 'under_review'].includes(
+        record.officialStatus ?? '',
+    );
+    const canPublish = record.officialStatus === 'approved';
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -178,19 +189,59 @@ export function ReviewResearchRecordModal({
                         Cancel
                     </button>
                     <div className="flex flex-wrap justify-end gap-2">
-                        <button
-                            type="button"
-                            onClick={() => handleSave('resolved')}
-                            disabled={isSaving}
-                            className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-[#008236] px-4 text-sm font-semibold text-white transition hover:bg-[#016630] disabled:cursor-wait disabled:opacity-70"
-                        >
-                            {isSaving ? (
-                                <Loader2 className="size-4 animate-spin" />
-                            ) : (
-                                <CheckCircle2 className="size-4" />
-                            )}
-                            Mark as Resolved
-                        </button>
+                        {canApprove ? (
+                            <button
+                                type="button"
+                                onClick={() => handleSave('approved')}
+                                disabled={isSaving}
+                                className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-[#008236] px-4 text-sm font-semibold text-white transition hover:bg-[#016630] disabled:cursor-wait disabled:opacity-70"
+                            >
+                                {isSaving ? (
+                                    <Loader2 className="size-4 animate-spin" />
+                                ) : (
+                                    <CheckCircle2 className="size-4" />
+                                )}
+                                Approve Research
+                            </button>
+                        ) : null}
+                        {canApprove ? (
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    handleSave('approved-published')
+                                }
+                                disabled={isSaving}
+                                className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-[#1e3a8a] px-4 text-sm font-semibold text-white transition hover:bg-[#172554] disabled:cursor-wait disabled:opacity-70"
+                            >
+                                {isSaving ? (
+                                    <Loader2 className="size-4 animate-spin" />
+                                ) : (
+                                    <Send
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                )}
+                                Approve & Publish
+                            </button>
+                        ) : null}
+                        {canPublish ? (
+                            <button
+                                type="button"
+                                onClick={() => handleSave('published')}
+                                disabled={isSaving}
+                                className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-[#1e3a8a] px-4 text-sm font-semibold text-white transition hover:bg-[#172554] disabled:cursor-wait disabled:opacity-70"
+                            >
+                                {isSaving ? (
+                                    <Loader2 className="size-4 animate-spin" />
+                                ) : (
+                                    <Send
+                                        className="size-4"
+                                        aria-hidden="true"
+                                    />
+                                )}
+                                Publish Research
+                            </button>
+                        ) : null}
                         <button
                             type="button"
                             onClick={() => handleSave('flagged')}

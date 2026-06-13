@@ -1,4 +1,4 @@
-import { Archive, Building2, RotateCcw, UsersRound } from 'lucide-react';
+import { Archive, Building2, FileText, RotateCcw, UsersRound } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { AdminArchiveSummary } from '@/types/admin-archive';
 
@@ -18,6 +18,12 @@ const cards: Array<{
         label: 'Archived Research Records',
         icon: Archive,
         tone: 'bg-[#eff6ff] text-[#1e3a8a]',
+    },
+    {
+        key: 'archivedFiles',
+        label: 'Archived Files',
+        icon: FileText,
+        tone: 'bg-[#f5f3ff] text-[#6d28d9]',
     },
     {
         key: 'archivedAgencies',
@@ -44,7 +50,7 @@ export function ArchiveSummaryCards({
     isLoading,
 }: ArchiveSummaryCardsProps) {
     return (
-        <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             {cards.map((card) => {
                 const Icon = card.icon;
 

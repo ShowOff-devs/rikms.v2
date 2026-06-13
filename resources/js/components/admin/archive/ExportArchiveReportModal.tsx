@@ -28,6 +28,7 @@ type ExportFormState = {
     startDate: string;
     endDate: string;
     includeResearch: boolean;
+    includeFiles: boolean;
     includeAgencies: boolean;
     includeUsers: boolean;
     includeRestoreActivity: boolean;
@@ -47,11 +48,12 @@ type ExportArchiveReportModalProps = {
 };
 
 const initialExportState: ExportFormState = {
-    format: 'pdf',
+    format: 'csv',
     dateRange: 'last-30-days',
     startDate: '',
     endDate: '',
     includeResearch: true,
+    includeFiles: true,
     includeAgencies: true,
     includeUsers: true,
     includeRestoreActivity: true,
@@ -61,6 +63,7 @@ const initialExportState: ExportFormState = {
 
 const sectionOptions: Array<{ key: keyof ExportFormState; label: string }> = [
     { key: 'includeResearch', label: 'Archived Research Records' },
+    { key: 'includeFiles', label: 'Archived Files' },
     { key: 'includeAgencies', label: 'Archived Agencies' },
     { key: 'includeUsers', label: 'Archived User Accounts' },
     { key: 'includeRestoreActivity', label: 'Restore Activity' },
@@ -140,6 +143,7 @@ export function ExportArchiveReportModal({
             startDate: form.dateRange === 'custom' ? form.startDate : undefined,
             endDate: form.dateRange === 'custom' ? form.endDate : undefined,
             includeResearch: form.includeResearch,
+            includeFiles: form.includeFiles,
             includeAgencies: form.includeAgencies,
             includeUsers: form.includeUsers,
             includeRestoreActivity: form.includeRestoreActivity,
@@ -199,9 +203,7 @@ export function ExportArchiveReportModal({
                                     <SelectValue placeholder="Select format" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="pdf">PDF</SelectItem>
                                     <SelectItem value="csv">CSV</SelectItem>
-                                    <SelectItem value="excel">Excel</SelectItem>
                                 </SelectContent>
                             </Select>
                             {errors.format && (

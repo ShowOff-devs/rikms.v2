@@ -17,6 +17,7 @@ import {
     getSecurityAlerts,
     getSecurityEvents,
     getSecuritySummary,
+    reopenSecurityAlert,
     resolveSecurityAlert,
     revokeAdminSession,
 } from '@/lib/admin/security-center-service';
@@ -246,6 +247,18 @@ export function SecurityCenterPage() {
         setFeedback('Security alert marked resolved.');
     };
 
+    const handleReopenAlert = async (id: string) => {
+        const updatedAlert = await reopenSecurityAlert(id);
+
+        setAlerts((currentAlerts) =>
+            currentAlerts.map((alert) =>
+                alert.id === id ? { ...alert, ...updatedAlert } : alert,
+            ),
+        );
+        syncSelectedAlert(updatedAlert);
+        setFeedback('Security alert reopened.');
+    };
+
     const handleOpenRevokeSession = (session: AdminSession) => {
         setSelectedSession(session);
         setIsRevokeModalOpen(true);
@@ -315,6 +328,7 @@ export function SecurityCenterPage() {
                     onViewDetails={handleViewAlertDetails}
                     onAcknowledge={handleAcknowledgeAlert}
                     onResolve={handleResolveAlert}
+                    onReopen={handleReopenAlert}
                 />
 
                 <LoginActivityTable
@@ -347,6 +361,7 @@ export function SecurityCenterPage() {
                 onOpenChange={setIsAlertDetailsOpen}
                 onAcknowledge={handleAcknowledgeAlert}
                 onResolve={handleResolveAlert}
+                onReopen={handleReopenAlert}
             />
 
             <RevokeSessionModal

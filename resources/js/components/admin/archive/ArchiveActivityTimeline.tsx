@@ -31,6 +31,11 @@ const activityStyles: Record<
         badge: 'border-[#e5e7eb] bg-[#f3f4f6] text-[#4a5565]',
         dot: 'bg-[#6a7282]',
     },
+    'file-archived': {
+        label: 'Archived',
+        badge: 'border-[#e5e7eb] bg-[#f3f4f6] text-[#4a5565]',
+        dot: 'bg-[#6a7282]',
+    },
     'agency-archived': {
         label: 'Archived',
         badge: 'border-[#e5e7eb] bg-[#f3f4f6] text-[#4a5565]',

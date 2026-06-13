@@ -21,6 +21,7 @@ type SecurityAlertDetailsModalProps = {
     onOpenChange: (open: boolean) => void;
     onAcknowledge: (id: string) => void;
     onResolve: (id: string) => void;
+    onReopen: (id: string) => void;
 };
 
 export function SecurityAlertDetailsModal({
@@ -29,6 +30,7 @@ export function SecurityAlertDetailsModal({
     onOpenChange,
     onAcknowledge,
     onResolve,
+    onReopen,
 }: SecurityAlertDetailsModalProps) {
     if (!alert) {
         return null;
@@ -148,6 +150,15 @@ export function SecurityAlertDetailsModal({
                             className="h-10 rounded-[10px] bg-[#1e3a8a] px-4 text-sm font-medium text-white transition hover:bg-[#172554]"
                         >
                             Mark Resolved
+                        </button>
+                    )}
+                    {alert.status === 'resolved' && (
+                        <button
+                            type="button"
+                            onClick={() => onReopen(alert.id)}
+                            className="h-10 rounded-[10px] bg-[#1e3a8a] px-4 text-sm font-medium text-white transition hover:bg-[#172554]"
+                        >
+                            Reopen
                         </button>
                     )}
                 </DialogFooter>

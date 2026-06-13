@@ -13,6 +13,7 @@ type SecurityAlertsPanelProps = {
     onViewDetails: (alert: SecurityAlert) => void;
     onAcknowledge: (id: string) => void;
     onResolve: (id: string) => void;
+    onReopen: (id: string) => void;
 };
 
 export function SecurityAlertsPanel({
@@ -21,6 +22,7 @@ export function SecurityAlertsPanel({
     onViewDetails,
     onAcknowledge,
     onResolve,
+    onReopen,
 }: SecurityAlertsPanelProps) {
     const activeCount = alerts.filter(
         (alert) => alert.status === 'open',
@@ -122,7 +124,7 @@ export function SecurityAlertsPanel({
                                         />
                                         View Details
                                     </button>
-                                    {alert.status === 'open' ? (
+                                    {alert.status === 'open' && (
                                         <button
                                             type="button"
                                             onClick={() =>
@@ -132,16 +134,23 @@ export function SecurityAlertsPanel({
                                         >
                                             Acknowledge
                                         </button>
-                                    ) : (
+                                    )}
+                                    {alert.status === 'acknowledged' && (
                                         <button
                                             type="button"
                                             onClick={() => onResolve(alert.id)}
-                                            disabled={
-                                                alert.status === 'resolved'
-                                            }
                                             className="inline-flex h-8 items-center justify-center gap-1.5 rounded-[8px] border border-[#e5e7eb] bg-white px-3 text-xs font-medium text-[#4a5565] transition hover:bg-[#f9fafb] disabled:cursor-not-allowed disabled:opacity-60"
                                         >
                                             Mark Resolved
+                                        </button>
+                                    )}
+                                    {alert.status === 'resolved' && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onReopen(alert.id)}
+                                            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-[8px] border border-[#e5e7eb] bg-white px-3 text-xs font-medium text-[#4a5565] transition hover:bg-[#f9fafb]"
+                                        >
+                                            Reopen
                                         </button>
                                     )}
                                 </div>

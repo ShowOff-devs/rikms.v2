@@ -8,6 +8,61 @@ type ApiSetting = {
     is_encrypted?: boolean;
 };
 
+type LogoUploadResponse = {
+    logo_url: string;
+};
+
+const defaultPlatformSettings: PlatformSettings = {
+    general: {
+        systemName: 'RIKMS v2',
+        shortName: 'RIKMS',
+        platformLogoUrl: undefined,
+        defaultLanguage: 'English',
+        timezone: 'Asia/Manila (UTC+8)',
+    },
+    repository: {
+        maxUploadSizeMb: 25,
+        allowedFileTypes: ['PDF', 'DOCX', 'XLSX'],
+        defaultResearchStatus: 'draft',
+        requireAuthors: true,
+        requireAbstract: true,
+        requireKeywords: false,
+        requirePublicationYear: true,
+    },
+    accessControl: {
+        accessRequestEnabled: true,
+        defaultAccessPolicy: 'request-access',
+        embargoOverrideEnabled: false,
+        embargoDurationMonths: 6,
+    },
+    security: {
+        requireMfaForSuperAdmins: false,
+        loginAlertsEnabled: true,
+        failedLoginThreshold: 5,
+        lockoutDurationMinutes: 15,
+        sessionTimeoutMinutes: 60,
+    },
+    notifications: {
+        systemNotificationsEnabled: true,
+        emailNotificationsEnabled: false,
+        securityAlertsEnabled: true,
+        notifyAccessRequestSubmitted: true,
+        notifyResearchPublished: true,
+        notifyWeeklyActivityDigest: false,
+    },
+    maintenance: {
+        maintenanceModeEnabled: false,
+        maintenanceMessage:
+            'RIKMS is temporarily unavailable while maintenance is in progress.',
+    },
+    // Backup execution is not configured in the pilot; these settings are informational only.
+    backup: {
+        lastBackupAt: 'Not configured',
+        backupFrequency: 'Daily at 03:00 AM',
+        backupStatus: 'idle',
+    },
+};
+
 function parseValue(setting: ApiSetting | undefined, fallback: unknown) {
     if (!setting || setting.is_encrypted) {
         return fallback;
@@ -38,54 +93,7 @@ function byKey(settings: ApiSetting[]) {
 
 function toPlatformSettings(settings: ApiSetting[]): PlatformSettings {
     const map = byKey(settings);
-    const fallback: PlatformSettings = {
-        general: {
-            systemName: '',
-            shortName: '',
-            platformLogoUrl: undefined,
-            defaultLanguage: 'en',
-            timezone: 'UTC',
-        },
-        repository: {
-            maxUploadSizeMb: 0,
-            allowedFileTypes: [],
-            defaultResearchStatus: 'draft',
-            requireAuthors: false,
-            requireAbstract: false,
-            requireKeywords: false,
-            requirePublicationYear: false,
-        },
-        accessControl: {
-            accessRequestEnabled: false,
-            defaultAccessPolicy: 'request-access',
-            embargoOverrideEnabled: false,
-            embargoDurationMonths: 0,
-        },
-        security: {
-            requireMfaForSuperAdmins: false,
-            loginAlertsEnabled: false,
-            failedLoginThreshold: 0,
-            lockoutDurationMinutes: 0,
-            sessionTimeoutMinutes: 0,
-        },
-        notifications: {
-            systemNotificationsEnabled: false,
-            emailNotificationsEnabled: false,
-            securityAlertsEnabled: false,
-            notifyAccessRequestSubmitted: false,
-            notifyResearchPublished: false,
-            notifyWeeklyActivityDigest: false,
-        },
-        maintenance: {
-            maintenanceModeEnabled: false,
-            maintenanceMessage: '',
-        },
-        backup: {
-            lastBackupAt: '',
-            backupFrequency: '',
-            backupStatus: 'idle',
-        },
-    };
+    const fallback = defaultPlatformSettings;
 
     return {
         general: {
@@ -359,9 +367,22 @@ export async function uploadPlatformLogo(file: File): Promise<string> {
         throw new Error('Platform logo must be an image file.');
     }
 
-    throw new Error(
-        'Platform logo upload storage is not configured. The selected logo is a local preview only and was not saved.',
+    if (file.size > 2 * 1024 * 1024) {
+        throw new Error('Platform logo must be 2MB or smaller.');
+    }
+
+    const formData = new FormData();
+    formData.append('logo', file);
+
+    const response = await fetchApi<LogoUploadResponse>(
+        '/api/admin/platform-settings/logo',
+        {
+            method: 'POST',
+            body: formData,
+        },
     );
+
+    return response.data.logo_url;
 }
 
 export async function enableMaintenanceMode(
@@ -388,10 +409,4 @@ export async function disableMaintenanceMode(): Promise<PlatformSettings> {
             maintenanceModeEnabled: false,
         },
     });
-}
-
-export async function runSystemBackup(): Promise<PlatformSettings> {
-    throw new Error(
-        'System backup jobs are not configured for this environment.',
-    );
 }

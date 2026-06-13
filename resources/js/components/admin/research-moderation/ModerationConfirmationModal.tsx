@@ -1,4 +1,4 @@
-import { Archive, CheckCircle2, Flag, Loader2 } from 'lucide-react';
+import { Archive, CheckCircle2, Flag, Loader2, Send } from 'lucide-react';
 import {
     Dialog,
     DialogContent,
@@ -9,7 +9,11 @@ import {
 } from '@/components/ui/dialog';
 import type { FlaggedResearchRecord } from '@/types/research-moderation';
 
-export type ModerationConfirmationAction = 'resolve' | 'flag' | 'archive';
+export type ModerationConfirmationAction =
+    | 'resolve'
+    | 'publish'
+    | 'flag'
+    | 'archive';
 
 const actionCopy: Record<
     ModerationConfirmationAction,
@@ -22,12 +26,20 @@ const actionCopy: Record<
     }
 > = {
     resolve: {
-        title: 'Mark Issue as Resolved?',
+        title: 'Approve Research?',
         description:
-            'This will update the record status and add a moderation activity entry.',
-        confirmLabel: 'Mark Resolved',
+            'This will approve the submitted research record and add a moderation activity entry.',
+        confirmLabel: 'Approve Research',
         icon: CheckCircle2,
         buttonClass: 'bg-[#008236] text-white hover:bg-[#016630]',
+    },
+    publish: {
+        title: 'Publish Research?',
+        description:
+            'This will publish the approved research record to the public repository.',
+        confirmLabel: 'Publish Research',
+        icon: Send,
+        buttonClass: 'bg-[#1e3a8a] text-white hover:bg-[#172554]',
     },
     flag: {
         title: 'Flag Record for Review?',

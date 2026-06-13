@@ -11,7 +11,6 @@ import { SecurityPolicies } from '@/components/admin/platform-settings/SecurityP
 import { SystemMaintenanceControls } from '@/components/admin/platform-settings/SystemMaintenanceControls';
 import {
     getPlatformSettings,
-    runSystemBackup,
     updatePlatformSettings,
     uploadPlatformLogo,
 } from '@/lib/admin/platform-settings-service';
@@ -114,7 +113,6 @@ export function PlatformSettingsPage() {
     const [errors, setErrors] = useState<PlatformSettingsErrors>({});
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
-    const [isBackupRunning, setIsBackupRunning] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [feedback, setFeedback] = useState<string | null>(null);
     const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
@@ -214,6 +212,15 @@ export function PlatformSettingsPage() {
             return;
         }
 
+        if (file.size > 2 * 1024 * 1024) {
+            setErrors((currentErrors) => ({
+                ...currentErrors,
+                platformLogoUrl: 'Platform logo must be 2MB or smaller.',
+            }));
+
+            return;
+        }
+
         if (logoPreviewUrl) {
             URL.revokeObjectURL(logoPreviewUrl);
         }
@@ -240,32 +247,17 @@ export function PlatformSettingsPage() {
         setIsMaintenanceModalOpen(false);
     };
 
-    const handleRunBackup = async () => {
-        if (!settings) {
-            return;
-        }
-
-        setIsBackupRunning(true);
-
-        try {
-            await runSystemBackup();
-        } catch (backupError) {
-            setError(
-                backupError instanceof Error
-                    ? backupError.message
-                    : 'System backup jobs are not configured for this environment.',
-            );
-        } finally {
-            setIsBackupRunning(false);
-        }
-    };
-
     const handleReset = () => {
         if (!initialSettings) {
             return;
         }
 
+        if (logoPreviewUrl) {
+            URL.revokeObjectURL(logoPreviewUrl);
+        }
+
         setLogoFile(null);
+        setLogoPreviewUrl(null);
         setSettings(cloneSettings(initialSettings));
         setErrors({});
         setFeedback('Unsaved changes have been reset.');
@@ -307,6 +299,12 @@ export function PlatformSettingsPage() {
             setSettings(savedSettings);
             setInitialSettings(cloneSettings(savedSettings));
             setLogoFile(null);
+
+            if (logoPreviewUrl) {
+                URL.revokeObjectURL(logoPreviewUrl);
+                setLogoPreviewUrl(null);
+            }
+
             setFeedback('Platform settings have been saved.');
         } catch (saveError) {
             setError(
@@ -400,11 +398,9 @@ export function PlatformSettingsPage() {
                             <BackupRecoverySettings
                                 settings={settings.backup}
                                 errors={errors}
-                                isRunning={isBackupRunning}
                                 onChange={(value) =>
                                     updateSection('backup', value)
                                 }
-                                onRunBackup={handleRunBackup}
                             />
                         </div>
 
@@ -415,7 +411,7 @@ export function PlatformSettingsPage() {
                                 disabled={!isDirty || isSaving}
                                 className="h-[42px] rounded-[14px] border border-[#e5e7eb] bg-white px-4 text-sm font-medium text-[#4a5565] transition hover:bg-[#f9fafb] disabled:cursor-not-allowed disabled:opacity-55"
                             >
-                                Reset to Defaults
+                                Discard Changes
                             </button>
                             <button
                                 type="button"

@@ -17,6 +17,7 @@ export type AgencyAdminUser = {
     agencyShortName: string;
     role: AgencyAdminUserRole;
     status: AgencyAdminUserStatus;
+    deactivationRequestedAt?: string | null;
     lastLogin?: string;
     avatarInitials: string;
     createdAt: string;

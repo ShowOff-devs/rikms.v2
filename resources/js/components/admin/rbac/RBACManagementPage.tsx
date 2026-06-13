@@ -12,13 +12,12 @@ import type { RBACTab } from '@/components/admin/rbac/RBACTabs';
 import { RoleChangeDiffModal } from '@/components/admin/rbac/RoleChangeDiffModal';
 import { RoleChangeHistory } from '@/components/admin/rbac/RoleChangeHistory';
 import { RolesTable } from '@/components/admin/rbac/RolesTable';
+import { UserRoleAssignmentDetailsModal } from '@/components/admin/rbac/UserRoleAssignmentDetailsModal';
 import { UserRoleAssignmentsTab } from '@/components/admin/rbac/UserRoleAssignmentsTab';
 import { ViewRoleModal } from '@/components/admin/rbac/ViewRoleModal';
 import {
-    addRoleChangeHistory,
     createRole,
     deleteRole,
-    getPermissionKeyDiff,
     getPermissions,
     getRoleChangeHistory,
     getRoles,
@@ -51,7 +50,11 @@ export function RBACManagementPage() {
     const [error, setError] = useState<string | null>(null);
     const [feedback, setFeedback] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [showActiveAssignmentsOnly, setShowActiveAssignmentsOnly] =
+        useState(true);
     const [viewRole, setViewRole] = useState<Role | null>(null);
+    const [viewAssignment, setViewAssignment] =
+        useState<UserRoleAssignment | null>(null);
     const [editRole, setEditRole] = useState<Role | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<Role | null>(null);
     const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -165,11 +168,15 @@ export function RBACManagementPage() {
     }, [normalizedSearch, permissions]);
 
     const filteredAssignments = useMemo(() => {
+        const visibleAssignments = showActiveAssignmentsOnly
+            ? assignments.filter((assignment) => assignment.status === 'active')
+            : assignments;
+
         if (!normalizedSearch) {
-            return assignments;
+            return visibleAssignments;
         }
 
-        return assignments.filter((assignment) => {
+        return visibleAssignments.filter((assignment) => {
             const roleName =
                 roles.find((role) => role.id === assignment.roleId)?.name ?? '';
 
@@ -186,7 +193,7 @@ export function RBACManagementPage() {
                 normalizedSearch,
             );
         });
-    }, [assignments, normalizedSearch, roles]);
+    }, [assignments, normalizedSearch, roles, showActiveAssignmentsOnly]);
 
     const stats = useMemo(() => {
         return {
@@ -200,6 +207,11 @@ export function RBACManagementPage() {
         };
     }, [permissions.length, roles]);
 
+    const viewAssignmentRole = useMemo(
+        () => roles.find((role) => role.id === viewAssignment?.roleId),
+        [roles, viewAssignment],
+    );
+
     const isRoleNameTaken = (name: string, currentRoleId?: string) =>
         roles.some(
             (role) =>
@@ -207,11 +219,9 @@ export function RBACManagementPage() {
                 role.id !== currentRoleId,
         );
 
-    const recordHistory = async (
-        payload: Omit<RoleChangeHistoryType, 'id' | 'date'>,
-    ) => {
-        const createdChange = await addRoleChangeHistory(payload);
-        setHistory((currentHistory) => [createdChange, ...currentHistory]);
+    const refreshHistory = async () => {
+        const loadedHistory = await getRoleChangeHistory();
+        setHistory(loadedHistory);
     };
 
     const handleCreateRole = async (payload: CreateRolePayload) => {
@@ -220,14 +230,7 @@ export function RBACManagementPage() {
         try {
             const createdRole = await createRole(payload);
             setRoles((currentRoles) => [createdRole, ...currentRoles]);
-            await recordHistory({
-                roleId: createdRole.id,
-                roleName: createdRole.name,
-                changedBy: 'Super Admin',
-                changeType: 'role-created',
-                after: getPermissionKeyDiff(createdRole.permissionIds),
-                summary: `${createdRole.name} was created from the RBAC management module.`,
-            });
+            await refreshHistory();
             setIsCreateOpen(false);
             setFeedback(`${createdRole.name} has been created.`);
         } finally {
@@ -247,19 +250,7 @@ export function RBACManagementPage() {
                         : currentRole,
                 ),
             );
-            await recordHistory({
-                roleId: updatedRole.id,
-                roleName: updatedRole.name,
-                changedBy: 'Super Admin',
-                changeType:
-                    role.permissionIds.join('|') ===
-                    updatedRole.permissionIds.join('|')
-                        ? 'role-modified'
-                        : 'permission-updated',
-                before: getPermissionKeyDiff(role.permissionIds),
-                after: getPermissionKeyDiff(updatedRole.permissionIds),
-                summary: `${updatedRole.name} was updated from RBAC Management.`,
-            });
+            await refreshHistory();
             setEditRole(null);
             setFeedback(`${updatedRole.name} has been updated.`);
         } finally {
@@ -294,14 +285,7 @@ export function RBACManagementPage() {
                     (currentRole) => currentRole.id !== role.id,
                 ),
             );
-            await recordHistory({
-                roleId: role.id,
-                roleName: role.name,
-                changedBy: 'Super Admin',
-                changeType: 'role-deleted',
-                before: getPermissionKeyDiff(role.permissionIds),
-                summary: `${role.name} was removed from RBAC Management.`,
-            });
+            await refreshHistory();
             setDeleteTarget(null);
             setFeedback(`${role.name} has been deleted.`);
         } finally {
@@ -343,13 +327,7 @@ export function RBACManagementPage() {
                         : currentAssignment,
                 ),
             );
-            await recordHistory({
-                roleId: nextRole.id,
-                roleName: nextRole.name,
-                changedBy: 'Super Admin',
-                changeType: 'role-modified',
-                summary: `${assignment.userName} was assigned to ${nextRole.name}.`,
-            });
+            await refreshHistory();
             setFeedback(`${assignment.userName} is now ${nextRole.name}.`);
         } finally {
             setIsSaving(false);
@@ -403,6 +381,21 @@ export function RBACManagementPage() {
                         >
                             Permission Matrix
                         </button>
+                        {activeTab === 'assignments' && (
+                            <label className="flex h-[42px] shrink-0 items-center gap-2 rounded-[8px] border border-[#e5e7eb] bg-white px-3 text-sm font-medium text-[#1e2939]">
+                                <input
+                                    type="checkbox"
+                                    checked={showActiveAssignmentsOnly}
+                                    onChange={(event) =>
+                                        setShowActiveAssignmentsOnly(
+                                            event.target.checked,
+                                        )
+                                    }
+                                    className="size-4 rounded border-[#d1d5dc] text-[#1e3a8a] accent-[#1e3a8a]"
+                                />
+                                Active users only
+                            </label>
+                        )}
                     </div>
 
                     {activeTab === 'roles' && (
@@ -424,6 +417,7 @@ export function RBACManagementPage() {
                         <UserRoleAssignmentsTab
                             assignments={filteredAssignments}
                             roles={roles}
+                            onView={setViewAssignment}
                             onChangeRole={handleChangeUserRole}
                         />
                     )}
@@ -441,6 +435,16 @@ export function RBACManagementPage() {
                 onOpenChange={(open) => {
                     if (!open) {
                         setViewRole(null);
+                    }
+                }}
+            />
+            <UserRoleAssignmentDetailsModal
+                assignment={viewAssignment}
+                role={viewAssignmentRole}
+                permissions={permissions}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setViewAssignment(null);
                     }
                 }}
             />

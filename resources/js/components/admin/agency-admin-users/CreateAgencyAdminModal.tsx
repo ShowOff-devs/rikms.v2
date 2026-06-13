@@ -26,6 +26,7 @@ type CreateAgencyAdminModalProps = {
     open: boolean;
     agencies: Agency[];
     isSaving: boolean;
+    serverError?: string | null;
     isEmailTaken: (email: string) => boolean;
     onOpenChange: (open: boolean) => void;
     onSubmit: (payload: CreateAgencyAdminUserPayload) => void;
@@ -57,6 +58,7 @@ export function CreateAgencyAdminModal({
     open,
     agencies,
     isSaving,
+    serverError = null,
     isEmailTaken,
     onOpenChange,
     onSubmit,
@@ -100,6 +102,16 @@ export function CreateAgencyAdminModal({
             return;
         }
 
+        if (
+            form.temporaryPassword.trim() &&
+            form.temporaryPassword.trim().length < 8
+        ) {
+            setError('Temporary Password must be at least 8 characters.');
+
+            return;
+        }
+
+        setError(null);
         onSubmit({
             fullName: form.fullName,
             email: form.email,
@@ -125,9 +137,9 @@ export function CreateAgencyAdminModal({
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    {error && (
+                    {(error || serverError) && (
                         <div className="rounded-[8px] border border-[#fecaca] bg-[#fef2f2] px-3 py-2 text-sm text-[#b91c1c]">
-                            {error}
+                            {error || serverError}
                         </div>
                     )}
 

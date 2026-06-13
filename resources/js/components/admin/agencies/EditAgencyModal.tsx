@@ -29,6 +29,7 @@ type EditAgencyModalProps = {
     agency: ManagedAgency | null;
     adminOptions: AgencyAdminOption[];
     isSaving: boolean;
+    serverError?: string | null;
     isNameTaken: (name: string, currentAgencyId?: string) => boolean;
     isShortNameTaken: (shortName: string, currentAgencyId?: string) => boolean;
     onOpenChange: (open: boolean) => void;
@@ -53,6 +54,7 @@ export function EditAgencyModal({
     agency,
     adminOptions,
     isSaving,
+    serverError = null,
     isNameTaken,
     isShortNameTaken,
     onOpenChange,
@@ -77,6 +79,7 @@ export function EditAgencyModal({
                         agency={agency}
                         adminOptions={adminOptions}
                         isSaving={isSaving}
+                        serverError={serverError}
                         isNameTaken={isNameTaken}
                         isShortNameTaken={isShortNameTaken}
                         onOpenChange={onOpenChange}
@@ -92,6 +95,7 @@ function EditAgencyForm({
     agency,
     adminOptions,
     isSaving,
+    serverError,
     isNameTaken,
     isShortNameTaken,
     onOpenChange,
@@ -158,6 +162,7 @@ function EditAgencyForm({
             return;
         }
 
+        setError(null);
         onSubmit(agency.id, {
             name,
             shortName,
@@ -173,9 +178,9 @@ function EditAgencyForm({
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
+            {(error || serverError) && (
                 <div className="rounded-[8px] border border-[#fecaca] bg-[#fef2f2] px-3 py-2 text-sm text-[#b91c1c]">
-                    {error}
+                    {error || serverError}
                 </div>
             )}
 

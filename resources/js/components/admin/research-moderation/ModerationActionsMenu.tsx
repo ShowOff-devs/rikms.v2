@@ -4,6 +4,7 @@ import {
     Eye,
     Flag,
     MoreVertical,
+    Send,
     SearchCheck,
 } from 'lucide-react';
 import {
@@ -20,6 +21,7 @@ type ModerationActionsMenuProps = {
     onView: (record: FlaggedResearchRecord) => void;
     onReview: (record: FlaggedResearchRecord) => void;
     onResolve: (record: FlaggedResearchRecord) => void;
+    onPublish: (record: FlaggedResearchRecord) => void;
     onFlag: (record: FlaggedResearchRecord) => void;
     onArchive: (record: FlaggedResearchRecord) => void;
 };
@@ -29,9 +31,15 @@ export function ModerationActionsMenu({
     onView,
     onReview,
     onResolve,
+    onPublish,
     onFlag,
     onArchive,
 }: ModerationActionsMenuProps) {
+    const canApprove = ['submitted', 'under_review'].includes(
+        record.officialStatus ?? '',
+    );
+    const canPublish = record.officialStatus === 'approved';
+
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -53,10 +61,18 @@ export function ModerationActionsMenu({
                     Review Record
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => onResolve(record)}>
-                    <CheckCircle2 className="size-4" aria-hidden="true" />
-                    Mark as Resolved
-                </DropdownMenuItem>
+                {canApprove ? (
+                    <DropdownMenuItem onSelect={() => onResolve(record)}>
+                        <CheckCircle2 className="size-4" aria-hidden="true" />
+                        Approve Research
+                    </DropdownMenuItem>
+                ) : null}
+                {canPublish ? (
+                    <DropdownMenuItem onSelect={() => onPublish(record)}>
+                        <Send className="size-4" aria-hidden="true" />
+                        Publish Research
+                    </DropdownMenuItem>
+                ) : null}
                 <DropdownMenuItem onSelect={() => onFlag(record)}>
                     <Flag className="size-4" aria-hidden="true" />
                     Flag for Review

@@ -21,6 +21,7 @@ import {
     resetAgencyAdminPassword,
     updateAgencyAdminUser,
 } from '@/lib/admin/agency-admin-users-service';
+import { apiMessage } from '@/lib/api-client';
 import type {
     Agency,
     AgencyAdminUser,
@@ -52,6 +53,7 @@ export function AgencyAdminUsersPage() {
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [feedback, setFeedback] = useState<string | null>(null);
+    const [createError, setCreateError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedAgency, setSelectedAgency] = useState('all');
     const [selectedStatus, setSelectedStatus] = useState('all');
@@ -79,9 +81,11 @@ export function AgencyAdminUsersPage() {
                 setAgencies(loadedAgencies);
                 setError(null);
             })
-            .catch(() => {
+            .catch((error) => {
                 if (isCurrent) {
-                    setError('Unable to load agency admin users.');
+                    setError(
+                        apiMessage(error, 'Unable to load agency admin users.'),
+                    );
                 }
             })
             .finally(() => {
@@ -174,12 +178,16 @@ export function AgencyAdminUsersPage() {
 
     const handleCreateUser = async (payload: CreateAgencyAdminUserPayload) => {
         setIsSaving(true);
+        setCreateError(null);
+        setError(null);
 
         try {
-            const createdUser = await createAgencyAdminUser(payload);
-            setUsers((currentUsers) => [createdUser, ...currentUsers]);
+            const created = await createAgencyAdminUser(payload);
+            setUsers((currentUsers) => [created.user, ...currentUsers]);
             setIsCreateOpen(false);
-            setFeedback(`${createdUser.fullName} has been created.`);
+            setFeedback(created.message);
+        } catch (error) {
+            setCreateError(apiMessage(error, 'Unable to create agency admin.'));
         } finally {
             setIsSaving(false);
         }
@@ -272,7 +280,10 @@ export function AgencyAdminUsersPage() {
         <AdminLayout search={topbarSearch} onSearchChange={setTopbarSearch}>
             <main className="px-4 py-8 lg:px-8">
                 <AgencyAdminUsersHeader
-                    onCreate={() => setIsCreateOpen(true)}
+                    onCreate={() => {
+                        setCreateError(null);
+                        setIsCreateOpen(true);
+                    }}
                 />
 
                 {error && (
@@ -332,8 +343,15 @@ export function AgencyAdminUsersPage() {
                 open={isCreateOpen}
                 agencies={agencies}
                 isSaving={isSaving}
+                serverError={createError}
                 isEmailTaken={isEmailTaken}
-                onOpenChange={setIsCreateOpen}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setCreateError(null);
+                    }
+
+                    setIsCreateOpen(open);
+                }}
                 onSubmit={handleCreateUser}
             />
             <EditAgencyAdminModal

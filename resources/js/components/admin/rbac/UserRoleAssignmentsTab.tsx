@@ -4,6 +4,7 @@ import type { Role, UserRoleAssignment } from '@/types/rbac';
 type UserRoleAssignmentsTabProps = {
     assignments: UserRoleAssignment[];
     roles: Role[];
+    onView: (assignment: UserRoleAssignment) => void;
     onChangeRole: (assignment: UserRoleAssignment) => void;
 };
 
@@ -16,6 +17,7 @@ const statusClasses = {
 export function UserRoleAssignmentsTab({
     assignments,
     roles,
+    onView,
     onChangeRole,
 }: UserRoleAssignmentsTabProps) {
     const getRoleName = (roleId: string) =>
@@ -114,6 +116,7 @@ export function UserRoleAssignmentsTab({
                                     </button>
                                     <button
                                         type="button"
+                                        onClick={() => onView(assignment)}
                                         className="flex size-8 items-center justify-center rounded-[8px] border border-[#e5e7eb] text-[#64748b] transition hover:bg-[#f8fafc] hover:text-[#1e3a8a]"
                                         aria-label={`View ${assignment.userName}`}
                                     >

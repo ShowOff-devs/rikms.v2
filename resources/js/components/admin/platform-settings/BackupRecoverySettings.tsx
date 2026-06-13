@@ -5,9 +5,7 @@ import { Field, SectionCard } from './platform-settings-controls';
 type BackupRecoverySettingsProps = {
     settings: PlatformSettings['backup'];
     errors: Record<string, string>;
-    isRunning: boolean;
     onChange: (settings: Partial<PlatformSettings['backup']>) => void;
-    onRunBackup: () => void;
 };
 
 const backupFrequencyOptions = [
@@ -36,11 +34,11 @@ function formatBackupDate(value: string) {
 export function BackupRecoverySettings({
     settings,
     errors,
-    isRunning,
     onChange,
-    onRunBackup,
 }: BackupRecoverySettingsProps) {
-    const statusText = 'Backup job not configured';
+    const statusText = 'Backup execution not configured';
+    const pilotMessage =
+        'Backup execution is not configured in this pilot environment. Database and file backups must be performed by the system administrator or configured during production deployment.';
 
     return (
         <SectionCard
@@ -93,18 +91,27 @@ export function BackupRecoverySettings({
                 </div>
             </div>
 
+            <div className="mt-5 rounded-[14px] border border-[#fee685] bg-[#fffbeb] px-4 py-3">
+                <div className="flex gap-3">
+                    <AlertTriangle
+                        className="mt-0.5 size-4 shrink-0 text-[#d97706]"
+                        aria-hidden="true"
+                    />
+                    <p className="text-sm leading-6 text-[#854d0e]">
+                        {pilotMessage}
+                    </p>
+                </div>
+            </div>
+
             <div className="mt-5">
+                {/* TODO Production: Implement real backup execution through a protected backend API, queued backup job, backup_runs table, audit logs, notifications, and configured backup storage. */}
                 <button
                     type="button"
-                    onClick={onRunBackup}
                     disabled
                     className="inline-flex h-10 items-center justify-center gap-2 rounded-[14px] bg-[#1e3a8a] px-5 text-sm font-semibold text-white shadow-[0_1px_1.5px_rgba(0,0,0,0.1),0_1px_1px_rgba(0,0,0,0.1)] transition hover:bg-[#172f70] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                    <RotateCw
-                        className={isRunning ? 'size-4 animate-spin' : 'size-4'}
-                        aria-hidden="true"
-                    />
-                    {isRunning ? 'Running Backup...' : 'Backup Not Configured'}
+                    <RotateCw className="size-4" aria-hidden="true" />
+                    Backup Execution Not Configured
                 </button>
             </div>
         </SectionCard>

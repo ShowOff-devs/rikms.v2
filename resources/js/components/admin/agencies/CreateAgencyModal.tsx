@@ -28,6 +28,7 @@ type CreateAgencyModalProps = {
     open: boolean;
     adminOptions: AgencyAdminOption[];
     isSaving: boolean;
+    serverError?: string | null;
     isNameTaken: (name: string) => boolean;
     isShortNameTaken: (shortName: string) => boolean;
     onOpenChange: (open: boolean) => void;
@@ -76,6 +77,7 @@ export function CreateAgencyModal({
     open,
     adminOptions,
     isSaving,
+    serverError = null,
     isNameTaken,
     isShortNameTaken,
     onOpenChange,
@@ -144,6 +146,7 @@ export function CreateAgencyModal({
             return;
         }
 
+        setError(null);
         onSubmit({
             name: form.name,
             shortName: form.shortName,
@@ -172,9 +175,9 @@ export function CreateAgencyModal({
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    {error && (
+                    {(error || serverError) && (
                         <div className="rounded-[8px] border border-[#fecaca] bg-[#fef2f2] px-3 py-2 text-sm text-[#b91c1c]">
-                            {error}
+                            {error || serverError}
                         </div>
                     )}
 

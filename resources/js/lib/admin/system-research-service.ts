@@ -61,7 +61,7 @@ export function filterSystemResearchRecords(
 
         if (
             isFilterActive(filters.agency) &&
-            record.agencyShortName !== filters.agency
+            !matchesAgency(record, filters.agency)
         ) {
             return false;
         }
@@ -103,6 +103,18 @@ export function filterSystemResearchRecords(
 
         return true;
     });
+}
+
+function matchesAgency(record: SystemResearchRecord, agency?: string) {
+    if (!agency) {
+        return true;
+    }
+
+    return [
+        record.agencyId,
+        record.agencyShortName,
+        record.agencyName,
+    ].includes(agency);
 }
 
 export function createSystemResearchSummary(

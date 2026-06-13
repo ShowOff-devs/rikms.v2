@@ -86,6 +86,18 @@ export function AgencyAdminUserDetailsModal({
                                     {user.status}
                                 </dd>
                             </div>
+                            {user.deactivationRequestedAt ? (
+                                <div className="flex justify-between gap-4 border-b border-[#f3f4f6] pb-3">
+                                    <dt className="text-[#6a7282]">
+                                        Deactivation Requested
+                                    </dt>
+                                    <dd className="text-right font-medium text-[#c2410c]">
+                                        {formatDateTime(
+                                            user.deactivationRequestedAt,
+                                        )}
+                                    </dd>
+                                </div>
+                            ) : null}
                             <div className="flex justify-between gap-4">
                                 <dt className="text-[#6a7282]">Last Login</dt>
                                 <dd className="inline-flex items-center gap-1.5 text-right font-medium text-[#1e2939]">

@@ -121,6 +121,19 @@ function tableHeaders(activeTab: ArchiveRecordType) {
         ];
     }
 
+    if (activeTab === 'file') {
+        return [
+            'File Name',
+            'Research',
+            'Agency',
+            'File Type',
+            'Archived By',
+            'Archive Date',
+            'Status',
+            'Actions',
+        ];
+    }
+
     return [
         'Research Title',
         'Agency',
@@ -269,6 +282,63 @@ export function ArchiveTable({
                                             </td>
                                             <td className="px-6 text-xs text-[#4a5565]">
                                                 {record.agency ?? 'System'}
+                                            </td>
+                                            <td className="px-6 text-xs text-[#6a7282]">
+                                                {record.archivedBy}
+                                            </td>
+                                            <td className="px-6 text-xs text-[#6a7282]">
+                                                <span className="inline-flex items-center gap-1.5">
+                                                    <CalendarDays className="size-3" />
+                                                    {formatArchiveDate(
+                                                        record.archiveDate,
+                                                    )}
+                                                </span>
+                                            </td>
+                                            <td className="px-6">
+                                                <StatusBadge
+                                                    status={record.status}
+                                                />
+                                            </td>
+                                            <td className="px-6">
+                                                <div className="flex justify-end">
+                                                    <ArchiveActionsMenu
+                                                        record={record}
+                                                        onView={onView}
+                                                        onRestore={onRestore}
+                                                        onDelete={onDelete}
+                                                    />
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                }
+
+                                if (record.type === 'file') {
+                                    return (
+                                        <tr
+                                            key={record.id}
+                                            className="h-[76px] border-b border-[#f9fafb] last:border-b-0"
+                                        >
+                                            <td className="max-w-[260px] px-6">
+                                                <RecordTitle
+                                                    icon={FileText}
+                                                    title={record.fileName}
+                                                    description="Archived file"
+                                                />
+                                            </td>
+                                            <td className="max-w-[260px] px-6 text-xs leading-5 text-[#4a5565]">
+                                                {record.researchTitle}
+                                            </td>
+                                            <td className="px-6 text-xs text-[#4a5565]">
+                                                <span className="inline-flex items-center gap-1.5">
+                                                    <Building2 className="size-3" />
+                                                    {record.agency}
+                                                </span>
+                                            </td>
+                                            <td className="px-6">
+                                                <span className="inline-flex rounded-[8px] bg-[#1e3a8a]/5 px-2 py-1 text-xs font-semibold text-[#1e3a8a]">
+                                                    {record.fileType}
+                                                </span>
                                             </td>
                                             <td className="px-6 text-xs text-[#6a7282]">
                                                 {record.archivedBy}

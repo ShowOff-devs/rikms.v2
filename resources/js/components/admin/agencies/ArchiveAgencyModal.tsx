@@ -30,8 +30,8 @@ export function ArchiveAgencyModal({
                         Archive Agency?
                     </DialogTitle>
                     <DialogDescription className="text-[#6a7282]">
-                        This mock action is confirmation-gated for future
-                        backend audit logging. Research records are not deleted.
+                        This will deactivate the agency and remove assigned
+                        agency admins. Research records are not deleted.
                     </DialogDescription>
                 </DialogHeader>
 

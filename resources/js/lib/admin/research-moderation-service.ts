@@ -7,6 +7,7 @@ import {
     rejectAdminResearch,
     returnAdminResearch,
 } from '@/lib/admin/admin-moderation-service';
+import { fetchApi } from '@/lib/api-client';
 import type {
     DuplicateResearchMatch,
     FlaggedResearchRecord,
@@ -17,6 +18,25 @@ import type {
     ModerationReportExportResult,
     ModerationSummary,
 } from '@/types/research-moderation';
+
+type ApiDuplicateResearchMatch = {
+    id: string;
+    original_research_id: number;
+    matching_research_id: number;
+    originalTitle: string;
+    matchingTitle: string;
+    originalAgency: string;
+    matchingAgency: string;
+    similarityScore: number;
+    detectedAt: string;
+    originalAuthors?: string[];
+    matchingAuthors?: string[];
+    originalYear?: number;
+    matchingYear?: number;
+    matchReason?: string;
+    originalAbstract?: string | null;
+    matchingAbstract?: string | null;
+};
 
 function isFilterActive(value?: string) {
     return Boolean(value && value !== 'all');
@@ -38,6 +58,7 @@ function matchesFilters(
             record.issueType,
             record.year,
             record.status,
+            record.officialStatus,
         ]
             .join(' ')
             .toLowerCase();
@@ -96,24 +117,67 @@ export async function getFlaggedResearchRecords(
 export async function getDuplicateResearchMatches(): Promise<
     DuplicateResearchMatch[]
 > {
-    return [];
+    const { data } = await fetchApi<ApiDuplicateResearchMatch[]>(
+        '/api/admin/research-moderation/duplicates',
+    );
+
+    return data.map((match) => ({
+        id: match.id,
+        originalResearchId: String(match.original_research_id),
+        matchingResearchId: String(match.matching_research_id),
+        originalTitle: match.originalTitle,
+        matchingTitle: match.matchingTitle,
+        originalAgency: match.originalAgency,
+        matchingAgency: match.matchingAgency,
+        similarityScore: match.similarityScore,
+        detectedAt: match.detectedAt,
+        originalAuthors: match.originalAuthors,
+        matchingAuthors: match.matchingAuthors,
+        originalYear: match.originalYear,
+        matchingYear: match.matchingYear,
+        matchReason: match.matchReason,
+        originalAbstract: match.originalAbstract ?? undefined,
+        matchingAbstract: match.matchingAbstract ?? undefined,
+    }));
 }
 
 export async function getModerationActivityLog(): Promise<
     ModerationActivity[]
 > {
-    return [];
+    const { data } = await fetchApi<ModerationActivity[]>(
+        '/api/admin/research-moderation/activity',
+    );
+
+    return data;
+}
+
+export async function dismissDuplicateResearchMatch(
+    match: DuplicateResearchMatch,
+) {
+    await fetchApi<{ pair_key: string }>(
+        '/api/admin/research-moderation/duplicates/dismiss',
+        {
+            method: 'POST',
+            body: JSON.stringify({
+                original_research_id: Number(match.originalResearchId),
+                matching_research_id: Number(match.matchingResearchId),
+            }),
+        },
+    );
 }
 
 export async function markResearchIssueResolved(
     id: string,
     payload: ModerationActionPayload = {},
 ): Promise<FlaggedResearchRecord> {
-    try {
-        return await approveAdminResearch(id, payload);
-    } catch {
-        return publishAdminResearch(id, payload);
-    }
+    return approveAdminResearch(id, payload);
+}
+
+export async function publishResearchRecord(
+    id: string,
+    payload: ModerationActionPayload = {},
+): Promise<FlaggedResearchRecord> {
+    return publishAdminResearch(id, payload);
 }
 
 export async function flagResearchForReview(

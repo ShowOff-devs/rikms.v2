@@ -3,12 +3,14 @@ import { AdminLayout } from '@/components/admin/layout/AdminLayout';
 import { moderationIssueTypeLabels } from '@/data/research-moderation-options';
 import {
     archiveFlaggedResearch,
+    dismissDuplicateResearchMatch,
     exportModerationReport,
     flagResearchForReview,
     getDuplicateResearchMatches,
     getFlaggedResearchRecords,
     getModerationActivityLog,
     markResearchIssueResolved,
+    publishResearchRecord,
 } from '@/lib/admin/research-moderation-service';
 import type {
     DuplicateResearchMatch,
@@ -70,6 +72,7 @@ function getSearchableRecordText(record: FlaggedResearchRecord) {
         record.issueType,
         record.year,
         record.status,
+        record.officialStatus,
     ]
         .map(normalize)
         .join(' ');
@@ -113,7 +116,7 @@ function makeDuplicateModerationRecord(
     match: DuplicateResearchMatch,
 ): FlaggedResearchRecord {
     return {
-        id: `duplicate-${match.id}`,
+        id: match.matchingResearchId,
         title: match.matchingTitle,
         agency: match.matchingAgency,
         uploadedBy: 'Duplicate Detection Service',
@@ -251,8 +254,8 @@ export function ResearchModerationPage() {
         effectiveCurrentPage * rowsPerPage,
     );
 
-    const closeConfirmation = () => {
-        if (isActionLoading) {
+    const closeConfirmation = (force = false) => {
+        if (isActionLoading && !force) {
             return;
         }
 
@@ -271,7 +274,7 @@ export function ResearchModerationPage() {
         setConfirmationDuplicate(duplicate ?? null);
     };
 
-    const resolveRecord = async (
+    const approveRecord = async (
         record: FlaggedResearchRecord,
         note?: string,
     ) => {
@@ -290,20 +293,87 @@ export function ResearchModerationPage() {
             );
             setActivities((current) => [
                 createActivity(
-                    'issue-resolved',
-                    'Marked issue as resolved:',
+                    'approved',
+                    'Approved research:',
                     record.title,
                 ),
                 ...current,
             ]);
-            setFeedback(`${record.title} was marked as resolved.`);
+            setFeedback(`${record.title} was approved.`);
             setSelectedReviewRecord(null);
-            closeConfirmation();
+            closeConfirmation(true);
         } catch (caught) {
             setFeedback(
                 caught instanceof Error
                     ? caught.message
                     : 'Unable to complete moderation action.',
+            );
+        } finally {
+            setIsActionLoading(false);
+        }
+    };
+
+    const approveAndPublishRecord = async (
+        record: FlaggedResearchRecord,
+        note?: string,
+    ) => {
+        setIsActionLoading(true);
+
+        try {
+            await markResearchIssueResolved(record.id, { note });
+            await publishResearchRecord(record.id, { note });
+            setRecords((current) =>
+                current.filter((item) => item.id !== record.id),
+            );
+            setActivities((current) => [
+                createActivity(
+                    'version-approved',
+                    'Approved and published research:',
+                    record.title,
+                ),
+                ...current,
+            ]);
+            setFeedback(`${record.title} was approved and published.`);
+            setSelectedReviewRecord(null);
+            closeConfirmation(true);
+        } catch (caught) {
+            setFeedback(
+                caught instanceof Error
+                    ? caught.message
+                    : 'Unable to approve and publish research.',
+            );
+        } finally {
+            setIsActionLoading(false);
+        }
+    };
+
+    const publishRecord = async (
+        record: FlaggedResearchRecord,
+        note?: string,
+    ) => {
+        setIsActionLoading(true);
+
+        try {
+            await publishResearchRecord(record.id, { note });
+            setRecords((current) =>
+                current.filter((item) => item.id !== record.id),
+            );
+            setActivities((current) => [
+                createActivity(
+                    'version-approved',
+                    'Published research:',
+                    record.title,
+                ),
+                ...current,
+            ]);
+            setFeedback(`${record.title} was published.`);
+            setSelectedReviewRecord(null);
+            closeConfirmation(true);
+        } catch (caught) {
+            setFeedback(
+                caught instanceof Error
+                    ? caught.message
+                    : 'Unable to publish research.',
             );
         } finally {
             setIsActionLoading(false);
@@ -352,7 +422,7 @@ export function ResearchModerationPage() {
             ]);
             setFeedback(`${record.title} was flagged for review.`);
             setSelectedReviewRecord(null);
-            closeConfirmation();
+            closeConfirmation(true);
         } catch (caught) {
             setFeedback(
                 caught instanceof Error
@@ -381,7 +451,7 @@ export function ResearchModerationPage() {
             ]);
             setFeedback(`${record.title} was archived.`);
             setSelectedReviewRecord(null);
-            closeConfirmation();
+            closeConfirmation(true);
         } catch (caught) {
             setFeedback(
                 caught instanceof Error
@@ -394,15 +464,28 @@ export function ResearchModerationPage() {
     };
 
     const handleReviewSave = async (
-        action: 'resolved' | 'flagged' | 'archived',
+        action:
+            | 'approved'
+            | 'published'
+            | 'approved-published'
+            | 'flagged'
+            | 'archived',
         note: string,
     ) => {
         if (!selectedReviewRecord) {
             return;
         }
 
-        if (action === 'resolved') {
-            await resolveRecord(selectedReviewRecord, note);
+        if (action === 'approved') {
+            await approveRecord(selectedReviewRecord, note);
+        }
+
+        if (action === 'approved-published') {
+            await approveAndPublishRecord(selectedReviewRecord, note);
+        }
+
+        if (action === 'published') {
+            await publishRecord(selectedReviewRecord, note);
         }
 
         if (action === 'flagged') {
@@ -420,7 +503,11 @@ export function ResearchModerationPage() {
         }
 
         if (confirmationAction === 'resolve') {
-            await resolveRecord(confirmationRecord);
+            await approveRecord(confirmationRecord);
+        }
+
+        if (confirmationAction === 'publish') {
+            await publishRecord(confirmationRecord);
         }
 
         if (confirmationAction === 'flag') {
@@ -436,23 +523,36 @@ export function ResearchModerationPage() {
         openConfirmation(makeDuplicateModerationRecord(match), 'flag', match);
     };
 
-    const handleMarkNotDuplicate = (match: DuplicateResearchMatch) => {
-        setDuplicates((current) =>
-            current.filter((item) => item.id !== match.id),
-        );
-        setActivities((current) => [
-            createActivity(
-                'duplicate-resolved',
-                'Marked not duplicate:',
-                match.matchingTitle,
-            ),
-            ...current,
-        ]);
+    const handleMarkNotDuplicate = async (match: DuplicateResearchMatch) => {
+        setIsActionLoading(true);
 
-        setComparisonMatch(null);
-        setFeedback(
-            `${match.matchingTitle} was removed from duplicate alerts.`,
-        );
+        try {
+            await dismissDuplicateResearchMatch(match);
+            setDuplicates((current) =>
+                current.filter((item) => item.id !== match.id),
+            );
+            setActivities((current) => [
+                createActivity(
+                    'duplicate-resolved',
+                    'Marked not duplicate:',
+                    match.matchingTitle,
+                ),
+                ...current,
+            ]);
+
+            setComparisonMatch(null);
+            setFeedback(
+                `${match.matchingTitle} was removed from duplicate alerts.`,
+            );
+        } catch (caught) {
+            setFeedback(
+                caught instanceof Error
+                    ? caught.message
+                    : 'Unable to dismiss duplicate match.',
+            );
+        } finally {
+            setIsActionLoading(false);
+        }
     };
 
     const handleExport = async (options: ModerationReportExportOptions) => {
@@ -521,6 +621,9 @@ export function ResearchModerationPage() {
                             }}
                             onResolve={(record) =>
                                 openConfirmation(record, 'resolve')
+                            }
+                            onPublish={(record) =>
+                                openConfirmation(record, 'publish')
                             }
                             onFlag={(record) =>
                                 openConfirmation(record, 'flag')

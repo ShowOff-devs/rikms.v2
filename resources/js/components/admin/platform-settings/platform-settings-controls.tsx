@@ -97,8 +97,8 @@ export function ToggleSwitch({
         >
             <span
                 className={cn(
-                    'absolute top-0.5 size-5 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_rgba(0,0,0,0.1)] transition-transform',
-                    checked ? 'translate-x-[22px]' : 'translate-x-0.5',
+                    'absolute top-0.5 left-0.5 size-5 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_rgba(0,0,0,0.1)] transition-transform',
+                    checked ? 'translate-x-5' : 'translate-x-0',
                 )}
             />
         </button>
@@ -129,7 +129,7 @@ export function ToggleRow({
                 className,
             )}
         >
-            <div className="flex min-w-0 items-center gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
                 {Icon ? (
                     <Icon
                         className="size-4 shrink-0 text-[#6a7282]"

@@ -22,6 +22,7 @@ type AdminAgencyAdminUserApiRecord = {
     role: string;
     roles?: string[];
     status: string;
+    deactivation_requested_at?: string | null;
     agency?: AdminAgencyApiRecord | null;
     created_at?: string | null;
     updated_at?: string | null;
@@ -36,6 +37,18 @@ type PasswordResetApiRecord = {
 type RemovedAgencyAdminApiRecord = {
     id: number;
     removed_at: string;
+};
+
+type CreateAgencyAdminUserMeta = {
+    invite_sent?: boolean;
+    invite_message?: string | null;
+};
+
+type CreateAgencyAdminUserResult = {
+    user: AgencyAdminUser;
+    message: string;
+    inviteSent: boolean;
+    inviteMessage?: string | null;
 };
 
 function getInitials(fullName: string) {
@@ -79,8 +92,11 @@ export async function getAgencyAdminUserById(
 
 export async function createAgencyAdminUser(
     payload: CreateAgencyAdminUserPayload,
-): Promise<AgencyAdminUser> {
-    const { data } = await fetchApi<AdminAgencyAdminUserApiRecord>(
+): Promise<CreateAgencyAdminUserResult> {
+    const { data, message, meta } = await fetchApi<
+        AdminAgencyAdminUserApiRecord,
+        CreateAgencyAdminUserMeta
+    >(
         '/api/admin/agency-admin-users',
         {
             method: 'POST',
@@ -90,13 +106,17 @@ export async function createAgencyAdminUser(
                 agency_id: Number(payload.agencyId),
                 status: payload.status,
                 send_invite: payload.sendInvite,
-                temporary_password:
-                    payload.temporaryPassword?.trim() || undefined,
+                temporary_password: payload.temporaryPassword?.trim() || null,
             }),
         },
     );
 
-    return mapAgencyAdminUserFromApi(data);
+    return {
+        user: mapAgencyAdminUserFromApi(data),
+        message,
+        inviteSent: Boolean(meta.invite_sent),
+        inviteMessage: meta.invite_message,
+    };
 }
 
 export async function updateAgencyAdminUser(
@@ -180,6 +200,7 @@ function mapAgencyAdminUserFromApi(
         agencyShortName,
         role: 'Agency Admin',
         status: user.status === 'active' ? 'active' : 'inactive',
+        deactivationRequestedAt: user.deactivation_requested_at ?? null,
         avatarInitials: getInitials(fullName),
         createdAt: user.created_at ?? new Date().toISOString(),
         updatedAt: user.updated_at ?? undefined,

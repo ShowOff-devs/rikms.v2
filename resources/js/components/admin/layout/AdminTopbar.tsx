@@ -8,6 +8,7 @@ import {
     ShieldCheck,
     UserRound,
 } from 'lucide-react';
+import AppLogoIcon from '@/components/app-logo-icon';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -30,7 +31,11 @@ export function AdminTopbar({
     onSearchChange,
 }: AdminTopbarProps) {
     const handleSignOut = () => {
-        router.post('/logout', {}, { onFinish: () => router.visit('/admin/login') });
+        router.post(
+            '/logout',
+            {},
+            { onFinish: () => router.visit('/admin/login') },
+        );
     };
 
     return (
@@ -46,8 +51,8 @@ export function AdminTopbar({
                 aria-label="RIKMS System Administration"
                 title="RIKMS System Administration"
             >
-                <span className="flex size-8 items-center justify-center rounded-[10px] bg-[#fe9a00]/20 text-[#ffb900]">
-                    <ShieldCheck className="size-5" aria-hidden="true" />
+                <span className="flex size-9 items-center justify-center rounded-[10px] bg-white p-1">
+                    <AppLogoIcon className="size-8" />
                 </span>
                 <span
                     className={cn(

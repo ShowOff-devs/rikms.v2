@@ -1,4 +1,4 @@
-export type ArchiveRecordType = 'research' | 'agency' | 'user';
+export type ArchiveRecordType = 'research' | 'file' | 'agency' | 'user';
 
 export type ArchiveStatus = 'archived' | 'pending-deletion' | 'restored';
 
@@ -18,6 +18,18 @@ export type ArchivedResearchRecord = {
     agency: string;
     authors: string[];
     year: number;
+    archivedBy: string;
+    archiveDate: string;
+    status: ArchiveStatus;
+};
+
+export type ArchivedFileRecord = {
+    id: string;
+    type: 'file';
+    fileName: string;
+    researchTitle: string;
+    agency: string;
+    fileType: string;
     archivedBy: string;
     archiveDate: string;
     status: ArchiveStatus;
@@ -48,11 +60,13 @@ export type ArchivedUserRecord = {
 
 export type AdminArchivedRecord =
     | ArchivedResearchRecord
+    | ArchivedFileRecord
     | ArchivedAgencyRecord
     | ArchivedUserRecord;
 
 export type ArchiveActivityType =
     | 'research-archived'
+    | 'file-archived'
     | 'agency-archived'
     | 'user-archived'
     | 'record-restored'
@@ -83,6 +97,7 @@ export type ArchiveExportOptions = {
     startDate?: string;
     endDate?: string;
     includeResearch: boolean;
+    includeFiles: boolean;
     includeAgencies: boolean;
     includeUsers: boolean;
     includeRestoreActivity: boolean;
@@ -100,6 +115,7 @@ export type GeneratedArchiveReport = {
 
 export type AdminArchiveSummary = {
     archivedResearchRecords: number;
+    archivedFiles: number;
     archivedAgencies: number;
     archivedUserAccounts: number;
     recentlyRestored: number;

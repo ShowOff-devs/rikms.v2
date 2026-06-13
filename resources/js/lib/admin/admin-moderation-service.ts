@@ -118,6 +118,7 @@ function mapModerationRecordFromApi(
         agency: record.agency?.short_name ?? record.agency?.name ?? 'Agency',
         uploadedBy: record.uploader?.name ?? 'Agency Admin',
         uploaderRole: record.uploader?.role ?? 'agency_admin',
+        officialStatus: record.status,
         issueType:
             record.status === 'rejected'
                 ? 'policy-violation'
@@ -129,17 +130,14 @@ function mapModerationRecordFromApi(
         abstract: record.abstract ?? undefined,
         authors: record.authors ?? [],
         issueDescription: `Current official status: ${record.status}. Review this relational research record and apply the appropriate moderation action.`,
-        recommendedAction:
-            record.status === 'approved'
-                ? 'Publish approved research when ready.'
-                : 'Approve, reject, return, or archive based on governance review.',
+        recommendedAction: getRecommendedAction(record.status),
     };
 }
 
 function mapModerationStatus(
     status: string,
 ): FlaggedResearchRecord['status'] {
-    if (status === 'approved') {
+    if (status === 'approved' || status === 'published') {
         return 'resolved';
     }
 
@@ -148,4 +146,16 @@ function mapModerationStatus(
     }
 
     return 'pending-review';
+}
+
+function getRecommendedAction(status: string) {
+    if (status === 'approved') {
+        return 'Publish approved research when ready.';
+    }
+
+    if (status === 'published') {
+        return 'Research is published in the public repository.';
+    }
+
+    return 'Approve, reject, return, or archive based on governance review.';
 }

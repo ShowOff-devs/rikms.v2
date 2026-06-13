@@ -1,4 +1,4 @@
-import { Archive, Building2, UsersRound } from 'lucide-react';
+import { Archive, Building2, FileText, UsersRound } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ArchiveRecordType } from '@/types/admin-archive';
@@ -15,6 +15,7 @@ const tabs: Array<{
     icon: LucideIcon;
 }> = [
     { value: 'research', label: 'Archived Research', icon: Archive },
+    { value: 'file', label: 'Archived Files', icon: FileText },
     { value: 'agency', label: 'Archived Agencies', icon: Building2 },
     { value: 'user', label: 'Archived Users', icon: UsersRound },
 ];

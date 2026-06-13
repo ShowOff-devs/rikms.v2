@@ -1,6 +1,5 @@
 import { FileDown, Loader2 } from 'lucide-react';
 import { useState } from 'react';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
@@ -41,7 +40,7 @@ type ExportFormErrors = Partial<
 >;
 
 const initialExportState: ExportFormState = {
-    format: 'pdf',
+    format: 'csv',
     dateRange: 'last-30-days',
     startDate: '',
     endDate: '',
@@ -188,8 +187,7 @@ export function ExportSecurityReportModal({
                         Export Security Report
                     </DialogTitle>
                     <DialogDescription className="text-[#6a7282]">
-                        Choose the report format, date range, and security
-                        sections to include.
+                        Choose the CSV report range to download.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -218,9 +216,7 @@ export function ExportSecurityReportModal({
                                     <SelectValue placeholder="Select format" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="pdf">PDF</SelectItem>
                                     <SelectItem value="csv">CSV</SelectItem>
-                                    <SelectItem value="excel">Excel</SelectItem>
                                 </SelectContent>
                             </Select>
                             {errors.format && (
@@ -331,36 +327,6 @@ export function ExportSecurityReportModal({
                         </div>
                     )}
 
-                    <div className="rounded-[12px] border border-[#e5e7eb] bg-[#f9fafb] p-4">
-                        <p className="text-sm font-semibold text-[#1e2939]">
-                            Include Sections
-                        </p>
-                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                            {sectionOptions.map((option) => (
-                                <label
-                                    key={option.key}
-                                    className="flex items-center gap-2 text-sm text-[#4a5565]"
-                                >
-                                    <Checkbox
-                                        checked={form[option.key]}
-                                        onCheckedChange={(checked) =>
-                                            updateForm(
-                                                option.key,
-                                                Boolean(checked),
-                                            )
-                                        }
-                                        className="border-[#d1d5dc] data-[state=checked]:border-[#1e3a8a] data-[state=checked]:bg-[#1e3a8a]"
-                                    />
-                                    {option.label}
-                                </label>
-                            ))}
-                        </div>
-                        {errors.sections && (
-                            <p className="mt-2 text-xs text-[#dc2626]">
-                                {errors.sections}
-                            </p>
-                        )}
-                    </div>
                 </div>
 
                 <DialogFooter>

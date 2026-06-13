@@ -21,6 +21,7 @@ import {
     getAgencyAdminOptions,
     updateAgency,
 } from '@/lib/admin/agencies-service';
+import { apiMessage } from '@/lib/api-client';
 import type {
     AgencyAdminOption,
     CreateAgencyPayload,
@@ -60,6 +61,8 @@ export function AgencyManagementPage() {
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [feedback, setFeedback] = useState<string | null>(null);
+    const [createError, setCreateError] = useState<string | null>(null);
+    const [editError, setEditError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedType, setSelectedType] = useState('all');
     const [selectedStatus, setSelectedStatus] = useState('all');
@@ -99,9 +102,9 @@ export function AgencyManagementPage() {
                 setAdminOptions(loadedAdminOptions);
                 setError(null);
             })
-            .catch(() => {
+            .catch((error) => {
                 if (isCurrent) {
-                    setError('Unable to load agencies.');
+                    setError(apiMessage(error, 'Unable to load agencies.'));
                 }
             })
             .finally(() => {
@@ -203,6 +206,8 @@ export function AgencyManagementPage() {
 
     const handleCreateAgency = async (payload: CreateAgencyPayload) => {
         setIsSaving(true);
+        setCreateError(null);
+        setError(null);
 
         try {
             const createdAgency = await createAgency(payload);
@@ -213,6 +218,8 @@ export function AgencyManagementPage() {
             await refreshAdminOptions();
             setIsCreateOpen(false);
             setFeedback(`${createdAgency.shortName} has been created.`);
+        } catch (error) {
+            setCreateError(apiMessage(error, 'Unable to create agency.'));
         } finally {
             setIsSaving(false);
         }
@@ -223,6 +230,8 @@ export function AgencyManagementPage() {
         payload: UpdateAgencyPayload,
     ) => {
         setIsSaving(true);
+        setEditError(null);
+        setError(null);
 
         try {
             const updatedAgency = await updateAgency(id, payload);
@@ -234,6 +243,8 @@ export function AgencyManagementPage() {
             await refreshAdminOptions();
             setEditAgency(null);
             setFeedback(`${updatedAgency.shortName} has been updated.`);
+        } catch (error) {
+            setEditError(apiMessage(error, 'Unable to update agency.'));
         } finally {
             setIsSaving(false);
         }
@@ -245,6 +256,7 @@ export function AgencyManagementPage() {
         }
 
         setIsSaving(true);
+        setError(null);
 
         try {
             const updatedAgency =
@@ -260,6 +272,8 @@ export function AgencyManagementPage() {
             setFeedback(
                 `${updatedAgency.shortName} is now ${updatedAgency.status}.`,
             );
+        } catch (error) {
+            setError(apiMessage(error, 'Unable to update agency status.'));
         } finally {
             setIsSaving(false);
         }
@@ -270,6 +284,7 @@ export function AgencyManagementPage() {
         adminUserId: string,
     ) => {
         setIsSaving(true);
+        setError(null);
 
         try {
             const updatedAgency = await assignAgencyAdmin(
@@ -286,6 +301,8 @@ export function AgencyManagementPage() {
             setFeedback(
                 `${updatedAgency.shortName} agency admin has been updated.`,
             );
+        } catch (error) {
+            setError(apiMessage(error, 'Unable to assign agency admin.'));
         } finally {
             setIsSaving(false);
         }
@@ -296,14 +313,21 @@ export function AgencyManagementPage() {
             return;
         }
 
+        const target = archiveTarget;
+
         setIsSaving(true);
+        setError(null);
 
         try {
-            await archiveAgency(archiveTarget.id);
-            setFeedback(
-                `${archiveTarget.shortName} archive request was recorded.`,
+            await archiveAgency(target.id);
+            setAgencies((currentAgencies) =>
+                currentAgencies.filter((agency) => agency.id !== target.id),
             );
+            await refreshAdminOptions();
             setArchiveTarget(null);
+            setFeedback(`${target.shortName} has been archived.`);
+        } catch (error) {
+            setError(apiMessage(error, 'Unable to archive agency.'));
         } finally {
             setIsSaving(false);
         }
@@ -313,7 +337,10 @@ export function AgencyManagementPage() {
         <AdminLayout search={topbarSearch} onSearchChange={setTopbarSearch}>
             <main className="px-4 py-8 lg:px-8">
                 <AgencyManagementHeader
-                    onCreate={() => setIsCreateOpen(true)}
+                    onCreate={() => {
+                        setCreateError(null);
+                        setIsCreateOpen(true);
+                    }}
                 />
 
                 {error && (
@@ -372,19 +399,28 @@ export function AgencyManagementPage() {
                 open={isCreateOpen}
                 adminOptions={adminOptions}
                 isSaving={isSaving}
+                serverError={createError}
                 isNameTaken={isNameTaken}
                 isShortNameTaken={isShortNameTaken}
-                onOpenChange={setIsCreateOpen}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setCreateError(null);
+                    }
+
+                    setIsCreateOpen(open);
+                }}
                 onSubmit={handleCreateAgency}
             />
             <EditAgencyModal
                 agency={editAgency}
                 adminOptions={adminOptions}
                 isSaving={isSaving}
+                serverError={editError}
                 isNameTaken={isNameTaken}
                 isShortNameTaken={isShortNameTaken}
                 onOpenChange={(open) => {
                     if (!open) {
+                        setEditError(null);
                         setEditAgency(null);
                     }
                 }}

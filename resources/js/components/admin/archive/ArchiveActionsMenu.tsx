@@ -24,6 +24,10 @@ function getRecordName(record: AdminArchivedRecord) {
         return record.name;
     }
 
+    if (record.type === 'file') {
+        return record.fileName;
+    }
+
     return record.fullName;
 }
 
@@ -34,6 +38,10 @@ function getRestoreLabel(record: AdminArchivedRecord) {
 
     if (record.type === 'user') {
         return 'Restore User';
+    }
+
+    if (record.type === 'file') {
+        return 'Restore File';
     }
 
     return 'Restore';

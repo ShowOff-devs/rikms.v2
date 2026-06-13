@@ -8,7 +8,6 @@ import type {
     UserRoleAssignment,
 } from '@/types/rbac';
 
-let roleChangeHistory: RoleChangeHistory[] = [];
 let cachedPermissions: Permission[] = [];
 let cachedAssignments: UserRoleAssignment[] = [];
 
@@ -74,11 +73,9 @@ export async function updateRole(
 }
 
 export async function deleteRole(id: string): Promise<void> {
-    void id;
-
-    throw new Error(
-        'Role deletion is deferred until a protected archive/delete endpoint is implemented.',
-    );
+    await fetchApi(`/api/admin/rbac/roles/${id}`, {
+        method: 'DELETE',
+    });
 }
 
 export async function getPermissions(): Promise<Permission[]> {
@@ -90,26 +87,9 @@ export async function getPermissions(): Promise<Permission[]> {
 }
 
 export async function getRoleChangeHistory(): Promise<RoleChangeHistory[]> {
-    return roleChangeHistory.map((change) => ({ ...change }));
-}
+    const response = await fetchApi<RoleChangeHistory[]>('/api/admin/rbac/history');
 
-export async function addRoleChangeHistory(
-    payload: Omit<RoleChangeHistory, 'id' | 'date'> & {
-        id?: string;
-        date?: string;
-    },
-): Promise<RoleChangeHistory> {
-    const createdChange: RoleChangeHistory = {
-        ...payload,
-        id: payload.id ?? `change-${Date.now()}`,
-        date: payload.date ?? new Date().toISOString(),
-        before: payload.before ? [...payload.before] : undefined,
-        after: payload.after ? [...payload.after] : undefined,
-    };
-
-    roleChangeHistory = [createdChange, ...roleChangeHistory];
-
-    return { ...createdChange };
+    return response.data;
 }
 
 export async function getUserRoleAssignments(): Promise<UserRoleAssignment[]> {

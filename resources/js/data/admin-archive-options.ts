@@ -8,6 +8,7 @@ export const archiveStatusLabels: Record<ArchiveStatus, string> = {
 
 export const archiveRecordTypeLabels = {
     research: 'Research',
+    file: 'File',
     agency: 'Agency',
     user: 'User',
 } as const;

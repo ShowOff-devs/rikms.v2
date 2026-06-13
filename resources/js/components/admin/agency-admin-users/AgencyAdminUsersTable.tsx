@@ -154,22 +154,29 @@ export function AgencyAdminUsersTable({
                                     </span>
                                 </td>
                                 <td className="px-4">
-                                    <span
-                                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] leading-4 font-semibold ${
-                                            isActive
-                                                ? 'border-[#b9f8cf] bg-[#f0fdf4] text-[#008236]'
-                                                : 'border-[#e5e7eb] bg-[#f9fafb] text-[#4a5565]'
-                                        }`}
-                                    >
+                                    <div className="flex flex-col items-start gap-1.5">
                                         <span
-                                            className={`size-1.5 rounded-full ${
+                                            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] leading-4 font-semibold ${
                                                 isActive
-                                                    ? 'bg-[#00c950]'
-                                                    : 'bg-[#99a1af]'
+                                                    ? 'border-[#b9f8cf] bg-[#f0fdf4] text-[#008236]'
+                                                    : 'border-[#e5e7eb] bg-[#f9fafb] text-[#4a5565]'
                                             }`}
-                                        />
-                                        {isActive ? 'Active' : 'Inactive'}
-                                    </span>
+                                        >
+                                            <span
+                                                className={`size-1.5 rounded-full ${
+                                                    isActive
+                                                        ? 'bg-[#00c950]'
+                                                        : 'bg-[#99a1af]'
+                                                }`}
+                                            />
+                                            {isActive ? 'Active' : 'Inactive'}
+                                        </span>
+                                        {user.deactivationRequestedAt ? (
+                                            <span className="rounded-full border border-[#fed7aa] bg-[#fff7ed] px-2 py-0.5 text-[10px] leading-3 font-semibold text-[#c2410c]">
+                                                Deactivation requested
+                                            </span>
+                                        ) : null}
+                                    </div>
                                 </td>
                                 <td className="px-4">
                                     <span className="inline-flex items-center gap-1.5 text-xs leading-4 text-[#99a1af]">

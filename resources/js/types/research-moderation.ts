@@ -18,6 +18,7 @@ export type FlaggedResearchRecord = {
     agency: string;
     uploadedBy: string;
     uploaderRole?: string;
+    officialStatus?: string;
     issueType: ModerationIssueType;
     year: number;
     status: ModerationStatus;
@@ -30,6 +31,8 @@ export type FlaggedResearchRecord = {
 
 export type DuplicateResearchMatch = {
     id: string;
+    originalResearchId: string;
+    matchingResearchId: string;
     originalTitle: string;
     matchingTitle: string;
     originalAgency: string;

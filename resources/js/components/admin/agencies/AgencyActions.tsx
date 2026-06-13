@@ -72,7 +72,7 @@ export function AgencyActions({
                 <DropdownMenuItem
                     onSelect={() =>
                         router.visit(
-                            `/admin/research?agency=${agency.id}`,
+                            `/admin/research?agency=${encodeURIComponent(agency.shortName)}&agency_id=${agency.id}`,
                         )
                     }
                 >

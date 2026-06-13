@@ -30,6 +30,26 @@ const initialFilters: SystemResearchFilters = {
     documentType: 'all',
 };
 
+function initialFiltersFromLocation(): SystemResearchFilters {
+    if (typeof window === 'undefined') {
+        return initialFilters;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+
+    return {
+        ...initialFilters,
+        agency:
+            params.get('agency') ??
+            params.get('agency_id') ??
+            initialFilters.agency,
+        status: params.get('status') ?? initialFilters.status,
+        year: params.get('year') ?? initialFilters.year,
+        category: params.get('category') ?? initialFilters.category,
+        search: params.get('search') ?? initialFilters.search,
+    };
+}
+
 function uniqueSorted(values: string[]) {
     return Array.from(new Set(values)).sort((left, right) =>
         left.localeCompare(right),
@@ -38,8 +58,9 @@ function uniqueSorted(values: string[]) {
 
 export function SystemResearchPage() {
     const [topbarSearch, setTopbarSearch] = useState('');
-    const [filters, setFilters] =
-        useState<SystemResearchFilters>(initialFilters);
+    const [filters, setFilters] = useState<SystemResearchFilters>(
+        initialFiltersFromLocation,
+    );
     const [records, setRecords] = useState<SystemResearchRecord[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);

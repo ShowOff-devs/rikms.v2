@@ -5,6 +5,7 @@ import {
     exportArchiveReport,
     getAdminArchiveSummary,
     getArchiveActivityTimeline,
+    getArchivedFileRecords,
     getArchivedAgencyRecords,
     getArchivedResearchRecords,
     getArchivedUserRecords,
@@ -19,6 +20,7 @@ import type {
     ArchiveExportOptions,
     ArchiveRecordType,
     ArchivedAgencyRecord,
+    ArchivedFileRecord,
     ArchivedResearchRecord,
     ArchivedUserRecord,
 } from '@/types/admin-archive';
@@ -66,6 +68,18 @@ function getRecordSearchValues(record: AdminArchivedRecord) {
             record.name,
             record.shortName,
             record.agencyType,
+            record.archivedBy,
+            record.archiveDate,
+            record.status,
+        ];
+    }
+
+    if (record.type === 'file') {
+        return [
+            record.fileName,
+            record.researchTitle,
+            record.agency,
+            record.fileType,
             record.archivedBy,
             record.archiveDate,
             record.status,
@@ -170,6 +184,7 @@ export function AdminArchivePage() {
     const [agencyRecords, setAgencyRecords] = useState<ArchivedAgencyRecord[]>(
         [],
     );
+    const [fileRecords, setFileRecords] = useState<ArchivedFileRecord[]>([]);
     const [userRecords, setUserRecords] = useState<ArchivedUserRecord[]>([]);
     const [activities, setActivities] = useState<ArchiveActivity[]>([]);
     const [activeTab, setActiveTab] = useState<ArchiveRecordType>('research');
@@ -196,6 +211,7 @@ export function AdminArchivePage() {
         Promise.all([
             getAdminArchiveSummary(),
             getArchivedResearchRecords(),
+            getArchivedFileRecords(),
             getArchivedAgencyRecords(),
             getArchivedUserRecords(),
             getArchiveActivityTimeline(),
@@ -204,6 +220,7 @@ export function AdminArchivePage() {
                 ([
                     loadedSummary,
                     loadedResearch,
+                    loadedFiles,
                     loadedAgencies,
                     loadedUsers,
                     loadedActivities,
@@ -214,6 +231,7 @@ export function AdminArchivePage() {
 
                     setSummary(loadedSummary);
                     setResearchRecords(loadedResearch);
+                    setFileRecords(loadedFiles);
                     setAgencyRecords(loadedAgencies);
                     setUserRecords(loadedUsers);
                     setActivities(loadedActivities);
@@ -253,10 +271,11 @@ export function AdminArchivePage() {
     const recordsByTab = useMemo(
         () => ({
             research: researchRecords,
+            file: fileRecords,
             agency: agencyRecords,
             user: userRecords,
         }),
-        [agencyRecords, researchRecords, userRecords],
+        [agencyRecords, fileRecords, researchRecords, userRecords],
     );
 
     const activeRecords = recordsByTab[activeTab];
@@ -277,8 +296,8 @@ export function AdminArchivePage() {
     );
 
     const allRecords = useMemo(
-        () => [...researchRecords, ...agencyRecords, ...userRecords],
-        [agencyRecords, researchRecords, userRecords],
+        () => [...researchRecords, ...fileRecords, ...agencyRecords, ...userRecords],
+        [agencyRecords, fileRecords, researchRecords, userRecords],
     );
 
     const agencies = useMemo(
@@ -298,6 +317,7 @@ export function AdminArchivePage() {
 
         return {
             archivedResearchRecords: researchRecords.length,
+            archivedFiles: fileRecords.length,
             archivedAgencies: agencyRecords.length,
             archivedUserAccounts: userRecords.length,
             recentlyRestored: activities.filter(
@@ -307,6 +327,7 @@ export function AdminArchivePage() {
     }, [
         activities,
         agencyRecords.length,
+        fileRecords.length,
         researchRecords.length,
         summary,
         userRecords.length,
@@ -329,6 +350,12 @@ export function AdminArchivePage() {
 
         if (record.type === 'agency') {
             setAgencyRecords((current) =>
+                current.filter((item) => item.id !== record.id),
+            );
+        }
+
+        if (record.type === 'file') {
+            setFileRecords((current) =>
                 current.filter((item) => item.id !== record.id),
             );
         }
@@ -371,6 +398,13 @@ export function AdminArchivePage() {
                 `${getArchivedRecordTitle(selectedRestoreRecord)} was restored to its active module.`,
             );
             setSelectedRestoreRecord(null);
+            setError(null);
+        } catch (restoreError) {
+            setError(
+                restoreError instanceof Error
+                    ? restoreError.message
+                    : 'Unable to restore archived record.',
+            );
         } finally {
             setIsRestoring(false);
         }
@@ -400,6 +434,13 @@ export function AdminArchivePage() {
                 `${getArchivedRecordTitle(selectedDeleteRecord)} was permanently deleted.`,
             );
             setSelectedDeleteRecord(null);
+            setError(null);
+        } catch (deleteError) {
+            setError(
+                deleteError instanceof Error
+                    ? deleteError.message
+                    : 'Unable to delete archived record.',
+            );
         } finally {
             setIsDeleting(false);
         }
@@ -455,6 +496,7 @@ export function AdminArchivePage() {
                         activeTab={activeTab}
                         counts={{
                             research: researchRecords.length,
+                            file: fileRecords.length,
                             agency: agencyRecords.length,
                             user: userRecords.length,
                         }}
