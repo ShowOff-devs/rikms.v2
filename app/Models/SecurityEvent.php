@@ -19,12 +19,15 @@ class SecurityEvent extends Model
         'metadata',
         'resolved_at',
         'resolved_by',
+        'acknowledged_at',
+        'acknowledged_by',
         'created_at',
     ];
 
     protected $casts = [
         'metadata' => 'array',
         'resolved_at' => 'datetime',
+        'acknowledged_at' => 'datetime',
         'created_at' => 'datetime',
     ];
 
@@ -41,5 +44,10 @@ class SecurityEvent extends Model
     public function resolver()
     {
         return $this->belongsTo(User::class, 'resolved_by');
+    }
+
+    public function acknowledger()
+    {
+        return $this->belongsTo(User::class, 'acknowledged_by');
     }
 }

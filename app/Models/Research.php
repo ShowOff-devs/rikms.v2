@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Support\Statuses;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -15,6 +17,9 @@ class Research extends Model
         'slug',
         'agency_id',
         'uploaded_by',
+        'revision_parent_id',
+        'superseded_by_id',
+        'revision_number',
         'title',
         'abstract',
         'authors',
@@ -23,6 +28,8 @@ class Research extends Model
         'category',
         'sdgs',
         'keywords',
+        'public_metadata',
+        'public_metadata_fields',
         'status',
         'access_level',
         'downloads',
@@ -43,7 +50,10 @@ class Research extends Model
         'authors' => 'array',
         'sdgs' => 'array',
         'keywords' => 'array',
+        'public_metadata' => 'array',
+        'public_metadata_fields' => 'array',
         'downloads' => 'integer',
+        'revision_number' => 'integer',
         'embargo_until' => 'date',
         'submitted_at' => 'datetime',
         'approved_at' => 'datetime',
@@ -80,6 +90,38 @@ class Research extends Model
     public function files()
     {
         return $this->hasMany(ResearchFile::class);
+    }
+
+    public function analyticsEvents()
+    {
+        return $this->hasMany(ResearchAnalyticsEvent::class);
+    }
+
+    public function scopePubliclyVisible(Builder $query): Builder
+    {
+        return $query
+            ->where('status', Statuses::RESEARCH_PUBLISHED)
+            ->whereNull('archived_at')
+            ->where(function (Builder $query): void {
+                $query
+                    ->whereNull('access_level')
+                    ->orWhere('access_level', '!=', 'private');
+            });
+    }
+
+    public function revisionParent()
+    {
+        return $this->belongsTo(self::class, 'revision_parent_id');
+    }
+
+    public function revisions()
+    {
+        return $this->hasMany(self::class, 'revision_parent_id');
+    }
+
+    public function supersededBy()
+    {
+        return $this->belongsTo(self::class, 'superseded_by_id');
     }
 
     public function archivedBy()

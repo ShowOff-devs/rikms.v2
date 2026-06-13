@@ -59,6 +59,16 @@ class Agency extends Model
         return $this->hasMany(AuditLog::class);
     }
 
+    public function archivedBy()
+    {
+        return $this->belongsTo(User::class, 'archived_by');
+    }
+
+    public function restoredBy()
+    {
+        return $this->belongsTo(User::class, 'restored_by');
+    }
+
     public function securityEvents()
     {
         return $this->hasMany(SecurityEvent::class);
