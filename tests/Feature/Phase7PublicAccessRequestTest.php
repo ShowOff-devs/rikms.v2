@@ -128,6 +128,31 @@ test('guest can submit a public access request for restricted research', functio
     ]);
 });
 
+test('public access request notifications respect agency admin preferences', function () {
+    $agency = createPhase7Agency('phase-7-notification-preferences');
+    $mutedAdmin = createPhase7User('agency_admin', $agency);
+    $notifiedAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $mutedAdmin);
+
+    $mutedAdmin->forceFill([
+        'notification_preferences' => ['notifyNewAccessRequests' => false],
+    ])->save();
+
+    $this->postJson(
+        "/api/public/research/{$research->slug}/access-requests",
+        phase7PublicPayload(['requester_email' => 'preferences@example.test']),
+    )->assertCreated();
+
+    $this->assertDatabaseMissing('notifications', [
+        'type' => 'access_request.submitted',
+        'user_id' => $mutedAdmin->id,
+    ]);
+    $this->assertDatabaseHas('notifications', [
+        'type' => 'access_request.submitted',
+        'user_id' => $notifiedAdmin->id,
+    ]);
+});
+
 test('public access request validation and duplicate pending requests are blocked', function () {
     $agency = createPhase7Agency('phase-7-validation-agency');
     $agencyAdmin = createPhase7User('agency_admin', $agency);
@@ -156,12 +181,13 @@ test('public access request validation and duplicate pending requests are blocke
         ->assertJsonStructure(['message', 'errors']);
 });
 
-test('public access requests are rejected for public archived or deleted research', function () {
+test('public access requests are rejected for public archived deleted or private research', function () {
     $agency = createPhase7Agency('phase-7-rejected-agency');
     $agencyAdmin = createPhase7User('agency_admin', $agency);
     $publicResearch = createPhase7Research($agency, $agencyAdmin, 'public');
     $archivedResearch = createPhase7Research($agency, $agencyAdmin);
     $deletedResearch = createPhase7Research($agency, $agencyAdmin);
+    $privateResearch = createPhase7Research($agency, $agencyAdmin, 'private');
 
     $archivedResearch->forceFill([
         'status' => 'archived',
@@ -183,6 +209,11 @@ test('public access requests are rejected for public archived or deleted researc
         "/api/public/research/{$deletedResearch->slug}/access-requests",
         phase7PublicPayload(['requester_email' => 'deleted@example.test']),
     )->assertNotFound();
+
+    $this->postJson(
+        "/api/public/research/{$privateResearch->slug}/access-requests",
+        phase7PublicPayload(['requester_email' => 'private@example.test']),
+    )->assertUnprocessable();
 });
 
 test('agency admin can see and decide the public request for own agency only', function () {

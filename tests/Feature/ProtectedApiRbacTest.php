@@ -42,6 +42,14 @@ function createProtectedApiUser(string $role, ?Agency $agency = null): User
         createProtectedApiRole($role)->id => ['assigned_at' => now()],
     ]);
 
+    if ($role === 'super_admin') {
+        $user->forceFill([
+            'two_factor_secret' => encrypt('test-secret'),
+            'two_factor_recovery_codes' => encrypt(json_encode(['recovery-code-1'])),
+            'two_factor_confirmed_at' => now(),
+        ])->save();
+    }
+
     return $user;
 }
 
@@ -166,6 +174,38 @@ test('agency admin without agency cannot access agency scoped APIs', function ()
 
     $this->actingAs($user)
         ->getJson('/api/agency/dashboard')
+        ->assertForbidden()
+        ->assertJsonStructure(['message', 'errors']);
+});
+
+test('inactive and archived users cannot access protected APIs', function (string $status) {
+    $agency = createProtectedApiAgency('inactive-access-'.$status);
+    $agencyAdmin = createProtectedApiUser('agency_admin', $agency);
+    $agencyAdmin->forceFill(['status' => $status])->save();
+
+    $this->actingAs($agencyAdmin)
+        ->getJson('/api/agency/dashboard')
+        ->assertForbidden()
+        ->assertJsonStructure(['message', 'errors']);
+})->with(['inactive', 'archived']);
+
+test('soft deleted agency admin cannot access agency APIs', function () {
+    $agency = createProtectedApiAgency('deleted-agency-access');
+    $agencyAdmin = createProtectedApiUser('agency_admin', $agency);
+    $agencyAdmin->delete();
+
+    $this->actingAs($agencyAdmin)
+        ->getJson('/api/agency/dashboard')
+        ->assertForbidden()
+        ->assertJsonStructure(['message', 'errors']);
+});
+
+test('soft deleted super admin cannot access admin APIs', function () {
+    $superAdmin = createProtectedApiUser('super_admin');
+    $superAdmin->delete();
+
+    $this->actingAs($superAdmin)
+        ->getJson('/api/admin/dashboard')
         ->assertForbidden()
         ->assertJsonStructure(['message', 'errors']);
 });

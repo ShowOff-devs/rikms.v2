@@ -5,6 +5,7 @@ use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\DevelopmentAccountSeeder;
 use Illuminate\Support\Facades\Hash;
+use PragmaRX\Google2FA\Google2FA;
 
 test('development account seeder creates the agency admin account', function () {
     $this->seed(DevelopmentAccountSeeder::class);
@@ -79,20 +80,44 @@ test('development account seeder reuses an existing dost agency', function () {
         ->and($existingAgency->fresh()->status)->toBe('active');
 });
 
-test('seeded super admin can authenticate through the admin portal flow', function () {
+test('seeded super admin is sent to two factor setup before accessing the admin portal', function () {
     $this->seed(DevelopmentAccountSeeder::class);
 
     $superAdmin = User::query()->where('email', 'super_admin@admin.com')->firstOrFail();
 
     $this->get('/admin/login')->assertOk();
 
-    $this->post(route('login.store'), [
+    $this->post('/admin/login', [
         'email' => 'super_admin@admin.com',
         'password' => 'superadmin',
         'authentication_code' => '123456',
-    ]);
+    ])->assertRedirect(route('two-factor.show', absolute: false));
+
+    $this->assertAuthenticatedAs($superAdmin);
+    $this->get('/admin/dashboard')->assertRedirect(route('two-factor.show', absolute: false));
+    $this->get('/agency/dashboard')->assertForbidden();
+});
+
+test('seeded super admin with confirmed two factor can complete the admin portal flow', function () {
+    $this->seed(DevelopmentAccountSeeder::class);
+
+    $secret = 'JBSWY3DPEHPK3PXP';
+    $superAdmin = User::query()->where('email', 'super_admin@admin.com')->firstOrFail();
+    $superAdmin->forceFill([
+        'two_factor_secret' => encrypt($secret),
+        'two_factor_recovery_codes' => encrypt(json_encode(['seeded-recovery-code'])),
+        'two_factor_confirmed_at' => now(),
+    ])->save();
+
+    $this->post('/admin/login', [
+        'email' => 'super_admin@admin.com',
+        'password' => 'superadmin',
+    ])->assertRedirect(route('two-factor.login', absolute: false));
+
+    $this->post(route('two-factor.login'), [
+        'code' => app(Google2FA::class)->getCurrentOtp($secret),
+    ])->assertRedirect(route('admin.dashboard', absolute: false));
 
     $this->assertAuthenticatedAs($superAdmin);
     $this->get('/admin/dashboard')->assertOk();
-    $this->get('/agency/dashboard')->assertForbidden();
 });

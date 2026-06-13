@@ -14,11 +14,21 @@ function createAgencyPortalUser(string $role = 'agency_admin'): User
         'status' => 'active',
     ]);
 
-    return User::factory()->create([
+    $user = User::factory()->create([
         'agency_id' => $agency->id,
         'role' => $role,
         'status' => 'active',
     ]);
+
+    if ($role === 'super_admin') {
+        $user->forceFill([
+            'two_factor_secret' => encrypt('test-secret'),
+            'two_factor_recovery_codes' => encrypt(json_encode(['recovery-code-1'])),
+            'two_factor_confirmed_at' => now(),
+        ])->save();
+    }
+
+    return $user;
 }
 
 test('agency login page can be rendered', function () {

@@ -168,6 +168,10 @@ test('metadata job saves openai metadata through writer', function () {
         'title' => 'Water Security in Davao Region',
         'authors' => ['Ana Santos'],
         'abstract' => 'This study evaluates water security policy.',
+        'methodology' => 'The study used policy document review and key informant interviews.',
+        'review_of_related_literature' => null,
+        'theoretical_framework' => null,
+        'results_and_discussion' => null,
         'keywords' => ['water security', 'policy'],
         'publication_year' => 2026,
         'research_category' => 'Environment',
@@ -215,6 +219,25 @@ test('metadata job writes failed result when extracted text is missing', functio
     (new ExtractResearchMetadataJob($research->id, $file->id, $agency->id, $user->id))->handle($writer, $extractor);
 });
 
+test('ai pipeline writer sanitizes malformed utf8 recursively for mongo payloads', function () {
+    $writer = new AiPipelineResultWriter;
+    $method = new ReflectionMethod($writer, 'sanitizeForMongo');
+    $method->setAccessible(true);
+
+    $sanitized = $method->invoke($writer, [
+        'text' => "Valid text \xC3\x28 with \x00 bad bytes",
+        'nested' => [
+            'errors' => ["Broken \xF0\x28\x8C\x28 error"],
+        ],
+    ]);
+
+    expect($sanitized['text'])->toBeString()
+        ->and(preg_match('//u', $sanitized['text']))->toBe(1)
+        ->and($sanitized['text'])->not->toContain("\x00")
+        ->and($sanitized['nested']['errors'][0])->toBeString()
+        ->and(preg_match('//u', $sanitized['nested']['errors'][0]))->toBe(1);
+});
+
 test('openai metadata extractor requests strict json schema response format', function () {
     config([
         'services.openai.api_key' => 'test-key',
@@ -226,6 +249,10 @@ test('openai metadata extractor requests strict json schema response format', fu
         'title' => 'Water Security in Davao Region',
         'authors' => ['Ana Santos'],
         'abstract' => 'This study evaluates water security policy.',
+        'methodology' => 'The study used policy document review and key informant interviews.',
+        'review_of_related_literature' => null,
+        'theoretical_framework' => null,
+        'results_and_discussion' => null,
         'keywords' => ['water security', 'policy'],
         'publication_year' => 2026,
         'research_category' => 'Environment',
@@ -255,6 +282,8 @@ test('openai metadata extractor requests strict json schema response format', fu
     $result = (new OpenAiResearchMetadataExtractor($client))->extract(str_repeat('Research text. ', 200));
 
     expect($result['title'])->toBe('Water Security in Davao Region')
+        ->and($result['methodology'])->toBe('The study used policy document review and key informant interviews.')
+        ->and($result['review_of_related_literature'])->toBeNull()
         ->and($result['publication_year'])->toBe(2026)
         ->and($result['confidence_score'])->toBe(0.91);
 
@@ -263,6 +292,10 @@ test('openai metadata extractor requests strict json schema response format', fu
             && $parameters['model'] === 'gpt-test'
             && $parameters['response_format']['type'] === 'json_schema'
             && $parameters['response_format']['json_schema']['strict'] === true
-            && in_array('research_category', $parameters['response_format']['json_schema']['schema']['required'], true);
+            && in_array('research_category', $parameters['response_format']['json_schema']['schema']['required'], true)
+            && in_array('methodology', $parameters['response_format']['json_schema']['schema']['required'], true)
+            && in_array('review_of_related_literature', $parameters['response_format']['json_schema']['schema']['required'], true)
+            && in_array('theoretical_framework', $parameters['response_format']['json_schema']['schema']['required'], true)
+            && in_array('results_and_discussion', $parameters['response_format']['json_schema']['schema']['required'], true);
     });
 });

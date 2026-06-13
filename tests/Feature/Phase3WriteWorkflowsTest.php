@@ -51,6 +51,14 @@ function createPhase3User(string $role, ?Agency $agency = null): User
         createPhase3Role($role)->id => ['assigned_at' => now()],
     ]);
 
+    if ($role === 'super_admin') {
+        $user->forceFill([
+            'two_factor_secret' => encrypt('test-secret'),
+            'two_factor_recovery_codes' => encrypt(json_encode(['recovery-code-1'])),
+            'two_factor_confirmed_at' => now(),
+        ])->save();
+    }
+
     return $user;
 }
 
@@ -114,6 +122,10 @@ test('real admin login session can access authenticated api user endpoint', func
     $this->post(route('login.store'), [
         'email' => $superAdmin->email,
         'password' => 'password',
+    ])->assertRedirect(route('two-factor.login', absolute: false));
+
+    $this->post(route('two-factor.login'), [
+        'recovery_code' => 'recovery-code-1',
     ])->assertRedirect(route('admin.dashboard', absolute: false));
 
     $this->getJson('/api/auth/user')
@@ -140,6 +152,28 @@ test('agency admin can create update and submit own draft research', function ()
         'abstract' => 'Pilot draft metadata.',
         'authors' => ['Ana Santos'],
         'keywords' => ['water', 'resilience'],
+        'public_metadata_fields' => [
+            'title',
+            'methodology',
+            'results_and_discussion',
+        ],
+        'public_metadata' => [
+            [
+                'key' => 'title',
+                'label' => 'Title',
+                'value' => 'Davao Region Water Security Study',
+            ],
+            [
+                'key' => 'methodology',
+                'label' => 'Methodology',
+                'value' => 'Mixed-methods regional assessment.',
+            ],
+            [
+                'key' => 'results_and_discussion',
+                'label' => 'Results and Discussion',
+                'value' => 'Water policy coordination improved.',
+            ],
+        ],
         'sdg_tags' => ['SDG 6'],
         'publication_year' => 2026,
         'access_level' => 'request_required',
@@ -150,16 +184,33 @@ test('agency admin can create update and submit own draft research', function ()
         ->assertCreated()
         ->assertJsonStructure(['message', 'data', 'meta'])
         ->assertJsonPath('data.status', 'draft')
-        ->assertJsonPath('data.agency_id', $agency->id);
+        ->assertJsonPath('data.agency_id', $agency->id)
+        ->assertJsonPath('data.public_metadata.1.key', 'methodology')
+        ->assertJsonPath('data.public_metadata.2.key', 'results_and_discussion')
+        ->assertJsonPath('data.public_metadata_fields.2', 'results_and_discussion');
 
     $researchId = $createResponse->json('data.id');
 
     $this->actingAs($user)->patchJson("/api/agency/research/{$researchId}", [
         'category' => 'Environment',
         'keywords' => ['water', 'policy'],
+        'public_metadata_fields' => ['title', 'abstract'],
+        'public_metadata' => [
+            [
+                'key' => 'title',
+                'label' => 'Title',
+                'value' => 'Davao Region Water Security Study',
+            ],
+            [
+                'key' => 'abstract',
+                'label' => 'Abstract',
+                'value' => 'Updated public abstract.',
+            ],
+        ],
     ])
         ->assertOk()
-        ->assertJsonPath('data.category', 'Environment');
+        ->assertJsonPath('data.category', 'Environment')
+        ->assertJsonPath('data.public_metadata_fields.1', 'abstract');
 
     $this->actingAs($user)->postJson("/api/agency/research/{$researchId}/submit", [
         'notes' => 'Ready for review.',
@@ -173,9 +224,82 @@ test('agency admin can create update and submit own draft research', function ()
         'uploaded_by' => $user->id,
         'status' => 'submitted',
     ]);
+    expect(Research::findOrFail($researchId)->public_metadata)
+        ->toMatchArray([
+            [
+                'key' => 'title',
+                'label' => 'Title',
+                'value' => 'Davao Region Water Security Study',
+            ],
+            [
+                'key' => 'abstract',
+                'label' => 'Abstract',
+                'value' => 'Updated public abstract.',
+            ],
+        ]);
+    expect(Research::findOrFail($researchId)->public_metadata_fields)
+        ->toBe(['title', 'abstract']);
     $this->assertDatabaseHas('audit_logs', ['event' => 'research.created']);
     $this->assertDatabaseHas('audit_logs', ['event' => 'research.updated']);
     $this->assertDatabaseHas('audit_logs', ['event' => 'research.submitted']);
+});
+
+test('agency admin can save long selected public metadata sections', function () {
+    $agency = createPhase3Agency('long-public-metadata-agency');
+    $user = createPhase3User('agency_admin', $agency);
+    $longSection = str_repeat('Long extracted methodology section. ', 900);
+
+    $response = $this->actingAs($user)->postJson('/api/agency/research', [
+        'title' => 'Long Public Metadata Draft',
+        'abstract' => $longSection,
+        'authors' => ['Ana Santos'],
+        'public_metadata' => [
+            [
+                'key' => 'methodology',
+                'label' => 'Methodology',
+                'value' => $longSection,
+            ],
+        ],
+        'access_level' => 'public',
+    ]);
+
+    $response
+        ->assertCreated()
+        ->assertJsonPath('data.public_metadata.0.key', 'methodology');
+});
+
+test('agency research draft slug generation skips soft deleted records', function () {
+    $agency = createPhase3Agency('soft-deleted-slug-agency');
+    $user = createPhase3User('agency_admin', $agency);
+    $title = 'Soft Deleted Slug Draft';
+    $baseSlug = 'soft-deleted-slug-draft';
+
+    Research::create([
+        'slug' => $baseSlug,
+        'agency_id' => $agency->id,
+        'uploaded_by' => $user->id,
+        'title' => $title,
+        'status' => 'draft',
+        'access_level' => 'request_required',
+    ]);
+
+    $deletedResearch = Research::create([
+        'slug' => $baseSlug.'-1',
+        'agency_id' => $agency->id,
+        'uploaded_by' => $user->id,
+        'title' => $title,
+        'status' => 'draft',
+        'access_level' => 'request_required',
+    ]);
+    $deletedResearch->delete();
+
+    $this->actingAs($user)
+        ->postJson('/api/agency/research', [
+            'title' => $title,
+            'access_level' => 'request_required',
+        ])
+        ->assertCreated()
+        ->assertJsonPath('data.slug', $baseSlug.'-2');
 });
 
 test('agency admin cannot write research for another agency or submit invalid transition', function () {
@@ -193,6 +317,96 @@ test('agency admin cannot write research for another agency or submit invalid tr
     $this->actingAs($user)
         ->postJson("/api/agency/research/{$publishedResearch->id}/submit")
         ->assertForbidden();
+});
+
+test('agency admin can create editable draft revision from published research', function () {
+    $agency = createPhase3Agency('revision-agency');
+    $user = createPhase3User('agency_admin', $agency);
+    $research = createPhase3Research($agency, $user, 'published');
+
+    $response = $this->actingAs($user)
+        ->postJson("/api/agency/research/{$research->id}/revision");
+
+    $response
+        ->assertCreated()
+        ->assertJsonPath('data.status', 'draft')
+        ->assertJsonPath('data.revision_parent_id', $research->id)
+        ->assertJsonPath('data.revision_number', 2);
+
+    $revisionId = $response->json('data.id');
+
+    $this->actingAs($user)
+        ->patchJson("/api/agency/research/{$revisionId}", [
+            'title' => 'Phase 3 Research Updated Revision',
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.title', 'Phase 3 Research Updated Revision');
+
+    $this->assertDatabaseHas('audit_logs', ['event' => 'research.revision_created']);
+});
+
+test('agency research revision slug generation skips soft deleted records', function () {
+    $agency = createPhase3Agency('soft-deleted-revision-slug-agency');
+    $user = createPhase3User('agency_admin', $agency);
+    $research = createPhase3Research($agency, $user, 'published');
+    $baseSlug = str($research->title.' revision 2')->slug()->toString();
+
+    $deletedRevision = Research::create([
+        'slug' => $baseSlug,
+        'agency_id' => $agency->id,
+        'uploaded_by' => $user->id,
+        'revision_parent_id' => $research->id,
+        'revision_number' => 2,
+        'title' => $research->title,
+        'status' => 'draft',
+        'access_level' => 'request_required',
+    ]);
+    $deletedRevision->delete();
+
+    $this->actingAs($user)
+        ->postJson("/api/agency/research/{$research->id}/revision")
+        ->assertCreated()
+        ->assertJsonPath('data.slug', $baseSlug.'-1')
+        ->assertJsonPath('data.revision_parent_id', $research->id);
+});
+
+test('publishing a revision supersedes the previous published version', function () {
+    $agency = createPhase3Agency('revision-publish-agency');
+    $agencyAdmin = createPhase3User('agency_admin', $agency);
+    $superAdmin = createPhase3User('super_admin');
+    $published = createPhase3Research($agency, $agencyAdmin, 'published');
+
+    $revisionId = $this->actingAs($agencyAdmin)
+        ->postJson("/api/agency/research/{$published->id}/revision")
+        ->assertCreated()
+        ->json('data.id');
+
+    $this->actingAs($agencyAdmin)
+        ->postJson("/api/agency/research/{$revisionId}/submit")
+        ->assertOk()
+        ->assertJsonPath('data.status', 'submitted');
+
+    $this->actingAs($superAdmin)
+        ->postJson("/api/admin/research/{$revisionId}/approve")
+        ->assertOk()
+        ->assertJsonPath('data.status', 'approved');
+
+    $this->actingAs($superAdmin)
+        ->postJson("/api/admin/research/{$revisionId}/publish")
+        ->assertOk()
+        ->assertJsonPath('data.status', 'published');
+
+    $this->assertDatabaseHas('research', [
+        'id' => $published->id,
+        'status' => 'superseded',
+        'superseded_by_id' => $revisionId,
+    ]);
+    $this->assertDatabaseHas('research', [
+        'id' => $revisionId,
+        'status' => 'published',
+        'revision_parent_id' => $published->id,
+    ]);
+    $this->assertDatabaseHas('audit_logs', ['event' => 'research.superseded']);
 });
 
 test('agency admin can upload valid pdf and jobs are queued', function () {
@@ -242,6 +456,11 @@ test('invalid upload file type is rejected and cross agency upload is forbidden'
     $this->actingAs($user)->postJson("/api/agency/research/{$ownResearch->id}/files", [
         'file' => UploadedFile::fake()->create('study.txt', 12, 'text/plain'),
     ])->assertUnprocessable();
+
+    $this->actingAs($user)->postJson("/api/agency/research/{$ownResearch->id}/files", [
+        'file' => UploadedFile::fake()->create('oversized.pdf', 11264, 'application/pdf'),
+    ])->assertUnprocessable()
+        ->assertJsonValidationErrors(['file']);
 
     $this->actingAs($user)->postJson("/api/agency/research/{$otherResearch->id}/files", [
         'file' => UploadedFile::fake()->create('study.pdf', 12, 'application/pdf'),
@@ -328,6 +547,30 @@ test('super admin can moderate research and invalid transitions fail', function 
     $this->assertDatabaseHas('audit_logs', ['event' => 'research.approved']);
     $this->assertDatabaseHas('audit_logs', ['event' => 'research.published']);
     $this->assertDatabaseHas('notifications', ['type' => 'research.approved']);
+});
+
+test('publishing research backfills a missing slug from title', function () {
+    $agency = createPhase3Agency('missing-slug-publish-agency');
+    $agencyAdmin = createPhase3User('agency_admin', $agency);
+    $superAdmin = createPhase3User('super_admin');
+    $research = createPhase3Research($agency, $agencyAdmin, 'approved');
+
+    $research->update([
+        'slug' => null,
+        'title' => 'Legacy Imported Research',
+    ]);
+
+    $this->actingAs($superAdmin)
+        ->postJson("/api/admin/research/{$research->id}/publish")
+        ->assertOk()
+        ->assertJsonPath('data.status', 'published')
+        ->assertJsonPath('data.slug', 'legacy-imported-research');
+
+    $this->assertDatabaseHas('research', [
+        'id' => $research->id,
+        'slug' => 'legacy-imported-research',
+        'status' => 'published',
+    ]);
 });
 
 test('admin can archive and restore research while agency lists exclude archived records', function () {

@@ -30,6 +30,14 @@ function createPhase6User(string $role, ?Agency $agency = null): User
         createPhase6Role($role)->id => ['assigned_at' => now()],
     ]);
 
+    if ($role === 'super_admin') {
+        $user->forceFill([
+            'two_factor_secret' => encrypt('test-secret'),
+            'two_factor_recovery_codes' => encrypt(json_encode(['recovery-code-1'])),
+            'two_factor_confirmed_at' => now(),
+        ])->save();
+    }
+
     return $user;
 }
 

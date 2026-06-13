@@ -18,11 +18,21 @@ function portalAuditAgency(string $slug): Agency
 
 function portalAuditUser(string $role, ?Agency $agency = null): User
 {
-    return User::factory()->create([
+    $user = User::factory()->create([
         'agency_id' => $agency?->id,
         'role' => $role,
         'status' => 'active',
     ]);
+
+    if ($role === 'super_admin') {
+        $user->forceFill([
+            'two_factor_secret' => encrypt('test-secret'),
+            'two_factor_recovery_codes' => encrypt(json_encode(['recovery-code-1'])),
+            'two_factor_confirmed_at' => now(),
+        ])->save();
+    }
+
+    return $user;
 }
 
 function portalAuditResearch(Agency $agency, User $uploader, string $title = 'Portal Audit Research'): Research
@@ -83,6 +93,22 @@ test('admin dashboard never redirects super admins to agency dashboard', functio
     $this->actingAs($superAdmin)
         ->get('/admin/dashboard')
         ->assertOk();
+});
+
+test('admin web routes require super admins to enable two factor authentication', function () {
+    $superAdmin = User::factory()->create([
+        'role' => 'super_admin',
+        'status' => 'active',
+    ]);
+
+    $this->actingAs($superAdmin)
+        ->get('/admin/dashboard')
+        ->assertRedirect(route('two-factor.show', absolute: false));
+
+    $this->actingAs($superAdmin)
+        ->getJson('/api/admin/dashboard')
+        ->assertForbidden()
+        ->assertJsonPath('errors.redirect', route('two-factor.show', absolute: false));
 });
 
 test('expected web route aliases render existing portal pages', function () {
@@ -170,7 +196,9 @@ test('portal login endpoints redirect by role and reject wrong portal users', fu
     $this->post('/admin/login', [
         'email' => $superAdmin->email,
         'password' => 'password',
-    ])->assertRedirect('/admin/dashboard');
+    ])->assertRedirect('/two-factor-challenge');
+
+    $this->assertGuest();
 
     $this->post('/logout');
 
@@ -228,5 +256,7 @@ test('default login remains an agency login entry point with role based redirect
     $this->post('/login', [
         'email' => $superAdmin->email,
         'password' => 'password',
-    ])->assertRedirect('/admin/dashboard');
+    ])->assertRedirect('/two-factor-challenge');
+
+    $this->assertGuest();
 });
