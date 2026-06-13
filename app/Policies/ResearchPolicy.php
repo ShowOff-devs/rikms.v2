@@ -34,6 +34,13 @@ class ResearchPolicy
             && $research->archived_at === null;
     }
 
+    public function createRevision(User $user, Research $research): bool
+    {
+        return $this->ownsAgencyResearch($user, $research)
+            && $research->status === Statuses::RESEARCH_PUBLISHED
+            && $research->archived_at === null;
+    }
+
     public function moderate(User $user, Research $research): bool
     {
         return $user->isSuperAdmin() && $research->archived_at === null;

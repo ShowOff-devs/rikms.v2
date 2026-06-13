@@ -24,10 +24,21 @@ class StoreResearchFileRequest extends FormRequest
         return [
             // TODO Phase 9: Add production upload hardening: malware scan/quarantine, MIME sniffing beyond extension,
             // configurable size limits, checksum verification, and audited rejection/failure events.
-            'file' => ['required', 'file', 'mimes:pdf', 'mimetypes:application/pdf', 'max:20480'],
+            'file' => ['required', 'file', 'mimes:pdf', 'mimetypes:application/pdf', 'max:10240'],
             'file_type' => ['nullable', 'string', 'max:80'],
             'visibility' => ['nullable', Rule::in(['private', 'agency', 'public'])],
             'access_level' => ['nullable', Rule::in(['public', 'restricted', 'private', 'embargoed'])],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'file.max' => 'The PDF must not be larger than 10 MB.',
+            'file.uploaded' => 'The PDF could not be uploaded. Check that PHP upload_max_filesize is at least 10M and post_max_size is at least 12M, then restart the web server.',
         ];
     }
 }

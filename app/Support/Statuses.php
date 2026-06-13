@@ -4,6 +4,12 @@ namespace App\Support;
 
 class Statuses
 {
+    public const USER_ACTIVE = 'active';
+
+    public const USER_INACTIVE = 'inactive';
+
+    public const USER_ARCHIVED = 'archived';
+
     public const RESEARCH_DRAFT = 'draft';
 
     public const RESEARCH_SUBMITTED = 'submitted';
@@ -14,6 +20,8 @@ class Statuses
 
     public const RESEARCH_ARCHIVED = 'archived';
 
+    public const RESEARCH_SUPERSEDED = 'superseded';
+
     public const ACCESS_REQUEST_PENDING = 'pending';
 
     public const NOTIFICATION_UNREAD = 'unread';
@@ -21,10 +29,10 @@ class Statuses
     public const NOTIFICATION_READ = 'read';
 
     public const USERS = [
-        'active',
-        'inactive',
+        self::USER_ACTIVE,
+        self::USER_INACTIVE,
         'suspended',
-        'archived',
+        self::USER_ARCHIVED,
     ];
 
     public const AGENCIES = [
@@ -42,6 +50,7 @@ class Statuses
         'rejected',
         'published',
         'archived',
+        'superseded',
     ];
 
     public const RESEARCH_APPROVALS = [

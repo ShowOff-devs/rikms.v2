@@ -81,7 +81,7 @@ class AgencyReadController extends Controller
     public function research(Request $request): JsonResponse
     {
         $query = $this->agencyResearchQuery($request)
-            ->with(['agency', 'uploader'])
+            ->with(['agency', 'uploader', 'files'])
             ->when($request->filled('status'), fn (Builder $query) => $query->where('status', $request->string('status')))
             ->when($request->filled('publication_year'), fn (Builder $query) => $query->where('publication_year', $request->integer('publication_year')))
             ->when($request->filled('access_level'), fn (Builder $query) => $query->where('access_level', $request->string('access_level')))
@@ -171,7 +171,9 @@ class AgencyReadController extends Controller
 
     private function agencyResearchQuery(Request $request): Builder
     {
-        $query = Research::query()->whereNull('archived_at');
+        $query = Research::query()
+            ->whereNull('archived_at')
+            ->where('status', '!=', Statuses::RESEARCH_SUPERSEDED);
 
         if ($request->user()->isSuperAdmin()) {
             return $query;

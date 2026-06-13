@@ -9,6 +9,7 @@ use App\Support\AuditLogger;
 use App\Support\Statuses;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rules\Password;
@@ -124,18 +125,57 @@ class AgencyProfileSettingsController extends Controller
     public function updateSecurity(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'twoFactorEnabled' => ['required', 'boolean'],
             'sessionTimeout' => ['nullable', 'integer', 'min:5', 'max:240'],
         ]);
 
+        $oldValues = $request->user()->only(['security_preferences']);
+
         $request->user()->update([
             'security_preferences' => [
-                'twoFactorEnabled' => $validated['twoFactorEnabled'],
                 'sessionTimeout' => $validated['sessionTimeout'] ?? 30,
             ],
         ]);
 
+        AuditLogger::record(
+            $request,
+            'agency.security_settings.updated',
+            $request->user(),
+            $oldValues,
+            $request->user()->fresh()->only(['security_preferences']),
+        );
+
         return ApiResponse::success('Agency security settings updated.', $this->settingsPayload($request)['security']);
+    }
+
+    public function revokeSession(Request $request, string $sessionId): JsonResponse
+    {
+        if (config('session.driver') !== 'database') {
+            return ApiResponse::error('Session revocation requires the database session driver.', [], 409);
+        }
+
+        if ($request->hasSession() && $sessionId === $request->session()->getId()) {
+            return ApiResponse::error('The current session cannot be revoked from this panel.', [
+                'session' => ['Sign out to end your current session.'],
+            ], 422);
+        }
+
+        $deleted = DB::table(config('session.table', 'sessions'))
+            ->where('id', $sessionId)
+            ->where('user_id', $request->user()->id)
+            ->delete();
+
+        if (! $deleted) {
+            return ApiResponse::error('Session was not found.', [], 404);
+        }
+
+        AuditLogger::record($request, 'agency_session.revoked', null, null, [
+            'session_id' => $sessionId,
+        ]);
+
+        return ApiResponse::success('Agency session revoked.', [
+            'id' => $sessionId,
+            'revokedAt' => now()->toISOString(),
+        ]);
     }
 
     public function uploadProfilePhoto(Request $request): JsonResponse
@@ -173,7 +213,24 @@ class AgencyProfileSettingsController extends Controller
 
     public function requestDeactivation(Request $request): JsonResponse
     {
+        if ($request->user()->deactivation_requested_at !== null) {
+            return ApiResponse::success('Agency account deactivation request is already pending.', [
+                'status' => 'submitted',
+                'requestedAt' => $request->user()->deactivation_requested_at?->toISOString(),
+            ]);
+        }
+
+        $oldValues = $request->user()->only(['deactivation_requested_at']);
+
         $request->user()->update(['deactivation_requested_at' => now()]);
+
+        AuditLogger::record(
+            $request,
+            'agency.deactivation_requested',
+            $request->user(),
+            $oldValues,
+            $request->user()->fresh()->only(['deactivation_requested_at']),
+        );
 
         return ApiResponse::success('Agency account deactivation requested.', [
             'status' => 'submitted',
@@ -216,9 +273,12 @@ class AgencyProfileSettingsController extends Controller
             ],
             'notifications' => $notifications,
             'security' => [
-                'twoFactorEnabled' => (bool) $security['twoFactorEnabled'],
+                'twoFactorEnabled' => $user->hasEnabledTwoFactorAuthentication(),
                 'sessionTimeout' => (int) $security['sessionTimeout'],
+                'sessionManagementAvailable' => config('session.driver') === 'database',
                 'activeSessions' => $this->activeSessions($request),
+                'deactivationRequested' => $user->deactivation_requested_at !== null,
+                'deactivationRequestedAt' => $user->deactivation_requested_at?->toISOString(),
             ],
         ];
     }
@@ -245,15 +305,23 @@ class AgencyProfileSettingsController extends Controller
                 ->get()
             : collect();
 
-        return $sessions->map(fn ($session): array => [
-            'id' => (string) $session->id,
-            'device' => 'Browser session',
-            'browser' => $this->browserFromUserAgent((string) $session->user_agent),
-            'operatingSystem' => $this->operatingSystemFromUserAgent((string) $session->user_agent),
-            'location' => $session->ip_address ?: 'Unknown location',
-            'isCurrent' => (string) $session->id === $request->session()->getId(),
-            'status' => 'active',
-        ])->values()->all();
+        $timeout = (int) (($request->user()->security_preferences['sessionTimeout'] ?? null) ?: config('session.lifetime', 120));
+
+        $currentSessionId = $request->hasSession() ? $request->session()->getId() : null;
+
+        return $sessions->map(function ($session) use ($currentSessionId, $timeout): array {
+            $lastActivity = now()->setTimestamp((int) $session->last_activity);
+
+            return [
+                'id' => (string) $session->id,
+                'device' => 'Browser session',
+                'browser' => $this->browserFromUserAgent((string) $session->user_agent),
+                'operatingSystem' => $this->operatingSystemFromUserAgent((string) $session->user_agent),
+                'location' => $session->ip_address ?: 'Unknown location',
+                'isCurrent' => $currentSessionId !== null && (string) $session->id === $currentSessionId,
+                'status' => $lastActivity->diffInMinutes(now()) > $timeout ? 'expired' : 'active',
+            ];
+        })->values()->all();
     }
 
     private function defaultNotificationPreferences(): array
@@ -263,15 +331,14 @@ class AgencyProfileSettingsController extends Controller
             'notifyRequestApprovalsDenials' => true,
             'notifyNewResearchUploads' => true,
             'browserNotifications' => false,
-            'weeklyDigest' => true,
-            'monthlyAnalyticsReport' => true,
+            'weeklyDigest' => false,
+            'monthlyAnalyticsReport' => false,
         ];
     }
 
     private function defaultSecurityPreferences($user): array
     {
         return [
-            'twoFactorEnabled' => $user->two_factor_confirmed_at !== null,
             'sessionTimeout' => 30,
         ];
     }

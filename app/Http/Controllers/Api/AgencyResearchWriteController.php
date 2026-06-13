@@ -13,17 +13,22 @@ use App\Http\Resources\ResearchResource;
 use App\Jobs\ClassifyResearchSdgJob;
 use App\Jobs\ExtractResearchMetadataJob;
 use App\Jobs\ParsePdfDocumentJob;
+use App\Models\Notification;
 use App\Models\Research;
 use App\Models\ResearchFile;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
+use App\Support\PublicMetadata;
+use App\Support\ResearchSlugger;
 use App\Support\Statuses;
+use App\Support\UserNotificationPreferences;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AgencyResearchWriteController extends Controller
 {
@@ -35,7 +40,7 @@ class AgencyResearchWriteController extends Controller
             $research = Research::create(array_merge(
                 $this->researchPayload($request->validated()),
                 [
-                    'slug' => $this->uniqueSlug($request->string('title')->toString()),
+                    'slug' => ResearchSlugger::generateUniqueResearchSlug($request->string('title')->toString()),
                     'agency_id' => $user->agency_id,
                     'uploaded_by' => $user->id,
                     'status' => Statuses::RESEARCH_DRAFT,
@@ -55,6 +60,8 @@ class AgencyResearchWriteController extends Controller
             return $research;
         });
 
+        $this->notifyAgencyResearchCreated($research);
+
         return ApiResponse::success(
             'Agency research draft created.',
             (new ResearchResource($research->load(['agency', 'uploader'])))->resolve($request),
@@ -73,13 +80,21 @@ class AgencyResearchWriteController extends Controller
             'category',
             'sdgs',
             'keywords',
+            'public_metadata',
+            'public_metadata_fields',
             'access_level',
             'embargo_until',
             'external_url',
         ]);
 
         DB::transaction(function () use ($request, $research, $oldValues): void {
-            $research->update($this->researchPayload($request->validated()));
+            $payload = $this->researchPayload($request->validated());
+
+            if (! $research->slug && ! empty($payload['title'])) {
+                $payload['slug'] = ResearchSlugger::generateUniqueResearchSlug((string) $payload['title'], (int) $research->id);
+            }
+
+            $research->update($payload);
 
             AuditLogger::record(
                 $request,
@@ -119,6 +134,72 @@ class AgencyResearchWriteController extends Controller
         return ApiResponse::success(
             'Agency research submitted for moderation.',
             (new ResearchResource($research->refresh()->load(['agency', 'uploader'])))->resolve($request),
+        );
+    }
+
+    public function createRevision(Request $request, Research $research): JsonResponse
+    {
+        if (! $request->user()?->can('createRevision', $research)) {
+            return ApiResponse::error('Only published research from your agency can be revised.', [], 403);
+        }
+
+        $existingRevision = Research::query()
+            ->where('revision_parent_id', $research->id)
+            ->whereIn('status', [
+                Statuses::RESEARCH_DRAFT,
+                Statuses::RESEARCH_SUBMITTED,
+                Statuses::RESEARCH_UNDER_REVIEW,
+                'approved',
+                'rejected',
+            ])
+            ->whereNull('archived_at')
+            ->latest()
+            ->first();
+
+        if ($existingRevision) {
+            return ApiResponse::success(
+                'Draft revision already exists.',
+                (new ResearchResource($existingRevision->load(['agency', 'uploader'])))->resolve($request),
+            );
+        }
+
+        $revision = DB::transaction(function () use ($request, $research): Research {
+            $revision = Research::create([
+                'slug' => ResearchSlugger::generateUniqueResearchSlug($research->title.' revision '.((int) $research->revision_number + 1)),
+                'agency_id' => $research->agency_id,
+                'uploaded_by' => $request->user()->id,
+                'revision_parent_id' => $research->id,
+                'revision_number' => (int) $research->revision_number + 1,
+                'title' => $research->title,
+                'abstract' => $research->abstract,
+                'authors' => $research->authors ?? [],
+                'publication_year' => $research->publication_year,
+                'category' => $research->category,
+                'sdgs' => $research->sdgs ?? [],
+                'keywords' => $research->keywords ?? [],
+                'public_metadata' => $research->public_metadata ?? [],
+                'public_metadata_fields' => $research->public_metadata_fields ?? [],
+                'status' => Statuses::RESEARCH_DRAFT,
+                'access_level' => $research->access_level,
+                'downloads' => 0,
+                'embargo_until' => $research->embargo_until,
+                'external_url' => $research->external_url,
+            ]);
+
+            AuditLogger::record($request, 'research.revision_created', $revision, null, [
+                'source_research_id' => $research->id,
+                'revision_number' => $revision->revision_number,
+                'status' => $revision->status,
+            ]);
+
+            return $revision;
+        });
+
+        return ApiResponse::success(
+            'Draft revision created.',
+            (new ResearchResource($revision->load(['agency', 'uploader'])))->resolve($request),
+            [],
+            201,
         );
     }
 
@@ -196,6 +277,27 @@ class AgencyResearchWriteController extends Controller
         );
     }
 
+    public function downloadFile(Request $request, Research $research, ResearchFile $file): JsonResponse|StreamedResponse
+    {
+        if ((int) $file->research_id !== (int) $research->id) {
+            return ApiResponse::error('The file does not belong to this research record.', [], 404);
+        }
+
+        if (! $this->canAccessAgencyResearch($request, $research)) {
+            return ApiResponse::error('This research record is outside your agency scope.', [], 403);
+        }
+
+        if ($file->archived_at !== null || $file->status === 'deleted') {
+            return ApiResponse::error('This research file is not available for download.', [], 404);
+        }
+
+        if (! Storage::disk($file->disk)->exists($file->path)) {
+            return ApiResponse::error('The stored research file could not be found.', [], 404);
+        }
+
+        return Storage::disk($file->disk)->download($file->path, $file->original_name);
+    }
+
     public function destroyFile(DeleteResearchFileRequest $request, Research $research, ResearchFile $file): JsonResponse
     {
         if ((int) $file->research_id !== (int) $research->id) {
@@ -239,6 +341,16 @@ class AgencyResearchWriteController extends Controller
 
         unset($validated['sdg_tags']);
 
+        if (array_key_exists('public_metadata', $validated)) {
+            $validated['public_metadata'] = PublicMetadata::normalizeMetadataEntries($validated['public_metadata']);
+        }
+
+        if (array_key_exists('public_metadata_fields', $validated)) {
+            $validated['public_metadata_fields'] = PublicMetadata::normalizeFieldList($validated['public_metadata_fields']);
+        } elseif (array_key_exists('public_metadata', $validated)) {
+            $validated['public_metadata_fields'] = PublicMetadata::fieldListFromMetadata($validated['public_metadata']);
+        }
+
         return collect($validated)->only([
             'title',
             'abstract',
@@ -247,22 +359,43 @@ class AgencyResearchWriteController extends Controller
             'category',
             'sdgs',
             'keywords',
+            'public_metadata',
+            'public_metadata_fields',
             'access_level',
             'embargo_until',
             'external_url',
         ])->all();
     }
 
-    private function uniqueSlug(string $title): string
+    private function canAccessAgencyResearch(Request $request, Research $research): bool
     {
-        $baseSlug = Str::slug($title) ?: 'research';
-        $slug = $baseSlug;
-        $suffix = 1;
+        return $request->user()?->isSuperAdmin() === true
+            || (
+                $request->user()?->agency_id !== null
+                && (int) $request->user()->agency_id === (int) $research->agency_id
+            );
+    }
 
-        while (Research::query()->where('slug', $slug)->exists()) {
-            $slug = $baseSlug.'-'.$suffix++;
-        }
-
-        return $slug;
+    private function notifyAgencyResearchCreated(Research $research): void
+    {
+        UserNotificationPreferences::agencyAdmins(
+            (int) $research->agency_id,
+            'notifyNewResearchUploads',
+        )->each(function ($user) use ($research): void {
+            Notification::create([
+                'user_id' => $user->id,
+                'agency_id' => $research->agency_id,
+                'type' => 'research.created',
+                'title' => 'New research record',
+                'message' => 'A new research record was created in your agency repository.',
+                'data' => [
+                    'research_id' => $research->id,
+                    'status' => $research->status,
+                ],
+                'action_url' => '/agency/research/'.$research->id,
+                'priority' => 'normal',
+                'status' => Statuses::NOTIFICATION_UNREAD,
+            ]);
+        });
     }
 }

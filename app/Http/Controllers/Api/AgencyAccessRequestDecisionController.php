@@ -11,6 +11,7 @@ use App\Models\Notification;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use App\Support\Statuses;
+use App\Support\UserNotificationPreferences;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -55,6 +56,30 @@ class AgencyAccessRequestDecisionController extends Controller
                 'priority' => 'normal',
                 'status' => Statuses::NOTIFICATION_UNREAD,
             ]);
+
+            UserNotificationPreferences::agencyAdmins(
+                (int) $accessRequest->agency_id,
+                'notifyRequestApprovalsDenials',
+            )->each(function ($user) use ($accessRequest, $status): void {
+                Notification::create([
+                    'user_id' => $user->id,
+                    'agency_id' => $accessRequest->agency_id,
+                    'type' => 'agency_access_request.'.$status,
+                    'title' => $status === 'approved'
+                        ? 'Access Request Approved'
+                        : 'Access Request Denied',
+                    'message' => $status === 'approved'
+                        ? 'An agency access request was approved.'
+                        : 'An agency access request was denied.',
+                    'data' => [
+                        'access_request_id' => $accessRequest->id,
+                        'research_id' => $accessRequest->research_id,
+                    ],
+                    'action_url' => '/agency/access-requests',
+                    'priority' => 'normal',
+                    'status' => Statuses::NOTIFICATION_UNREAD,
+                ]);
+            });
 
             AuditLogger::record(
                 $request,

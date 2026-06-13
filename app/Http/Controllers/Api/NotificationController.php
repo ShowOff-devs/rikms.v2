@@ -22,6 +22,15 @@ class NotificationController extends Controller
         return $this->markNotificationRead($request, $notification);
     }
 
+    public function agencyUnread(Request $request, Notification $notification): JsonResponse
+    {
+        if (! $this->canManageAgencyNotification($request, $notification)) {
+            return ApiResponse::error('This notification is outside your agency scope.', [], 403);
+        }
+
+        return $this->markNotificationUnread($request, $notification);
+    }
+
     public function agencyReadAll(Request $request): JsonResponse
     {
         $updated = $this->agencyNotificationQuery($request)
@@ -78,6 +87,22 @@ class NotificationController extends Controller
 
         return ApiResponse::success(
             'Notification marked as read.',
+            [
+                'notification' => (new NotificationResource($notification->refresh()))->resolve($request),
+                'unread_count' => $this->unreadCountForRequest($request),
+            ],
+        );
+    }
+
+    private function markNotificationUnread(Request $request, Notification $notification): JsonResponse
+    {
+        $notification->update([
+            'read_at' => null,
+            'status' => Statuses::NOTIFICATION_UNREAD,
+        ]);
+
+        return ApiResponse::success(
+            'Notification marked as unread.',
             [
                 'notification' => (new NotificationResource($notification->refresh()))->resolve($request),
                 'unread_count' => $this->unreadCountForRequest($request),

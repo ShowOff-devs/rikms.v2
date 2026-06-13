@@ -149,6 +149,34 @@ class AgencyArchiveController extends Controller
         );
     }
 
+    public function destroyResearch(Request $request, Research $research): JsonResponse
+    {
+        if (! $this->canManage($request, $research)) {
+            return ApiResponse::error('This research record is outside your agency scope.', [], 403);
+        }
+
+        if (! $research->archived_at) {
+            return ApiResponse::error('Only archived research records can be deleted from the archive.', [], 422);
+        }
+
+        $oldValues = $research->only(['status', 'archived_at', 'archived_by', 'archive_reason', 'deleted_at']);
+        $responseData = (new ResearchResource($research->load(['agency', 'uploader', 'archivedBy'])))->resolve($request);
+
+        DB::transaction(function () use ($request, $research, $oldValues): void {
+            $research->delete();
+
+            AuditLogger::record(
+                $request,
+                'agency.research.deleted',
+                $research,
+                $oldValues,
+                $research->fresh()?->only(['status', 'archived_at', 'archived_by', 'archive_reason', 'deleted_at']) ?? ['deleted_at' => now()->toISOString()],
+            );
+        });
+
+        return ApiResponse::success('Archived research deleted.', $responseData);
+    }
+
     private function canManage(Request $request, Research $research): bool
     {
         return (int) $research->agency_id === (int) $request->user()->agency_id;
