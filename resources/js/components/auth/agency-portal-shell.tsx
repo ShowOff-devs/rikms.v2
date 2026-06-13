@@ -1,5 +1,5 @@
-import { BookOpen } from 'lucide-react';
 import type { ReactNode } from 'react';
+import AppLogoIcon from '@/components/app-logo-icon';
 import PortalFooter from '@/components/layout/portal-footer';
 import PortalNavbar from '@/components/layout/portal-navbar';
 
@@ -28,11 +28,8 @@ export default function AgencyPortalShell({
                         <div className="absolute top-[140px] right-[-64px] size-32 rounded-full border border-[rgba(255,255,255,0.1)] sm:size-40 lg:top-[208px] lg:size-[192px]" />
 
                         <div className="mx-auto flex h-full max-w-[512px] flex-col items-center justify-center px-8 py-16 text-center lg:px-0">
-                            <div className="mb-6 flex size-16 items-center justify-center rounded-2xl bg-[rgba(255,255,255,0.15)]">
-                                <BookOpen
-                                    className="size-9 text-white"
-                                    strokeWidth={1.8}
-                                />
+                            <div className="mb-6 flex size-20 items-center justify-center rounded-2xl bg-white p-2 shadow-sm">
+                                <AppLogoIcon className="size-16" />
                             </div>
                             <h1 className="max-w-[391px] text-[32px] leading-[40px] font-bold text-white">
                                 {heroTitle}

@@ -8,6 +8,7 @@ import { initializeTheme } from '@/hooks/use-appearance';
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
 createInertiaApp({
+    id: 'app',
     title: (title) => (title ? `${title} - ${appName}` : appName),
     resolve: (name) =>
         resolvePageComponent(
@@ -15,6 +16,14 @@ createInertiaApp({
             import.meta.glob('./pages/**/*.tsx'),
         ),
     setup({ el, App, props }) {
+        if (!(el instanceof HTMLElement)) {
+            console.error(
+                'Unable to mount React app: #app root element was not found.',
+            );
+
+            return;
+        }
+
         const root = createRoot(el);
 
         root.render(

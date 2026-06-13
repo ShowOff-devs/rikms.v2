@@ -17,7 +17,10 @@ import {
     getResearchRecord,
     submitPublicAccessRequest,
 } from '@/lib/research/research-service';
-import type { ResearchRecord } from '@/types/research';
+import type {
+    PublicResearchMetadataField,
+    ResearchRecord,
+} from '@/types/research';
 
 type ResearchDetailPageProps = {
     researchId?: string;
@@ -37,6 +40,14 @@ const accessLabels = {
     embargo: 'Embargoed',
     external: 'External Source',
 } as const;
+
+const primaryMetadataKeys = new Set(['title', 'abstract', 'authors']);
+
+const optionalText = (value: string) => {
+    const trimmed = value.trim();
+
+    return trimmed ? trimmed : undefined;
+};
 
 export default function ResearchDetailPage({
     researchId: providedResearchId,
@@ -84,6 +95,11 @@ export default function ResearchDetailPage({
     const canRequestAccess =
         research?.accessLevel === 'restricted' ||
         research?.accessLevel === 'embargo';
+    const supplementalPublicMetadata =
+        research?.publicMetadata?.filter(
+            (field) =>
+                !primaryMetadataKeys.has(field.key) && field.value.trim(),
+        ) ?? [];
 
     const handleRequestSubmit = async (
         event: React.FormEvent<HTMLFormElement>,
@@ -94,12 +110,15 @@ export default function ResearchDetailPage({
         setFieldErrors({});
 
         try {
+            const purpose = form.purpose.trim();
+
             await submitPublicAccessRequest(researchId, {
-                requester_name: form.name,
-                requester_email: form.email,
-                requester_affiliation: form.affiliation || undefined,
-                requester_purpose: form.purpose,
-                message: form.message || undefined,
+                requester_name: form.name.trim(),
+                requester_email: form.email.trim(),
+                requester_affiliation: optionalText(form.affiliation),
+                requester_purpose: purpose,
+                intended_use: purpose,
+                message: optionalText(form.message),
             });
             setRequestSubmitted(true);
         } catch (error) {
@@ -173,9 +192,11 @@ export default function ResearchDetailPage({
                             <h1 className="mt-3 max-w-[900px] text-[28px] leading-9 font-bold text-[#1e3a8a]">
                                 {research.title}
                             </h1>
-                            <p className="mt-2 text-sm leading-5 text-[#6b7280]">
-                                {research.authors.join(', ')}
-                            </p>
+                            {research.authors.length > 0 ? (
+                                <p className="mt-2 text-sm leading-5 text-[#6b7280]">
+                                    {research.authors.join(', ')}
+                                </p>
+                            ) : null}
 
                             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm leading-5 text-[#6b7280]">
                                 <span className="inline-flex items-center gap-1.5">
@@ -195,14 +216,32 @@ export default function ResearchDetailPage({
                                 </span>
                             </div>
 
-                            <section className="mt-6 border-t border-[#f3f4f6] pt-6">
-                                <h2 className="text-base leading-6 font-semibold text-[#1e3a8a]">
-                                    Abstract
-                                </h2>
-                                <p className="mt-2 max-w-[900px] text-sm leading-6 text-[#374151]">
-                                    {research.abstract}
-                                </p>
-                            </section>
+                            {research.abstract.trim() ? (
+                                <section className="mt-6 border-t border-[#f3f4f6] pt-6">
+                                    <h2 className="text-base leading-6 font-semibold text-[#1e3a8a]">
+                                        Abstract
+                                    </h2>
+                                    <PublicLongText value={research.abstract} />
+                                </section>
+                            ) : null}
+
+                            {supplementalPublicMetadata.length > 0 ? (
+                                <section className="mt-6 border-t border-[#f3f4f6] pt-6">
+                                    <h2 className="text-base leading-6 font-semibold text-[#1e3a8a]">
+                                        Public Metadata
+                                    </h2>
+                                    <div className="mt-4 space-y-5">
+                                        {supplementalPublicMetadata.map(
+                                            (field) => (
+                                                <PublicMetadataItem
+                                                    key={field.key}
+                                                    field={field}
+                                                />
+                                            ),
+                                        )}
+                                    </div>
+                                </section>
+                            ) : null}
 
                             <section className="mt-6 border-t border-[#f3f4f6] pt-6">
                                 <h2 className="text-base leading-6 font-semibold text-[#1e3a8a]">
@@ -439,12 +478,72 @@ export default function ResearchDetailPage({
     );
 }
 
+function PublicLongText({ value }: { value: string }) {
+    const paragraphs = value
+        .trim()
+        .split(/\n+/u)
+        .map((paragraph) => paragraph.trim())
+        .filter(Boolean);
+
+    return (
+        <div className="mt-2 max-w-[900px] space-y-3 text-sm leading-6 text-[#374151]">
+            {paragraphs.map((paragraph, index) => (
+                <p
+                    key={`${index}-${paragraph.slice(0, 24)}`}
+                    className="text-justify"
+                >
+                    {paragraph}
+                </p>
+            ))}
+        </div>
+    );
+}
+
+function PublicMetadataItem({ field }: { field: PublicResearchMetadataField }) {
+    const value = field.value.trim();
+
+    if (field.key === 'keywords') {
+        const keywords = value
+            .split(/[,;]+/u)
+            .map((keyword) => keyword.trim())
+            .filter(Boolean);
+
+        return (
+            <div>
+                <p className="text-xs font-semibold tracking-wide text-[#6b7280] uppercase">
+                    {field.label}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                    {keywords.map((keyword) => (
+                        <span
+                            key={keyword}
+                            className="rounded-full bg-[#eff6ff] px-2.5 py-1 text-xs font-medium text-[#1e3a8a]"
+                        >
+                            {keyword}
+                        </span>
+                    ))}
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div>
+            <p className="text-xs font-semibold tracking-wide text-[#6b7280] uppercase">
+                {field.label}
+            </p>
+            <PublicLongText value={value} />
+        </div>
+    );
+}
+
 function flattenErrors(errors: ApiError['errors']) {
     const fieldMap: Record<string, string> = {
         requester_name: 'name',
         requester_email: 'email',
         requester_affiliation: 'affiliation',
         requester_purpose: 'purpose',
+        intended_use: 'purpose',
     };
 
     return Object.entries(errors).reduce<Record<string, string>>(

@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { BookOpen } from 'lucide-react';
+import AppLogoIcon from '@/components/app-logo-icon';
 
 export default function PortalFooter() {
     return (
@@ -8,11 +8,8 @@ export default function PortalFooter() {
                 <div className="grid gap-10 md:grid-cols-3">
                     <div>
                         <div className="flex items-center gap-2">
-                            <span className="flex size-8 items-center justify-center rounded-[10px] bg-[rgba(255,255,255,0.2)] text-white">
-                                <BookOpen
-                                    className="size-[15px]"
-                                    strokeWidth={2.2}
-                                />
+                            <span className="flex size-9 items-center justify-center rounded-[10px] bg-white p-1">
+                                <AppLogoIcon className="size-8" />
                             </span>
                             <span className="text-[17.6px] leading-[26.4px] font-bold">
                                 RIKMS

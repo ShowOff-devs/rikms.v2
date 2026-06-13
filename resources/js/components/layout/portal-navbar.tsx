@@ -1,6 +1,7 @@
 import { Link, router } from '@inertiajs/react';
-import { BookOpen, Menu, Search, X } from 'lucide-react';
+import { Menu, Search, X } from 'lucide-react';
 import { useState } from 'react';
+import AppLogoIcon from '@/components/app-logo-icon';
 import { cn } from '@/lib/utils';
 
 type NavKey = 'browse-research' | 'agencies' | 'about' | 'login';
@@ -35,7 +36,7 @@ export default function PortalNavbar({ activeNav }: PortalNavbarProps) {
 
         router.visit(
             trimmedQuery
-                ? `/browse-research?q=${encodeURIComponent(trimmedQuery)}`
+                ? `/browse-research?search=${encodeURIComponent(trimmedQuery)}`
                 : '/browse-research',
         );
     };
@@ -44,8 +45,8 @@ export default function PortalNavbar({ activeNav }: PortalNavbarProps) {
         <header className="sticky top-0 z-50 border-b border-[#e5e7eb] bg-white shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_0px_rgba(0,0,0,0.1)]">
             <div className="mx-auto flex min-h-16 w-full max-w-[1552px] flex-wrap items-center gap-3 px-4 py-3 lg:flex-nowrap lg:px-6 lg:py-0 xl:px-11 2xl:px-[176px]">
                 <Link href="/" className="flex items-center gap-2">
-                    <span className="flex size-8 items-center justify-center rounded-[10px] bg-[#1e3a8a] text-white">
-                        <BookOpen className="size-[15px]" strokeWidth={2.2} />
+                    <span className="flex size-9 items-center justify-center rounded-[10px] bg-white p-1 shadow-sm ring-1 ring-[#e5e7eb]">
+                        <AppLogoIcon className="size-8" />
                     </span>
                     <span className="text-[17.6px] leading-[26.4px] font-bold tracking-[-0.44px] text-[#1e3a8a]">
                         RIKMS

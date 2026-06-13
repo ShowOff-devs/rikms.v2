@@ -54,6 +54,7 @@ export default function AdminLoginPage() {
             const body = (await response.json().catch(() => ({}))) as {
                 message?: string;
                 redirect?: string;
+                two_factor?: boolean;
                 errors?: Record<string, string[]>;
             };
 
@@ -63,6 +64,50 @@ export default function AdminLoginPage() {
                         body.errors?.email?.[0] ??
                         'Unable to sign in with those credentials.',
                 );
+            }
+
+            if (body.two_factor) {
+                const authenticationCode = String(
+                    form.get('authentication_code') ?? '',
+                ).trim();
+
+                if (!authenticationCode) {
+                    throw new Error('Enter your Google Authenticator code.');
+                }
+
+                const twoFactorResponse = await fetch('/two-factor-challenge', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        Accept: 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        ...(token ? { 'X-CSRF-TOKEN': token } : {}),
+                    },
+                    body: JSON.stringify({
+                        code: authenticationCode,
+                    }),
+                });
+
+                const twoFactorBody = (await twoFactorResponse
+                    .json()
+                    .catch(() => ({}))) as {
+                    message?: string;
+                    redirect?: string;
+                    errors?: Record<string, string[]>;
+                };
+
+                if (!twoFactorResponse.ok) {
+                    throw new Error(
+                        twoFactorBody.message ??
+                            twoFactorBody.errors?.code?.[0] ??
+                            'Invalid authentication code.',
+                    );
+                }
+
+                router.visit(twoFactorBody.redirect ?? '/admin/dashboard');
+
+                return;
             }
 
             router.visit(body.redirect ?? '/admin/dashboard');

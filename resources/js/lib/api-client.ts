@@ -49,6 +49,40 @@ async function parsePayload(response: Response) {
     }
 }
 
+function firstError(errors: ApiErrorPayload['errors'] | undefined) {
+    if (!errors) {
+        return null;
+    }
+
+    for (const value of Object.values(errors)) {
+        if (Array.isArray(value) && value[0]) {
+            return value[0];
+        }
+
+        if (typeof value === 'string' && value) {
+            return value;
+        }
+    }
+
+    return null;
+}
+
+function fallbackErrorMessage(status: number) {
+    if (status === 419) {
+        return 'Your session expired. Refresh the page and try again.';
+    }
+
+    if (status === 413) {
+        return 'The selected file is too large for the server upload limit.';
+    }
+
+    if (status === 422) {
+        return 'Please check the submitted fields and try again.';
+    }
+
+    return 'Unable to complete API request.';
+}
+
 function redirectForUnauthorized(url: string) {
     if (typeof window === 'undefined') {
         return;
@@ -99,7 +133,9 @@ export async function fetchApi<TData, TMeta = Record<string, unknown>>(
         }
 
         throw new ApiError(
-            payload.message ?? 'Unable to complete API request.',
+            firstError(payload.errors) ??
+                payload.message ??
+                fallbackErrorMessage(response.status),
             response.status,
             payload.errors ?? {},
         );
@@ -109,5 +145,9 @@ export async function fetchApi<TData, TMeta = Record<string, unknown>>(
 }
 
 export function apiMessage(error: unknown, fallback: string) {
+    if (error instanceof ApiError) {
+        return firstError(error.errors) ?? error.message;
+    }
+
     return error instanceof Error ? error.message : fallback;
 }

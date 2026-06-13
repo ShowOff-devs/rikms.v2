@@ -14,10 +14,19 @@ export type ResearchTag = {
     type: 'sdg' | 'category';
 };
 
+export type PublicResearchMetadataField = {
+    key: string;
+    label: string;
+    value: string;
+};
+
 export type ResearchRecord = {
-    id: string;
+    id: number;
+    slug?: string | null;
+    public_identifier: string;
     title: string;
     abstract: string;
+    methodology: string;
     authors: string[];
     agency: string;
     publicationYear: number;
@@ -31,6 +40,10 @@ export type ResearchRecord = {
     downloads: number;
     updatedAt: string;
     keywords: string[];
+    publicMetadata: PublicResearchMetadataField[];
+    publicMetadataFields: string[];
+    public_metadata?: PublicResearchMetadataField[];
+    public_metadata_fields?: string[];
 };
 
 export type ResearchFilters = {

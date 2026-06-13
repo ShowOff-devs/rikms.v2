@@ -44,7 +44,7 @@
         @inertiaHead
     </head>
     <body class="font-sans antialiased">
-        @inertia
+        @inertia('app')
         @vite(['resources/js/app.tsx'])
     </body>
 </html>

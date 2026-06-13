@@ -1,5 +1,6 @@
-import { BookOpen, LockKeyhole } from 'lucide-react';
+import { LockKeyhole } from 'lucide-react';
 import type { ReactNode } from 'react';
+import AppLogoIcon from '@/components/app-logo-icon';
 
 type AdminAuthLayoutProps = {
     children: ReactNode;
@@ -23,8 +24,8 @@ export default function AdminAuthLayout({ children }: AdminAuthLayoutProps) {
                     <div className="absolute -right-28 -bottom-28 size-64 rounded-full border border-white/[0.05]" />
 
                     <div className="relative mx-auto flex w-full max-w-[512px] flex-col items-center justify-center px-6 py-12 text-center sm:px-8 lg:py-0">
-                        <div className="flex size-16 items-center justify-center rounded-[16px] border border-white/10 bg-white/10">
-                            <BookOpen className="size-8" aria-hidden="true" />
+                        <div className="flex size-20 items-center justify-center rounded-[16px] border border-white/10 bg-white p-2 shadow-sm">
+                            <AppLogoIcon className="size-16" />
                         </div>
 
                         <h1 className="mt-6 text-[32px] leading-[38px] font-bold tracking-normal">
