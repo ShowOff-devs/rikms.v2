@@ -132,15 +132,18 @@ const reportUploadedFileSchema = z.custom<File | null>(
 const reportDetailsSchema = z
     .object({
         uploadedFile: reportUploadedFileSchema,
+        researchId: z.string().optional(),
+        uploadedFileId: z.string().optional(),
         uploadedFileName: z.string().optional(),
         uploadedFileType: z.string().optional(),
         uploadedFileSize: z.number().optional(),
-        reportTitle: z.string().trim().min(1, 'Report title is required.'),
+        uploadError: z.string().nullable().optional(),
+        reportTitle: z.string(),
         reportDescription: z.string(),
         reportingQuarter: z.string().trim().min(1, 'Quarter is required.'),
         reportingYear: z.string().trim().min(1, 'Year is required.'),
         agency: z.string().trim().min(1),
-        uploadStatus: z.enum(['idle', 'uploaded', 'error']),
+        uploadStatus: z.enum(['idle', 'uploading', 'uploaded', 'error']),
     })
     .superRefine((value, context) => {
         if (!value.uploadedFileName || value.uploadStatus !== 'uploaded') {
@@ -205,6 +208,7 @@ export const reportStepSchemas = {
             aiGeneratedFields: z.array(reportMetadataKeySchema),
             userEditedFields: z.array(reportMetadataKeySchema),
             metadataValidated: z.boolean(),
+            analysisMessage: z.string().nullable().optional(),
         })
         .superRefine((value, context) => {
             if (

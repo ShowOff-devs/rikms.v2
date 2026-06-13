@@ -7,9 +7,9 @@ export type MetadataKey =
     | 'title'
     | 'abstract'
     | 'methodology'
-    | 'reviewOfRelatedLiterature'
-    | 'theoreticalFramework'
-    | 'resultsAndDiscussion'
+    | 'review_of_related_literature'
+    | 'theoretical_framework'
+    | 'results_and_discussion'
     | 'keywords'
     | 'authors';
 
@@ -53,6 +53,7 @@ export type AgencyUploadState = {
     aiHasRun: boolean;
     metadata: MetadataField[];
     aiSuggestedSdgs: number[];
+    aiSdgResultAvailable: boolean;
     selectedSdgs: number[];
     accessType: AccessType;
     embargoDate: string;

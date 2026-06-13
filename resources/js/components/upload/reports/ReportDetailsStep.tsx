@@ -1,8 +1,19 @@
 import { FileText, Zap } from 'lucide-react';
 import ReportStepLayout from '@/components/upload/reports/ReportStepLayout';
 import FileUploader from '@/components/upload/shared/FileUploader';
-import { mockUploadDocument } from '@/lib/upload/services/mock-report-upload-service';
-import type { ReportDetailsData } from '@/types/upload/reportWorkflow';
+import { apiMessage } from '@/lib/api-client';
+import {
+    REPORT_STEP_IDS,
+    buildReportWorkflowData,
+} from '@/lib/upload/report-workflow';
+import {
+    saveReportDraft,
+    uploadReportFile,
+} from '@/lib/upload/services/report-upload-service';
+import type {
+    ReportDetailsData,
+    ReportDocumentType,
+} from '@/types/upload/reportWorkflow';
 import type { UploadWizardStepProps } from '@/types/uploadWizard';
 
 const quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
@@ -10,23 +21,23 @@ const quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
 function getFileError(file: File) {
     const extension = file.name.split('.').pop()?.toLowerCase();
 
-    if (!extension || !['pdf', 'docx', 'doc'].includes(extension)) {
-        return 'Supported formats are PDF, DOCX, and DOC.';
+    if (!extension || extension !== 'pdf') {
+        return 'Upload a PDF report document.';
     }
 
-    if (file.size > 50 * 1024 * 1024) {
-        return 'Maximum file size is 50 MB.';
+    if (file.size > 10 * 1024 * 1024) {
+        return 'Maximum file size is 10 MB.';
     }
 
     return null;
 }
 
 export default function ReportDetailsStep(props: UploadWizardStepProps) {
-    const { stepData, setStepData, errors } = props;
+    const { config, state, stepData, setStepData, errors } = props;
     const data = stepData as ReportDetailsData;
     const fileError =
         data.uploadStatus === 'error'
-            ? 'Upload a PDF, DOCX, or DOC file up to 50 MB.'
+            ? (data.uploadError ?? 'Upload a PDF file up to 10 MB.')
             : errors.uploadedFile?.message?.toString();
 
     const updateDetails = (updates: Partial<ReportDetailsData>) => {
@@ -46,6 +57,7 @@ export default function ReportDetailsStep(props: UploadWizardStepProps) {
                 uploadedFileType: file.type,
                 uploadedFileSize: file.size,
                 uploadStatus: 'error',
+                uploadError: error,
             });
 
             return;
@@ -57,11 +69,46 @@ export default function ReportDetailsStep(props: UploadWizardStepProps) {
             uploadedFileName: file.name,
             uploadedFileType: file.type,
             uploadedFileSize: file.size,
-            uploadStatus: 'uploaded',
+            uploadStatus: 'uploading',
+            uploadError: null,
         };
 
         updateDetails(nextDetails);
-        await mockUploadDocument(nextDetails);
+
+        try {
+            const draft = await saveReportDraft(
+                buildReportWorkflowData(config.type as ReportDocumentType, {
+                    ...state.stepData,
+                    [REPORT_STEP_IDS.details]: nextDetails,
+                }),
+            );
+            const uploadedFile = await uploadReportFile(
+                draft.id,
+                file,
+                config.type as ReportDocumentType,
+            );
+
+            setStepData({
+                ...nextDetails,
+                researchId: String(draft.id),
+                uploadedFileId: uploadedFile.id,
+                uploadedFileName: uploadedFile.name,
+                uploadedFileType: uploadedFile.type,
+                uploadedFileSize: uploadedFile.size,
+                uploadStatus: 'uploaded',
+                uploadError: null,
+            } satisfies ReportDetailsData);
+        } catch (error) {
+            setStepData({
+                ...nextDetails,
+                uploadedFile: null,
+                uploadStatus: 'error',
+                uploadError: apiMessage(
+                    error,
+                    'The upload failed. Try selecting the file again.',
+                ),
+            } satisfies ReportDetailsData);
+        }
     };
 
     return (
@@ -73,9 +120,13 @@ export default function ReportDetailsStep(props: UploadWizardStepProps) {
         >
             <div className="space-y-5">
                 <FileUploader
-                    accept=".pdf,.doc,.docx,application/pdf"
+                    accept=".pdf,application/pdf"
                     fileName={data.uploadedFileName}
-                    helperText="PDF - DOCX - DOC - Max 50 MB"
+                    helperText={
+                        data.uploadStatus === 'uploading'
+                            ? 'Uploading to RIKMS...'
+                            : 'PDF - Max 10 MB'
+                    }
                     error={fileError}
                     onFileSelect={handleFile}
                 />

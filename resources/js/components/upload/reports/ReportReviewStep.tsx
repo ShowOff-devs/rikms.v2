@@ -1,3 +1,4 @@
+import { router } from '@inertiajs/react';
 import {
     ArrowLeft,
     CheckCircle2,
@@ -11,6 +12,7 @@ import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import ConfirmationModal from '@/components/upload/shared/ConfirmationModal';
 import ReportPreviewCard from '@/components/upload/shared/ReportPreviewCard';
+import { apiMessage } from '@/lib/api-client';
 import {
     REPORT_STEP_IDS,
     buildReportWorkflowData,
@@ -20,10 +22,9 @@ import {
     sdgOptions,
 } from '@/lib/upload/report-workflow';
 import {
-    createSubmittedReviewState,
-    mockSaveDraft,
-    mockSubmitDocument,
-} from '@/lib/upload/services/mock-report-upload-service';
+    saveReportDraft,
+    submitReport,
+} from '@/lib/upload/services/report-upload-service';
 import type {
     ReportDocumentType,
     ReportReviewData,
@@ -85,12 +86,12 @@ function SuccessState({ data }: { data: ReportWorkflowData }) {
                 </h1>
                 <p className="mt-2 text-sm leading-6 text-[#6a7282]">
                     {data.details.reportTitle || 'Your report'} has been queued
-                    for repository processing. Backend persistence will replace
-                    this mock submission later.
+                    for repository processing and moderation.
                 </p>
                 <Button
                     type="button"
                     className="mt-6 rounded-[14px] bg-[#1e3a8a] text-white hover:bg-[#172f70]"
+                    onClick={() => router.visit('/agency/research')}
                 >
                     <ExternalLink className="size-4" />
                     View Submission Queue
@@ -104,6 +105,7 @@ export default function ReportReviewStep(props: UploadWizardStepProps) {
     const { config, state, stepData, setStepData, goBack, goToStep } = props;
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
     const data = buildReportWorkflowData(
         config.type as ReportDocumentType,
         state.stepData,
@@ -130,25 +132,47 @@ export default function ReportReviewStep(props: UploadWizardStepProps) {
     };
 
     const saveDraft = async () => {
-        await mockSaveDraft(data);
-        updateReview({
-            draftStatus: 'saved',
-            submissionStatus: 'draft',
-        });
+        setSubmitError(null);
+
+        try {
+            await saveReportDraft(data);
+            updateReview({
+                draftStatus: 'saved',
+                submissionStatus: 'draft',
+            });
+        } catch (error) {
+            setSubmitError(apiMessage(error, 'Unable to save report draft.'));
+        }
     };
 
     const submit = async () => {
         setSubmitting(true);
+        setSubmitError(null);
         updateReview({
             reviewStatus: 'reviewed',
             submissionStatus: 'pending',
         });
 
-        const result = await mockSubmitDocument(data);
+        try {
+            const result = await submitReport(data);
 
-        setStepData(createSubmittedReviewState(result.submittedAt));
-        setSubmitting(false);
-        setConfirmOpen(false);
+            setStepData({
+                ...review,
+                reviewStatus: 'reviewed',
+                draftStatus: 'saved',
+                submissionStatus: 'submitted',
+                submittedAt: result.submitted_at ?? new Date().toISOString(),
+            } satisfies ReportReviewData);
+            setConfirmOpen(false);
+        } catch (error) {
+            setSubmitError(apiMessage(error, 'Unable to submit report.'));
+            updateReview({
+                reviewStatus: 'not-reviewed',
+                submissionStatus: 'draft',
+            });
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     if (review.submissionStatus === 'submitted') {
@@ -186,6 +210,12 @@ export default function ReportReviewStep(props: UploadWizardStepProps) {
                         </span>
                     </div>
                 </div>
+
+                {submitError ? (
+                    <div className="mb-5 rounded-[12px] border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-sm font-medium text-[#b91c1c]">
+                        {submitError}
+                    </div>
+                ) : null}
 
                 <div className="space-y-4">
                     <ReviewSection
@@ -343,7 +373,7 @@ export default function ReportReviewStep(props: UploadWizardStepProps) {
             <ConfirmationModal
                 open={confirmOpen}
                 title="Submit Report?"
-                description="This will submit the document and selected metadata to the RIKMS repository workflow. This is a frontend mock and no backend record will be created yet."
+                description="This will submit the document and selected metadata to the RIKMS repository workflow for moderation."
                 confirmLabel="Confirm Submission"
                 isSubmitting={submitting}
                 onOpenChange={setConfirmOpen}

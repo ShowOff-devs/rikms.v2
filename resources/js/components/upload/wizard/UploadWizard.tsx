@@ -7,9 +7,17 @@ import { useShallow } from 'zustand/react/shallow';
 import PlaceholderStep from '@/components/upload/steps/PlaceholderStep';
 import UploadNavigation from '@/components/upload/wizard/UploadNavigation';
 import UploadWizardLayout from '@/components/upload/wizard/UploadWizardLayout';
-import { saveUploadDraft } from '@/lib/upload/services/mock-upload-draft-service';
+import {
+    REPORT_STEP_IDS,
+    buildReportWorkflowData,
+} from '@/lib/upload/report-workflow';
+import { saveReportDraft } from '@/lib/upload/services/report-upload-service';
 import { createUploadWizardStore } from '@/stores/uploadWizardStore';
 import type { UploadWizardStoreApi } from '@/stores/uploadWizardStore';
+import type {
+    ReportDetailsData,
+    ReportDocumentType,
+} from '@/types/upload/reportWorkflow';
 import type {
     UploadStepId,
     UploadWizardConfig,
@@ -158,18 +166,34 @@ export default function UploadWizard({ config }: UploadWizardProps) {
         setDraftStatus('saving');
 
         try {
-            const result = await saveUploadDraft({
-                flowType: config.type,
-                state: store.getState(),
-            });
+            if (
+                config.type === 'terminal-report' ||
+                config.type === 'project-accomplishment'
+            ) {
+                const workflowData = buildReportWorkflowData(
+                    config.type as ReportDocumentType,
+                    store.getState().stepData,
+                );
+                const result = await saveReportDraft(workflowData);
 
-            setDraftSavedAt(
-                new Intl.DateTimeFormat(undefined, {
-                    hour: 'numeric',
-                    minute: '2-digit',
-                }).format(new Date(result.savedAt)),
+                setStepDataInStore(REPORT_STEP_IDS.details, {
+                    ...workflowData.details,
+                    researchId: String(result.id),
+                } satisfies ReportDetailsData);
+                setDraftSavedAt(
+                    new Intl.DateTimeFormat(undefined, {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                    }).format(new Date()),
+                );
+                setDraftStatus('saved');
+
+                return;
+            }
+
+            throw new Error(
+                `Draft saving is not connected for the ${config.type} upload workflow.`,
             );
-            setDraftStatus('saved');
         } catch {
             setDraftStatus('error');
         }

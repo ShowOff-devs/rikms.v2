@@ -70,13 +70,3 @@ export type UploadWizardConfig = {
     lockedStepIds?: UploadStepId[];
     startStepBackHref?: string;
 };
-
-export type UploadDraftPayload = {
-    flowType: UploadFlowType;
-    state: UploadWizardState;
-};
-
-export type UploadDraftResult = {
-    id: string;
-    savedAt: string;
-};

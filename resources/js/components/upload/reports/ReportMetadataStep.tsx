@@ -4,11 +4,12 @@ import { Button } from '@/components/ui/button';
 import ReportStepLayout from '@/components/upload/reports/ReportStepLayout';
 import MetadataLivePreview from '@/components/upload/shared/MetadataLivePreview';
 import MetadataSectionCard from '@/components/upload/shared/MetadataSectionCard';
+import { apiMessage } from '@/lib/api-client';
 import {
     REPORT_STEP_IDS,
     metadataFieldLabels,
 } from '@/lib/upload/report-workflow';
-import { mockRunAIMetadataExtraction } from '@/lib/upload/services/mock-report-upload-service';
+import { runReportMetadataExtraction } from '@/lib/upload/services/report-upload-service';
 import type {
     ReportAIMetadataData,
     ReportDetailsData,
@@ -25,6 +26,7 @@ export default function ReportMetadataStep(props: UploadWizardStepProps) {
         REPORT_STEP_IDS.details
     ] as ReportDetailsData;
     const [isRunning, setIsRunning] = useState(false);
+    const [analysisError, setAnalysisError] = useState<string | null>(null);
 
     const updateAIMetadata = (updates: Partial<ReportAIMetadataData>) => {
         setStepData({
@@ -35,13 +37,24 @@ export default function ReportMetadataStep(props: UploadWizardStepProps) {
 
     const runAnalysis = async () => {
         setIsRunning(true);
+        setAnalysisError(null);
         updateAIMetadata({
             aiAnalysisStarted: true,
             extractionStatus: 'running',
+            analysisMessage: null,
         });
 
         try {
-            const result = await mockRunAIMetadataExtraction(details);
+            if (!details?.researchId) {
+                throw new Error(
+                    'Upload the report document before running metadata extraction.',
+                );
+            }
+
+            const result = await runReportMetadataExtraction(
+                details.researchId,
+                details,
+            );
 
             setStepData({
                 ...data,
@@ -53,11 +66,19 @@ export default function ReportMetadataStep(props: UploadWizardStepProps) {
                 aiGeneratedFields: result.aiGeneratedFields,
                 userEditedFields: [],
                 metadataValidated: true,
+                analysisMessage: result.analysisMessage,
             } satisfies ReportAIMetadataData);
-        } catch {
+        } catch (error) {
+            setAnalysisError(
+                apiMessage(error, 'Unable to run AI metadata extraction.'),
+            );
             updateAIMetadata({
                 extractionStatus: 'error',
                 aiAnalysisCompleted: false,
+                analysisMessage: apiMessage(
+                    error,
+                    'Unable to run AI metadata extraction.',
+                ),
             });
         } finally {
             setIsRunning(false);
@@ -116,12 +137,21 @@ export default function ReportMetadataStep(props: UploadWizardStepProps) {
                     <Button
                         type="button"
                         className="mt-6 h-11 rounded-[14px] bg-[#7c3aed] px-5 text-white hover:bg-[#6d28d9]"
-                        disabled={isRunning || !details?.uploadedFileName}
+                        disabled={
+                            isRunning ||
+                            !details?.uploadedFileName ||
+                            !details.researchId
+                        }
                         onClick={runAnalysis}
                     >
                         <Sparkles className="size-4" />
                         {isRunning ? 'Analyzing...' : 'Run AI Analysis'}
                     </Button>
+                    {analysisError ? (
+                        <p className="mt-3 max-w-md text-xs font-semibold text-[#dc2626]">
+                            {analysisError}
+                        </p>
+                    ) : null}
                 </div>
             ) : (
                 <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
@@ -132,8 +162,8 @@ export default function ReportMetadataStep(props: UploadWizardStepProps) {
                                 Metadata extraction completed
                             </div>
                             <p className="mt-1 text-xs text-[#008236]/75">
-                                Review each section and choose what appears in
-                                the public repository preview.
+                                {data.analysisMessage ??
+                                    'Review each section and choose what appears in the public repository preview.'}
                             </p>
                         </div>
                         {metadataKeys.map((key) => (

@@ -2,7 +2,7 @@ export type ReportDocumentType = 'terminal-report' | 'project-accomplishment';
 
 export type ReportWorkflowSelection = ReportDocumentType | 'research-study';
 
-export type ReportUploadStatus = 'idle' | 'uploaded' | 'error';
+export type ReportUploadStatus = 'idle' | 'uploading' | 'uploaded' | 'error';
 
 export type ReportExtractionStatus = 'idle' | 'running' | 'success' | 'error';
 
@@ -38,9 +38,12 @@ export type ReportDocTypeData = {
 
 export type ReportDetailsData = {
     uploadedFile: File | null;
+    researchId?: string;
+    uploadedFileId?: string;
     uploadedFileName?: string;
     uploadedFileType?: string;
     uploadedFileSize?: number;
+    uploadError?: string | null;
     reportTitle: string;
     reportDescription: string;
     reportingQuarter: string;
@@ -69,6 +72,7 @@ export type ReportAIMetadataData = {
     aiGeneratedFields: ReportMetadataKey[];
     userEditedFields: ReportMetadataKey[];
     metadataValidated: boolean;
+    analysisMessage?: string | null;
 };
 
 export type ReportPerformanceProject = {

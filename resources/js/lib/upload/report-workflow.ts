@@ -127,9 +127,12 @@ export function createReportDocTypeData(
 export function createReportDetailsData(): ReportDetailsData {
     return {
         uploadedFile: null,
+        researchId: undefined,
+        uploadedFileId: undefined,
         uploadedFileName: undefined,
         uploadedFileType: undefined,
         uploadedFileSize: undefined,
+        uploadError: null,
         reportTitle: '',
         reportDescription: '',
         reportingQuarter: '',
@@ -149,6 +152,7 @@ export function createReportAIMetadataData(): ReportAIMetadataData {
         aiGeneratedFields: [],
         userEditedFields: [],
         metadataValidated: false,
+        analysisMessage: null,
     };
 }
 
@@ -359,7 +363,11 @@ export function reportReadinessCount(data: ReportWorkflowData) {
     return [
         Boolean(data.selectedWorkflow),
         data.details.uploadStatus === 'uploaded' &&
-            Boolean(data.details.reportTitle.trim()) &&
+            Boolean(
+                data.details.reportTitle.trim() ||
+                    data.aiMetadata.extractedMetadata.title.trim() ||
+                    data.details.uploadedFileName,
+            ) &&
             Boolean(data.details.reportingQuarter) &&
             Boolean(data.details.reportingYear),
         data.aiMetadata.aiAnalysisCompleted &&
