@@ -17,7 +17,7 @@ class EnsureUserHasPermission
             return ApiResponse::error('Authentication is required.', [], 401);
         }
 
-        if (! $user->hasAnyPermission($this->normalizeArguments($permissions))) {
+        if (! $user->isActive() || ! $user->hasAnyPermission($this->normalizeArguments($permissions))) {
             return ApiResponse::error('You do not have permission to access this resource.', [], 403);
         }
 

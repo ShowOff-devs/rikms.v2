@@ -21,7 +21,7 @@ class EnsureUserHasRole
             return ApiResponse::error('Authentication is required.', [], 401);
         }
 
-        if (! $user->hasAnyRole($this->normalizeArguments($roles))) {
+        if (! $user->isActive() || ! $user->hasAnyRole($this->normalizeArguments($roles))) {
             if (! $request->is('api/*') && ! $request->expectsJson()) {
                 abort(403, 'You do not have permission to access this resource.');
             }

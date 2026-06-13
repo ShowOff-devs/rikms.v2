@@ -45,6 +45,10 @@ class LoginResponse implements LoginResponseContract
     private function redirectPath(object $user): string
     {
         if ($user->isSuperAdmin()) {
+            if (! $user->hasEnabledTwoFactorAuthentication()) {
+                return route('two-factor.show', absolute: false);
+            }
+
             return route('admin.dashboard', absolute: false);
         }
 
