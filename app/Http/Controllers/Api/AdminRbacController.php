@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\AuditLog;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
@@ -59,6 +60,58 @@ class AdminRbacController extends Controller
         return ApiResponse::success('RBAC user role assignments retrieved.', $users);
     }
 
+    public function history(): JsonResponse
+    {
+        $logs = AuditLog::query()
+            ->with('user:id,name,email')
+            ->whereIn('event', [
+                'rbac.role.assigned',
+                'rbac.role.removed',
+                'rbac.permissions.updated',
+                'rbac.role.created',
+                'rbac.role.updated',
+                'rbac.role.deleted',
+            ])
+            ->latest('created_at')
+            ->latest('id')
+            ->limit(50)
+            ->get();
+
+        $roleIds = $logs
+            ->flatMap(fn (AuditLog $log): array => [
+                $log->auditable_type === (new Role)->getMorphClass() ? $log->auditable_id : null,
+                data_get($log->old_values, 'role_id'),
+                data_get($log->new_values, 'role_id'),
+            ])
+            ->filter()
+            ->unique()
+            ->values();
+
+        $rolesById = Role::withTrashed()
+            ->whereIn('id', $roleIds)
+            ->get()
+            ->keyBy('id');
+
+        $permissionsById = Permission::query()
+            ->whereIn(
+                'id',
+                $logs
+                    ->flatMap(fn (AuditLog $log): array => [
+                        ...((array) data_get($log->old_values, 'permission_ids', [])),
+                        ...((array) data_get($log->new_values, 'permission_ids', [])),
+                    ])
+                    ->filter()
+                    ->unique()
+                    ->values(),
+            )
+            ->get()
+            ->keyBy('id');
+
+        $history = $logs->map(fn (AuditLog $log): array => $this->historyPayload($log, $rolesById, $permissionsById));
+
+        return ApiResponse::success('RBAC change history retrieved.', $history);
+    }
+
     public function assignUserRole(Request $request, User $user): JsonResponse
     {
         $validated = $request->validate([
@@ -111,6 +164,49 @@ class AdminRbacController extends Controller
         );
 
         return ApiResponse::success('Role removed from user.', $this->userAssignmentPayload($user->fresh(['agency', 'roles'])));
+    }
+
+    public function deleteRole(Request $request, Role $role): JsonResponse
+    {
+        if ($role->is_system) {
+            throw ValidationException::withMessages([
+                'role' => ['Protected system roles cannot be deleted.'],
+            ]);
+        }
+
+        $oldValues = [
+            ...$role->only(['id', 'name', 'slug', 'display_name', 'description']),
+            'permission_ids' => $role->permissions()->pluck('permissions.id')->sort()->values()->all(),
+            'user_ids' => $role->users()->pluck('users.id')->sort()->values()->all(),
+        ];
+
+        DB::transaction(function () use ($role): void {
+            $users = $role->users()->with('roles')->get();
+
+            $role->permissions()->detach();
+            $role->users()->detach();
+
+            $users->each(function (User $user) use ($role): void {
+                if ($user->role !== $role->slug) {
+                    return;
+                }
+
+                $replacementRole = $user->roles()->orderBy('roles.name')->first();
+                $user->forceFill(['role' => $replacementRole?->slug ?? ''])->save();
+            });
+
+            $role->delete();
+        });
+
+        AuditLogger::record(
+            $request,
+            'rbac.role.deleted',
+            $role,
+            $oldValues,
+            null,
+        );
+
+        return ApiResponse::success('Role deleted.');
     }
 
     public function updateRolePermissions(Request $request, Role $role): JsonResponse
@@ -177,7 +273,10 @@ class AdminRbacController extends Controller
             'rbac.role.created',
             $role,
             null,
-            $role->only(['id', 'name', 'slug', 'description']),
+            [
+                ...$role->only(['id', 'name', 'slug', 'display_name', 'description']),
+                'permission_ids' => $role->permissions()->pluck('permissions.id')->sort()->values()->all(),
+            ],
         );
 
         return ApiResponse::success('Role created.', $this->rolePayload($role->load(['permissions', 'users'])), status: 201);
@@ -258,6 +357,68 @@ class AdminRbacController extends Controller
                 ])->values()->all()
                 : [],
         ];
+    }
+
+    private function historyPayload(AuditLog $log, $rolesById, $permissionsById): array
+    {
+        $roleId = $log->auditable_type === (new Role)->getMorphClass()
+            ? $log->auditable_id
+            : (data_get($log->new_values, 'role_id') ?? data_get($log->old_values, 'role_id'));
+
+        $role = $roleId ? $rolesById->get($roleId) : null;
+        $roleName = data_get($log->new_values, 'display_name')
+            ?? data_get($log->new_values, 'name')
+            ?? data_get($log->old_values, 'display_name')
+            ?? data_get($log->old_values, 'name')
+            ?? data_get($log->new_values, 'role_slug')
+            ?? data_get($log->old_values, 'role_slug')
+            ?? $role?->display_name
+            ?? $role?->name
+            ?? 'Unknown role';
+
+        return [
+            'id' => (string) $log->id,
+            'roleId' => $roleId ? (string) $roleId : '',
+            'roleName' => $roleName,
+            'changedBy' => $log->user?->name ?? 'System',
+            'changeType' => $this->historyChangeType($log->event),
+            'date' => $log->created_at?->toISOString(),
+            'before' => $this->permissionKeyDiff((array) data_get($log->old_values, 'permission_ids', []), $permissionsById),
+            'after' => $this->permissionKeyDiff((array) data_get($log->new_values, 'permission_ids', []), $permissionsById),
+            'summary' => $this->historySummary($log, $roleName),
+        ];
+    }
+
+    private function historyChangeType(string $event): string
+    {
+        return match ($event) {
+            'rbac.permissions.updated' => 'permission-updated',
+            'rbac.role.created' => 'role-created',
+            'rbac.role.deleted' => 'role-deleted',
+            default => 'role-modified',
+        };
+    }
+
+    private function historySummary(AuditLog $log, string $roleName): string
+    {
+        return match ($log->event) {
+            'rbac.role.assigned' => $roleName.' was assigned to a user.',
+            'rbac.role.removed' => $roleName.' was removed from a user.',
+            'rbac.permissions.updated' => $roleName.' permissions were updated.',
+            'rbac.role.created' => $roleName.' was created.',
+            'rbac.role.deleted' => $roleName.' was deleted.',
+            'rbac.role.updated' => $roleName.' details were updated.',
+            default => 'RBAC settings were updated.',
+        };
+    }
+
+    private function permissionKeyDiff(array $permissionIds, $permissionsById): array
+    {
+        return collect($permissionIds)
+            ->map(fn ($id) => $permissionsById->get($id)?->slug)
+            ->filter()
+            ->values()
+            ->all();
     }
 
     private function permissionPayload(Permission $permission): array

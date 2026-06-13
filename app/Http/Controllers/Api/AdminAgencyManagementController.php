@@ -14,14 +14,15 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Unique;
 
 class AdminAgencyManagementController extends Controller
 {
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255', Rule::unique('agencies', 'name')->whereNull('deleted_at')],
-            'short_name' => ['required', 'string', 'max:255', Rule::unique('agencies', 'short_name')->whereNull('deleted_at')],
+            'name' => ['required', 'string', 'max:255', $this->uniqueAgencyRule('name')],
+            'short_name' => ['required', 'string', 'max:255', $this->uniqueAgencyRule('short_name')],
             'type' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'website' => ['nullable', 'url', 'max:255'],
@@ -65,8 +66,8 @@ class AdminAgencyManagementController extends Controller
         abort_if($agency->archived_at !== null, 404);
 
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255', Rule::unique('agencies', 'name')->ignore($agency->id)->whereNull('deleted_at')],
-            'short_name' => ['required', 'string', 'max:255', Rule::unique('agencies', 'short_name')->ignore($agency->id)->whereNull('deleted_at')],
+            'name' => ['required', 'string', 'max:255', $this->uniqueAgencyRule('name')->ignore($agency->id)],
+            'short_name' => ['required', 'string', 'max:255', $this->uniqueAgencyRule('short_name')->ignore($agency->id)],
             'type' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'website' => ['nullable', 'url', 'max:255'],
@@ -251,6 +252,13 @@ class AdminAgencyManagementController extends Controller
         }
 
         return $slug;
+    }
+
+    private function uniqueAgencyRule(string $column): Unique
+    {
+        return Rule::unique('agencies', $column)
+            ->whereNull('deleted_at')
+            ->whereNull('archived_at');
     }
 
     private function displayType(string $type): string

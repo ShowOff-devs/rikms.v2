@@ -75,6 +75,7 @@ class AdminReadController extends Controller
     public function agencies(Request $request): JsonResponse
     {
         $query = Agency::query()
+            ->whereNull('archived_at')
             ->with(['users' => function ($query): void {
                 $query->where('role', 'agency_admin')
                     ->orWhereHas('roles', fn (Builder $query) => $query->where('slug', 'agency_admin'))

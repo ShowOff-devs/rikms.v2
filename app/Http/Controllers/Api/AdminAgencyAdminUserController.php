@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Throwable;
 
 class AdminAgencyAdminUserController extends Controller
 {
@@ -83,7 +84,7 @@ class AdminAgencyAdminUserController extends Controller
             'last_name' => $lastName,
             'name' => trim($validated['full_name']),
             'email' => str($validated['email'])->lower()->toString(),
-            'password' => Hash::make($validated['temporary_password'] ?: Str::random(24)),
+            'password' => Hash::make($validated['temporary_password'] ?? Str::random(24)),
             'role' => 'agency_admin',
             'status' => $validated['status'],
         ]);
@@ -103,14 +104,28 @@ class AdminAgencyAdminUserController extends Controller
             $user->only(['id', 'agency_id', 'name', 'email', 'role', 'status']),
         );
 
+        $inviteSent = false;
+        $inviteMessage = null;
+
         if ($request->boolean('send_invite')) {
-            Password::sendResetLink(['email' => $user->email]);
+            try {
+                $status = Password::broker('users')->sendResetLink(['email' => $user->email]);
+                $inviteSent = $status === Password::RESET_LINK_SENT;
+                $inviteMessage = $inviteSent ? null : __($status);
+            } catch (Throwable) {
+                $inviteMessage = 'Invitation email could not be delivered.';
+            }
         }
 
         return ApiResponse::success(
-            'Agency admin user created.',
+            $inviteMessage
+                ? 'Agency admin user created, but the invitation email could not be sent.'
+                : 'Agency admin user created.',
             (new UserResource($user->load(['agency', 'roles'])))->resolve($request),
-            [],
+            [
+                'invite_sent' => $inviteSent,
+                'invite_message' => $inviteMessage,
+            ],
             201,
         );
     }
@@ -173,8 +188,15 @@ class AdminAgencyAdminUserController extends Controller
     public function sendPasswordReset(Request $request, User $user): JsonResponse
     {
         $this->abortUnlessAgencyAdmin($user);
+        abort_unless($user->isActive(), 404);
 
-        $status = Password::sendResetLink(['email' => $user->email]);
+        try {
+            $status = Password::broker('users')->sendResetLink(['email' => $user->email]);
+        } catch (Throwable) {
+            return ApiResponse::error('Unable to send password reset instructions.', [
+                'email' => ['Password reset email could not be delivered.'],
+            ], 422);
+        }
 
         if ($status !== Password::RESET_LINK_SENT) {
             return ApiResponse::error('Unable to send password reset instructions.', [
@@ -229,15 +251,18 @@ class AdminAgencyAdminUserController extends Controller
     {
         $this->abortUnlessAgencyAdmin($user);
 
-        $oldValues = $user->only(['status']);
-        $user->forceFill(['status' => $status])->save();
+        $oldValues = $user->only(['status', 'deactivation_requested_at']);
+        $user->forceFill([
+            'status' => $status,
+            'deactivation_requested_at' => null,
+        ])->save();
 
         AuditLogger::record(
             $request,
             'agency_admin_user.status_updated',
             $user,
             $oldValues,
-            ['status' => $status],
+            $user->fresh()->only(['status', 'deactivation_requested_at']),
         );
 
         return ApiResponse::success(

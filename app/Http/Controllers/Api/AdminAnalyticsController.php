@@ -7,6 +7,7 @@ use App\Models\AccessRequest;
 use App\Models\Agency;
 use App\Models\AuditLog;
 use App\Models\Research;
+use App\Models\ResearchAnalyticsEvent;
 use App\Models\ResearchFile;
 use App\Models\SecurityEvent;
 use App\Models\User;
@@ -81,14 +82,18 @@ class AdminAnalyticsController extends Controller
             ['report' => $report, 'filters' => $request->query()],
         );
 
-        return response()->streamDownload(function () use ($report): void {
+        $securityEvents = $report === 'security'
+            ? $this->securityExportQuery($request)
+            : null;
+
+        return response()->streamDownload(function () use ($report, $securityEvents): void {
             $handle = fopen('php://output', 'w');
 
             if ($report === 'security') {
-                fputcsv($handle, ['ID', 'Type', 'Severity', 'Resolved At', 'Created At']);
-                SecurityEvent::query()->orderByDesc('created_at')->chunk(200, function ($events) use ($handle): void {
+                fputcsv($handle, ['ID', 'Type', 'Severity', 'Acknowledged At', 'Resolved At', 'Created At']);
+                $securityEvents?->orderByDesc('created_at')->chunk(200, function ($events) use ($handle): void {
                     foreach ($events as $event) {
-                        fputcsv($handle, [$event->id, $event->event_type, $event->severity, $event->resolved_at, $event->created_at]);
+                        fputcsv($handle, [$event->id, $event->event_type, $event->severity, $event->acknowledged_at, $event->resolved_at, $event->created_at]);
                     }
                 });
             } elseif ($report === 'access-requests') {
@@ -111,19 +116,36 @@ class AdminAnalyticsController extends Controller
         }, 'rikms-'.$report.'-report-'.now()->format('Y-m-d').'.csv', ['Content-Type' => 'text/csv']);
     }
 
+    private function securityExportQuery(Request $request): Builder
+    {
+        $query = SecurityEvent::query();
+
+        return match ($request->query('date_range')) {
+            'last-7-days' => $query->where('created_at', '>=', now()->subDays(7)->startOfDay()),
+            'last-30-days' => $query->where('created_at', '>=', now()->subDays(30)->startOfDay()),
+            'this-month' => $query->whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()]),
+            'custom' => $query
+                ->when($request->date('start_date'), fn (Builder $query, $date) => $query->where('created_at', '>=', $date->startOfDay()))
+                ->when($request->date('end_date'), fn (Builder $query, $date) => $query->where('created_at', '<=', $date->endOfDay())),
+            default => $query,
+        };
+    }
+
     private function analyticsPayload(Request $request): array
     {
+        $filteredResearchIds = $this->researchQuery($request)->pluck('id');
+
         return [
             'metrics' => [
-                ['id' => 'total-records', 'label' => 'Total Research Records', 'value' => Research::query()->count(), 'icon' => 'database'],
+                ['id' => 'total-records', 'label' => 'Total Research Records', 'value' => $filteredResearchIds->count(), 'icon' => 'database'],
                 ['id' => 'participating-agencies', 'label' => 'Total Participating Agencies', 'value' => Agency::query()->count(), 'icon' => 'building'],
-                ['id' => 'downloads', 'label' => 'Total Downloads', 'value' => (int) Research::query()->sum('downloads'), 'icon' => 'download'],
-                ['id' => 'views', 'label' => 'Total Views', 'value' => 0, 'icon' => 'eye'],
+                ['id' => 'downloads', 'label' => 'Total Downloads', 'value' => (int) $this->researchQuery($request)->sum('downloads'), 'icon' => 'download'],
+                ['id' => 'views', 'label' => 'Total Views', 'value' => $this->analyticsEventCount($filteredResearchIds, 'view'), 'icon' => 'eye'],
                 ['id' => 'access-requests', 'label' => 'Total Access Requests', 'value' => AccessRequest::query()->count(), 'icon' => 'file'],
                 ['id' => 'agency-admins', 'label' => 'Active Agency Admin Users', 'value' => User::query()->where('status', 'active')->where(function (Builder $query): void {
                     $query->where('role', 'agency_admin')->orWhereHas('roles', fn (Builder $query) => $query->where('slug', 'agency_admin'));
                 })->count(), 'icon' => 'users'],
-                ['id' => 'uploads', 'label' => 'Uploaded Files', 'value' => ResearchFile::query()->count(), 'icon' => 'file'],
+                ['id' => 'uploads', 'label' => 'Uploaded Files', 'value' => ResearchFile::query()->whereIn('research_id', $filteredResearchIds)->count(), 'icon' => 'file'],
             ],
             'uploadTrends' => $this->researchUploadTrends($request),
             'researchByAgency' => $this->researchByAgency($request),
@@ -131,7 +153,7 @@ class AdminAnalyticsController extends Controller
             'sdgContribution' => $this->sdgContribution($request),
             'mostAccessedResearch' => $this->mostAccessedResearch($request),
             'accessRequestStatus' => $this->accessRequestStatus($request),
-            'platformUsageActivity' => $this->platformUsageActivity(),
+            'platformUsageActivity' => $this->platformUsageActivity($request),
             'filterOptions' => $this->filterOptions(),
         ];
     }
@@ -217,7 +239,9 @@ class AdminAnalyticsController extends Controller
     {
         return $this->researchQuery($request)
             ->with('agency')
+            ->withCount(['analyticsEvents as views_count' => fn (Builder $query) => $query->where('event_type', 'view')])
             ->orderByDesc('downloads')
+            ->orderByDesc('views_count')
             ->limit(10)
             ->get()
             ->map(fn (Research $research): array => [
@@ -225,7 +249,7 @@ class AdminAnalyticsController extends Controller
                 'title' => $research->title,
                 'agency' => $research->agency?->short_name ?: $research->agency?->name ?: 'Unassigned',
                 'year' => (int) ($research->publication_year ?: 0),
-                'views' => 0,
+                'views' => (int) $research->views_count,
                 'downloads' => (int) $research->downloads,
             ])
             ->all();
@@ -245,20 +269,35 @@ class AdminAnalyticsController extends Controller
         ];
     }
 
-    private function platformUsageActivity(): array
+    private function platformUsageActivity(Request $request): array
     {
-        return AccessRequest::query()
-            ->select(['id', 'created_at'])
-            ->orderBy('created_at')
-            ->get()
-            ->groupBy(fn (AccessRequest $accessRequest): string => $accessRequest->created_at?->format('M') ?? 'N/A')
-            ->map(fn ($records, string $month): array => [
-                'month' => $month,
-                'repositoryViews' => 0,
-                'downloads' => 0,
-                'accessRequests' => $records->count(),
-            ])
-            ->values()
+        $researchIds = $this->researchQuery($request)->pluck('id');
+        $months = collect(range(11, 0))
+            ->map(fn (int $offset) => now()->startOfMonth()->subMonths($offset));
+        $events = ResearchAnalyticsEvent::query()
+            ->whereIn('research_id', $researchIds)
+            ->whereIn('event_type', ['view', 'download'])
+            ->where('occurred_at', '>=', $months->first()->copy()->startOfMonth())
+            ->get(['event_type', 'occurred_at'])
+            ->groupBy(fn (ResearchAnalyticsEvent $event): string => $event->occurred_at?->format('Y-m') ?? 'N/A');
+        $accessRequests = AccessRequest::query()
+            ->whereIn('research_id', $researchIds)
+            ->where('created_at', '>=', $months->first()->copy()->startOfMonth())
+            ->get(['id', 'created_at'])
+            ->groupBy(fn (AccessRequest $accessRequest): string => $accessRequest->created_at?->format('Y-m') ?? 'N/A');
+
+        return $months
+            ->map(function ($month) use ($events, $accessRequests): array {
+                $key = $month->format('Y-m');
+                $monthlyEvents = $events->get($key, collect());
+
+                return [
+                    'month' => $month->format('M'),
+                    'repositoryViews' => $monthlyEvents->where('event_type', 'view')->count(),
+                    'downloads' => $monthlyEvents->where('event_type', 'download')->count(),
+                    'accessRequests' => $accessRequests->get($key, collect())->count(),
+                ];
+            })
             ->all();
     }
 
@@ -268,8 +307,15 @@ class AdminAnalyticsController extends Controller
             'agencies' => Agency::query()->orderBy('short_name')->pluck('short_name')->filter()->values()->all(),
             'publicationYears' => Research::query()->whereNotNull('publication_year')->distinct()->orderByDesc('publication_year')->pluck('publication_year')->map(fn ($year): string => (string) $year)->all(),
             'researchCategories' => Research::query()->whereNotNull('category')->distinct()->orderBy('category')->pluck('category')->all(),
-            'sdgs' => [],
-            'documentTypes' => [],
+            'sdgs' => $this->sdgFilterOptions(),
+            'documentTypes' => ResearchFile::query()
+                ->selectRaw("coalesce(nullif(file_type, ''), nullif(extension, ''), nullif(mime_type, '')) as document_type")
+                ->distinct()
+                ->orderBy('document_type')
+                ->pluck('document_type')
+                ->filter()
+                ->values()
+                ->all(),
             'accessTypes' => Research::query()->distinct()->orderBy('access_level')->pluck('access_level')->filter()->values()->all(),
             'statuses' => Research::query()->distinct()->orderBy('status')->pluck('status')->filter()->values()->all(),
         ];
@@ -286,7 +332,49 @@ class AdminAnalyticsController extends Controller
             ->when($request->filled('agency'), fn (Builder $query) => $query->whereHas('agency', fn (Builder $query) => $query->where('short_name', $request->string('agency'))->orWhere('name', $request->string('agency'))))
             ->when($request->filled('publicationYear'), fn (Builder $query) => $query->where('publication_year', $request->integer('publicationYear')))
             ->when($request->filled('researchCategory'), fn (Builder $query) => $query->where('category', $request->string('researchCategory')))
+            ->when($request->filled('sdg'), fn (Builder $query) => $query->whereJsonContains('sdgs', $request->string('sdg')->toString()))
+            ->when($request->filled('documentType'), function (Builder $query) use ($request): void {
+                $documentType = $request->string('documentType')->toString();
+
+                $query->whereHas('files', function (Builder $query) use ($documentType): void {
+                    $query->where('file_type', $documentType)
+                        ->orWhere('extension', $documentType)
+                        ->orWhere('mime_type', $documentType);
+                });
+            })
             ->when($request->filled('accessType'), fn (Builder $query) => $query->where('access_level', $request->string('accessType')))
             ->when($request->filled('status'), fn (Builder $query) => $query->where('status', $request->string('status')));
+    }
+
+    private function analyticsEventCount($researchIds, string $eventType): int
+    {
+        return ResearchAnalyticsEvent::query()
+            ->whereIn('research_id', $researchIds)
+            ->where('event_type', $eventType)
+            ->count();
+    }
+
+    private function sdgFilterOptions(): array
+    {
+        $sdgs = [];
+
+        Research::query()
+            ->whereNotNull('sdgs')
+            ->select(['id', 'sdgs'])
+            ->chunk(200, function ($records) use (&$sdgs): void {
+                foreach ($records as $record) {
+                    foreach (($record->sdgs ?? []) as $sdg) {
+                        $key = is_array($sdg) ? ($sdg['sdg'] ?? $sdg['value'] ?? null) : $sdg;
+
+                        if (is_string($key) && trim($key) !== '') {
+                            $sdgs[$key] = ['value' => $key, 'label' => $key];
+                        }
+                    }
+                }
+            });
+
+        ksort($sdgs);
+
+        return array_values($sdgs);
     }
 }

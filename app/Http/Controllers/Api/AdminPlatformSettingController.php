@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 class AdminPlatformSettingController extends Controller
@@ -143,6 +144,33 @@ class AdminPlatformSettingController extends Controller
             PlatformSettingResource::collection($updated)->resolve($request),
             ['updated_count' => $updated->count()],
         );
+    }
+
+    public function uploadLogo(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'logo' => ['required', 'file', 'mimes:png,jpg,jpeg,svg,webp', 'max:2048'],
+        ]);
+
+        $path = $validated['logo']->store('platform/logos', 'public');
+        $url = Storage::disk('public')->url($path);
+
+        AuditLogger::record(
+            $request,
+            'platform_setting.logo_uploaded',
+            null,
+            null,
+            [
+                'logo_url' => $url,
+                'file_name' => $validated['logo']->getClientOriginalName(),
+            ],
+        );
+
+        return ApiResponse::success('Platform logo uploaded.', [
+            'logo_url' => $url,
+            'file_name' => $validated['logo']->getClientOriginalName(),
+            'uploaded_at' => now()->toISOString(),
+        ], [], 201);
     }
 
     private function normalizeValue(mixed $value, string $type): mixed

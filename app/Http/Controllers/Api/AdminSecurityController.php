@@ -13,10 +13,33 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class AdminSecurityController extends Controller
 {
     use RespondsWithApiPagination;
+
+    public function summary(Request $request): JsonResponse
+    {
+        $adminUsers = $this->adminUsersQuery();
+
+        return ApiResponse::success('Security summary retrieved.', [
+            'mfa_enabled_admin_accounts' => (clone $adminUsers)
+                ->whereNotNull('two_factor_confirmed_at')
+                ->count(),
+            'mfa_eligible_admin_accounts' => (clone $adminUsers)->count(),
+            'failed_login_attempts' => SecurityEvent::query()
+                ->where('event_type', 'like', '%failed%')
+                ->count(),
+            'locked_accounts' => SecurityEvent::query()
+                ->where('event_type', 'like', '%locked%')
+                ->count(),
+            'active_admin_sessions' => $this->adminSessionRows()->count(),
+            'security_alerts' => SecurityEvent::query()
+                ->whereNull('resolved_at')
+                ->count(),
+        ]);
+    }
 
     public function events(Request $request): JsonResponse
     {
@@ -45,11 +68,7 @@ class AdminSecurityController extends Controller
 
     public function sessions(Request $request): JsonResponse
     {
-        $sessionRows = DB::table(config('session.table', 'sessions'))
-            ->whereNotNull('user_id')
-            ->orderByDesc('last_activity')
-            ->limit(100)
-            ->get();
+        $sessionRows = $this->adminSessionRows();
 
         $users = User::query()
             ->with('roles')
@@ -82,6 +101,38 @@ class AdminSecurityController extends Controller
         return ApiResponse::success('Admin sessions retrieved.', $data);
     }
 
+    private function adminUsersQuery(): Builder
+    {
+        return User::query()
+            ->where('status', 'active')
+            ->where(function (Builder $query): void {
+                $query
+                    ->whereIn('role', ['super_admin', 'agency_admin'])
+                    ->orWhereHas('roles', fn (Builder $query) => $query->whereIn('slug', ['super_admin', 'agency_admin']));
+            });
+    }
+
+    private function adminSessionRows()
+    {
+        if (! Schema::hasTable(config('session.table', 'sessions'))) {
+            return collect();
+        }
+
+        $sessionRows = DB::table(config('session.table', 'sessions'))
+            ->whereNotNull('user_id')
+            ->orderByDesc('last_activity')
+            ->limit(100)
+            ->get();
+
+        $adminUserIds = $this->adminUsersQuery()
+            ->whereIn('id', $sessionRows->pluck('user_id')->filter()->unique())
+            ->pluck('id');
+
+        return $sessionRows
+            ->filter(fn ($session): bool => $adminUserIds->contains((int) $session->user_id))
+            ->values();
+    }
+
     public function revokeSession(Request $request, string $sessionId): JsonResponse
     {
         $deleted = DB::table(config('session.table', 'sessions'))
@@ -102,13 +153,38 @@ class AdminSecurityController extends Controller
         ]);
     }
 
+    public function acknowledge(Request $request, SecurityEvent $securityEvent): JsonResponse
+    {
+        $oldValues = $securityEvent->only(['acknowledged_at', 'acknowledged_by']);
+
+        $securityEvent->forceFill([
+            'acknowledged_at' => now(),
+            'acknowledged_by' => $request->user()->id,
+        ])->save();
+
+        AuditLogger::record(
+            $request,
+            'security_event.acknowledged',
+            $securityEvent,
+            $oldValues,
+            $securityEvent->only(['acknowledged_at', 'acknowledged_by']),
+        );
+
+        return ApiResponse::success(
+            'Security event acknowledged.',
+            (new SecurityEventResource($securityEvent->load(['user', 'agency'])))->resolve($request),
+        );
+    }
+
     public function resolve(Request $request, SecurityEvent $securityEvent): JsonResponse
     {
-        $oldValues = $securityEvent->only(['resolved_at', 'resolved_by']);
+        $oldValues = $securityEvent->only(['resolved_at', 'resolved_by', 'acknowledged_at', 'acknowledged_by']);
 
         $securityEvent->forceFill([
             'resolved_at' => now(),
             'resolved_by' => $request->user()->id,
+            'acknowledged_at' => $securityEvent->acknowledged_at ?? now(),
+            'acknowledged_by' => $securityEvent->acknowledged_by ?? $request->user()->id,
         ])->save();
 
         AuditLogger::record(
@@ -127,11 +203,13 @@ class AdminSecurityController extends Controller
 
     public function reopen(Request $request, SecurityEvent $securityEvent): JsonResponse
     {
-        $oldValues = $securityEvent->only(['resolved_at', 'resolved_by']);
+        $oldValues = $securityEvent->only(['resolved_at', 'resolved_by', 'acknowledged_at', 'acknowledged_by']);
 
         $securityEvent->forceFill([
             'resolved_at' => null,
             'resolved_by' => null,
+            'acknowledged_at' => null,
+            'acknowledged_by' => null,
         ])->save();
 
         AuditLogger::record(
