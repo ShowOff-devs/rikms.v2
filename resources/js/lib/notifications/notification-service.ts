@@ -44,7 +44,14 @@ export async function updateAgencyNotificationReadState(
         return getAgencyNotifications();
     }
 
-    throw new Error('Marking agency notifications as unread is not supported yet.');
+    await fetchApi<{
+        notification: NotificationApiRecord;
+        unread_count: number;
+    }>(`/api/agency/notifications/${notificationId}/unread`, {
+        method: 'POST',
+    });
+
+    return getAgencyNotifications();
 }
 
 export async function markAllAgencyNotificationsRead() {

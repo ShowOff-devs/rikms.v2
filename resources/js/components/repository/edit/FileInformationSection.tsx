@@ -63,7 +63,8 @@ export function FileInformationSection({
                         <button
                             type="button"
                             onClick={onDownload}
-                            className="inline-flex h-9 items-center gap-2 rounded-[10px] border border-[#e5e7eb] bg-white px-3 text-xs font-semibold text-[#4a5565]"
+                            disabled={!file.canDownload}
+                            className="inline-flex h-9 items-center gap-2 rounded-[10px] border border-[#e5e7eb] bg-white px-3 text-xs font-semibold text-[#4a5565] disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             <Download className="size-4" />
                             Download

@@ -151,9 +151,24 @@ export async function restoreArchivedResearch(
 export async function permanentlyDeleteArchivedResearch(
     id: string,
 ): Promise<ArchivedResearch | null> {
-    void id;
+    const researchId = apiResearchId(id);
 
-    throw new Error('Permanent archive deletion is not configured for production.');
+    if (researchId) {
+        const { data } = await fetchApi<ResearchApiRecord>(
+            `/api/agency/research/${researchId}/archive`,
+            {
+                method: 'DELETE',
+            },
+        );
+
+        return mapApiArchivedResearch({
+            ...data,
+            status: 'archived',
+            archived_at: data.archived_at ?? new Date().toISOString(),
+        });
+    }
+
+    throw new Error('Archived research delete requires a persisted API record.');
 }
 
 export async function getArchiveActivity(): Promise<ArchiveActivity[]> {

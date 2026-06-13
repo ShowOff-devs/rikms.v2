@@ -23,6 +23,7 @@ export const repositoryStatusLabels: Record<RepositoryStatus, string> = {
     pending: 'Pending',
     restricted: 'Restricted',
     archived: 'Archived',
+    superseded: 'Superseded',
 };
 
 export const repositoryAccessTypeLabels: Record<RepositoryAccessType, string> =

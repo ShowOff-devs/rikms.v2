@@ -8,7 +8,8 @@ export type RepositoryStatus =
     | 'published'
     | 'pending'
     | 'restricted'
-    | 'archived';
+    | 'archived'
+    | 'superseded';
 
 export type RepositoryAccessType =
     | 'public'
@@ -23,11 +24,13 @@ export type RepositoryAuthor = {
 };
 
 export type RepositoryFileInfo = {
+    id?: string;
     name: string;
     size: string;
     uploadedAt: string;
     type: string;
     pages: number;
+    canDownload?: boolean;
 };
 
 export type RepositoryVersion = {
@@ -39,6 +42,9 @@ export type RepositoryVersion = {
 
 export type RepositoryItem = {
     id: string;
+    revisionParentId?: string;
+    supersededById?: string;
+    revisionNumber?: number;
     title: string;
     abstract: string;
     authors: RepositoryAuthor[];
@@ -66,7 +72,12 @@ export type RepositoryItem = {
 
 export type RepositoryUpdatePayload = Omit<
     RepositoryItem,
-    'id' | 'createdAt' | 'updatedAt'
+    | 'id'
+    | 'createdAt'
+    | 'updatedAt'
+    | 'revisionParentId'
+    | 'supersededById'
+    | 'revisionNumber'
 >;
 
 export type RepositoryFileReplacement = {
@@ -75,6 +86,7 @@ export type RepositoryFileReplacement = {
     type: string;
     pages?: number;
     file?: File;
+    documentType?: RepositoryDocumentType;
 };
 
 export type RepositorySortKey =

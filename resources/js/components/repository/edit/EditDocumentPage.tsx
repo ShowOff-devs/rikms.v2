@@ -24,6 +24,8 @@ import type {AgencyAiResults} from '@/lib/agency/agency-ai-results-service';
 import { useAgencySession } from '@/lib/auth/agency-auth';
 import {
     archiveRepositoryItem,
+    createRepositoryRevision,
+    downloadRepositoryFile,
     getRepositoryItemById,
     publishRepositoryItem,
     replaceRepositoryFile,
@@ -33,7 +35,6 @@ import {
 import type {
     RepositoryAccessType,
     RepositoryItem,
-    RepositoryStatus,
     RepositoryUpdatePayload,
 } from '@/types/repository';
 
@@ -145,6 +146,34 @@ const hasErrors = (errors: EditDocumentErrors) =>
             : Object.keys(value).length > 0,
     );
 
+function canEditRepositoryItem(item: RepositoryItem | null) {
+    return item?.status === 'draft';
+}
+
+function editLockMessage(item: RepositoryItem | null) {
+    if (!item) {
+        return null;
+    }
+
+    if (item.status === 'pending') {
+        return 'Submitted research is pending moderation and cannot be edited unless an administrator returns it to draft.';
+    }
+
+    if (item.status === 'published') {
+        return 'Published research is locked. Create a draft revision to edit changes without changing the public record yet.';
+    }
+
+    if (item.status === 'archived') {
+        return 'Archived research must be restored before it can be edited.';
+    }
+
+    if (item.status === 'superseded') {
+        return 'This version has been superseded by a newer published revision and is kept read-only for audit history.';
+    }
+
+    return null;
+}
+
 export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
     const session = useAgencySession();
     const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -233,6 +262,12 @@ export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
             return;
         }
 
+        if (!canEditRepositoryItem(item)) {
+            setMessage(editLockMessage(item));
+
+            return;
+        }
+
         const nextPayload = { ...form, ...payloadOverride };
         const nextErrors = validatePayload(nextPayload);
         setErrors(nextErrors);
@@ -277,6 +312,13 @@ export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
     };
 
     const handleArchive = async () => {
+        if (!canEditRepositoryItem(item)) {
+            setMessage(editLockMessage(item));
+            setShowArchiveConfirm(false);
+
+            return;
+        }
+
         setIsSaving(true);
         const archived = await archiveRepositoryItem(repositoryId);
 
@@ -291,8 +333,41 @@ export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
         setIsSaving(false);
     };
 
+    const handleCreateRevision = async () => {
+        if (item?.status !== 'published') {
+            setMessage('Only published research can be revised.');
+
+            return;
+        }
+
+        setIsSaving(true);
+
+        try {
+            const revision = await createRepositoryRevision(repositoryId);
+
+            if (revision) {
+                setMessage('Draft revision created.');
+                router.visit(`/agency/research/${revision.id}`);
+            }
+        } catch (error) {
+            setMessage(
+                error instanceof Error
+                    ? error.message
+                    : 'Unable to create draft revision.',
+            );
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     const handleReplaceFile = async (file: File) => {
         if (!form) {
+            return;
+        }
+
+        if (!canEditRepositoryItem(item)) {
+            setMessage(editLockMessage(item));
+
             return;
         }
 
@@ -301,6 +376,7 @@ export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
             size: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
             type: file.type || 'PDF Document',
             file,
+            documentType: form.documentType,
         });
 
         if (replaced) {
@@ -309,6 +385,33 @@ export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
             setMessage('Document file uploaded to the repository.');
         }
     };
+
+    const handleDownloadFile = async () => {
+        if (!form?.file.id || !form.file.canDownload) {
+            setMessage('No downloadable repository file is available yet.');
+
+            return;
+        }
+
+        try {
+            await downloadRepositoryFile(
+                repositoryId,
+                form.file.id,
+                form.file.name,
+            );
+            setMessage('Research file download started.');
+        } catch (error) {
+            setMessage(
+                error instanceof Error
+                    ? error.message
+                    : 'Unable to download research file.',
+            );
+        }
+    };
+
+    const canEdit = canEditRepositoryItem(item);
+    const lockedMessage = editLockMessage(item);
+    const canCreateRevision = item?.status === 'published';
 
     return (
         <AgencyAdminLayout
@@ -389,6 +492,11 @@ export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
                                     {message}
                                 </div>
                             ) : null}
+                            {!message && lockedMessage ? (
+                                <div className="mt-5 rounded-[12px] border border-[#fde68a] bg-[#fffbeb] px-4 py-3 text-sm font-medium text-[#92400e]">
+                                    {lockedMessage}
+                                </div>
+                            ) : null}
 
                             <section className="mt-5 grid items-start gap-5 xl:grid-cols-[minmax(0,820px)_360px]">
                                 <div className="space-y-5">
@@ -411,11 +519,7 @@ export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
                                         file={form.file}
                                         fileInputRef={fileInputRef}
                                         onReplaceFile={handleReplaceFile}
-                                        onDownload={() =>
-                                            setMessage(
-                                                'File download is not available from this screen yet.',
-                                            )
-                                        }
+                                        onDownload={handleDownloadFile}
                                     />
                                 </div>
 
@@ -427,9 +531,7 @@ export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
                                         embargoUntil={form.embargoUntil ?? ''}
                                         externalLink={form.externalLink ?? ''}
                                         errors={errors}
-                                        onStatusChange={(
-                                            status: RepositoryStatus,
-                                        ) => updateForm({ status })}
+                                        disabled={!canEdit}
                                         onAccessChange={(
                                             accessType: RepositoryAccessType,
                                         ) => updateForm({ accessType })}
@@ -447,10 +549,14 @@ export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
 
                             <EditDocumentActions
                                 isSaving={isSaving}
+                                canEdit={canEdit}
+                                lockedMessage={lockedMessage ?? undefined}
                                 onSave={() => commit('save')}
                                 onSaveDraft={() => commit('draft')}
                                 onPublish={() => commit('publish')}
                                 onArchive={() => setShowArchiveConfirm(true)}
+                                canCreateRevision={canCreateRevision}
+                                onCreateRevision={handleCreateRevision}
                             />
                         </>
                     ) : null}

@@ -1,5 +1,6 @@
 import { FileText, Mail, Tag } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import {
     Dialog,
     DialogClose,
@@ -16,6 +17,7 @@ import {
     repositorySdgColors,
     repositoryStatusLabels,
 } from '@/data/repository-display';
+import { getRepositoryItemById } from '@/lib/repository/repository-service';
 import type { RepositoryItem } from '@/types/repository';
 
 export function ResearchViewModal({
@@ -27,11 +29,54 @@ export function ResearchViewModal({
     open: boolean;
     onOpenChange: (open: boolean) => void;
 }) {
-    if (!item) {
+    const [detailItem, setDetailItem] = useState<RepositoryItem | null>(null);
+    const [detailError, setDetailError] = useState<{
+        id: string;
+        message: string;
+    } | null>(null);
+
+    useEffect(() => {
+        if (!open || !item) {
+            return;
+        }
+
+        let isCurrent = true;
+
+        getRepositoryItemById(item.id)
+            .then((record) => {
+                if (!isCurrent) {
+                    return;
+                }
+
+                setDetailItem(record ?? item);
+                setDetailError(null);
+            })
+            .catch(() => {
+                if (isCurrent) {
+                    setDetailError({
+                        id: item.id,
+                        message: 'Unable to refresh research details.',
+                    });
+                }
+            });
+
+        return () => {
+            isCurrent = false;
+        };
+    }, [item, open]);
+
+    const displayItem =
+        detailItem && item && detailItem.id === item.id ? detailItem : item;
+    const activeDetailError =
+        detailError && item && detailError.id === item.id
+            ? detailError.message
+            : null;
+
+    if (!displayItem) {
         return null;
     }
 
-    const typeColor = repositoryDocumentTypeColors[item.documentType];
+    const typeColor = repositoryDocumentTypeColors[displayItem.documentType];
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -44,6 +89,11 @@ export function ResearchViewModal({
                         View-only metadata summary for the selected agency
                         repository record.
                     </DialogDescription>
+                    {activeDetailError ? (
+                        <p className="mt-2 text-xs font-medium text-[#e7000b]">
+                            {activeDetailError}
+                        </p>
+                    ) : null}
                 </DialogHeader>
 
                 <div className="px-6 py-5">
@@ -56,52 +106,64 @@ export function ResearchViewModal({
                             }}
                         >
                             <FileText className="size-3.5" />
-                            {repositoryDocumentTypeLabels[item.documentType]}
+                            {
+                                repositoryDocumentTypeLabels[
+                                    displayItem.documentType
+                                ]
+                            }
                         </span>
-                        <DetailBadge label={String(item.year)} />
+                        <DetailBadge label={String(displayItem.year)} />
                         <DetailBadge
-                            label={repositoryStatusLabels[item.status]}
+                            label={repositoryStatusLabels[displayItem.status]}
                         />
                         <DetailBadge
-                            label={repositoryAccessTypeLabels[item.accessType]}
+                            label={
+                                repositoryAccessTypeLabels[
+                                    displayItem.accessType
+                                ]
+                            }
                         />
                     </div>
 
                     <h2 className="mt-4 text-xl leading-7 font-bold text-[#101828]">
-                        {item.title}
+                        {displayItem.title}
                     </h2>
                     <p className="mt-2 text-sm leading-6 text-[#6a7282]">
-                        {item.abstract}
+                        {displayItem.abstract}
                     </p>
 
                     <div className="mt-5 grid gap-3 md:grid-cols-2">
                         <DetailBlock label="Authors">
                             <div className="space-y-2">
-                                {item.authors.map((author) => (
-                                    <div key={author.email}>
+                                {displayItem.authors.map((author, index) => (
+                                    <div key={`${author.name}-${index}`}>
                                         <p className="text-sm font-semibold text-[#364153]">
                                             {author.name}
                                         </p>
-                                        <p className="mt-0.5 inline-flex items-center gap-1 text-xs text-[#6a7282]">
-                                            <Mail className="size-3" />
-                                            {author.email}
-                                        </p>
+                                        {author.email ? (
+                                            <p className="mt-0.5 inline-flex items-center gap-1 text-xs text-[#6a7282]">
+                                                <Mail className="size-3" />
+                                                {author.email}
+                                            </p>
+                                        ) : null}
                                     </div>
                                 ))}
                             </div>
                         </DetailBlock>
-                        <DetailBlock label="Agency">{item.agency}</DetailBlock>
+                        <DetailBlock label="Agency">
+                            {displayItem.agency}
+                        </DetailBlock>
                         <DetailBlock label="Category">
-                            {item.category}
+                            {displayItem.category}
                         </DetailBlock>
                         <DetailBlock label="File Name">
-                            {item.file?.name ?? 'No file metadata'}
+                            {displayItem.file?.name ?? 'No file metadata'}
                         </DetailBlock>
                         <DetailBlock label="Metadata Completion">
-                            {item.metadataCompletion}%
+                            {displayItem.metadataCompletion}%
                         </DetailBlock>
                         <DetailBlock label="Digital Library Readiness">
-                            {item.digitalLibraryScore}%
+                            {displayItem.digitalLibraryScore}%
                         </DetailBlock>
                     </div>
 
@@ -111,7 +173,7 @@ export function ResearchViewModal({
                                 SDG Tags
                             </p>
                             <div className="mt-2 flex flex-wrap gap-1.5">
-                                {item.sdgs.map((sdg) => (
+                                {displayItem.sdgs.map((sdg) => (
                                     <span
                                         key={sdg}
                                         className="rounded-[4px] px-1.5 py-0.5 text-[9px] font-bold text-white"
@@ -132,7 +194,8 @@ export function ResearchViewModal({
                                 Keywords
                             </p>
                             <p className="mt-2 text-sm leading-5 text-[#6a7282]">
-                                {item.keywords.join(', ') || 'No keywords'}
+                                {displayItem.keywords.join(', ') ||
+                                    'No keywords'}
                             </p>
                         </div>
                     </div>

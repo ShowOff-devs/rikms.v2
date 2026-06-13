@@ -60,7 +60,7 @@ export function ResearchStatusPanel({
     embargoUntil,
     externalLink,
     errors,
-    onStatusChange,
+    disabled = false,
     onAccessChange,
     onChange,
 }: {
@@ -69,7 +69,7 @@ export function ResearchStatusPanel({
     embargoUntil: string;
     externalLink: string;
     errors: EditDocumentErrors;
-    onStatusChange: (status: RepositoryStatus) => void;
+    disabled?: boolean;
     onAccessChange: (accessType: RepositoryAccessType) => void;
     onChange: (patch: Partial<RepositoryUpdatePayload>) => void;
 }) {
@@ -88,19 +88,17 @@ export function ResearchStatusPanel({
                 </p>
                 <div className="mt-2 grid grid-cols-3 gap-2">
                     {statusOptions.map((option) => (
-                        <button
+                        <span
                             key={option}
-                            type="button"
-                            onClick={() => onStatusChange(option)}
                             className={cn(
-                                'h-9 rounded-[10px] border text-xs font-semibold',
+                                'inline-flex h-9 items-center justify-center rounded-[10px] border text-xs font-semibold',
                                 status === option
                                     ? 'border-[#1e3a8a] bg-[#eff6ff] text-[#1e3a8a]'
                                     : 'border-[#e5e7eb] text-[#6a7282]',
                             )}
                         >
                             {repositoryStatusLabels[option]}
-                        </button>
+                        </span>
                     ))}
                 </div>
             </div>
@@ -123,8 +121,9 @@ export function ResearchStatusPanel({
                                 key={option.value}
                                 type="button"
                                 onClick={() => onAccessChange(option.value)}
+                                disabled={disabled}
                                 className={cn(
-                                    'flex w-full gap-3 rounded-[12px] border p-3 text-left',
+                                    'flex w-full gap-3 rounded-[12px] border p-3 text-left disabled:cursor-not-allowed disabled:opacity-60',
                                     isSelected
                                         ? 'border-[#1e3a8a] bg-[#eff6ff]'
                                         : 'border-[#e5e7eb] bg-white',
@@ -176,6 +175,7 @@ export function ResearchStatusPanel({
                             onChange={(event) =>
                                 onChange({ embargoUntil: event.target.value })
                             }
+                            disabled={disabled}
                             className={inputClass}
                         />
                     </FieldLabel>
@@ -193,6 +193,7 @@ export function ResearchStatusPanel({
                             onChange={(event) =>
                                 onChange({ externalLink: event.target.value })
                             }
+                            disabled={disabled}
                             className={inputClass}
                             placeholder="https://repository.example/document"
                         />

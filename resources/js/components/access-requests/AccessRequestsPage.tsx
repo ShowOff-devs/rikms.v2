@@ -44,7 +44,10 @@ export function AccessRequestsPage() {
         null,
     );
     const [denialReason, setDenialReason] = useState('');
-    const [feedback, setFeedback] = useState('');
+    const [feedback, setFeedback] = useState<{
+        message: string;
+        type: 'success' | 'error';
+    } | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSavingDecision, setIsSavingDecision] = useState(false);
 
@@ -130,9 +133,10 @@ export function AccessRequestsPage() {
             return;
         }
 
+        setSelectedRequest(null);
         setDecisionState({ request, decision });
         setDenialReason('');
-        setFeedback('');
+        setFeedback(null);
     };
 
     const handleDecisionConfirm = async () => {
@@ -172,11 +176,14 @@ export function AccessRequestsPage() {
                         : current,
                 );
                 setFeedback(
-                    `${updatedRequest.requesterName}'s request was ${
-                        updatedRequest.status === 'approved'
-                            ? 'approved'
-                            : 'denied'
-                    }.`,
+                    {
+                        message: `${updatedRequest.requesterName}'s request was ${
+                            updatedRequest.status === 'approved'
+                                ? 'approved'
+                                : 'denied'
+                        }.`,
+                        type: 'success',
+                    },
                 );
             }
 
@@ -184,9 +191,13 @@ export function AccessRequestsPage() {
             setDenialReason('');
         } catch (error) {
             setFeedback(
-                error instanceof Error
-                    ? error.message
-                    : 'Unable to save access request decision.',
+                {
+                    message:
+                        error instanceof Error
+                            ? error.message
+                            : 'Unable to save access request decision.',
+                    type: 'error',
+                },
             );
         }
 
@@ -232,9 +243,13 @@ export function AccessRequestsPage() {
                                 {feedback ? (
                                     <div
                                         role="status"
-                                        className="rounded-[10px] border border-[#b9f8cf] bg-[#f0fdf4] px-4 py-3 text-sm font-medium text-[#008236]"
+                                        className={`rounded-[10px] border px-4 py-3 text-sm font-medium ${
+                                            feedback.type === 'success'
+                                                ? 'border-[#b9f8cf] bg-[#f0fdf4] text-[#008236]'
+                                                : 'border-[#ffc9c9] bg-[#fef2f2] text-[#e7000b]'
+                                        }`}
                                     >
-                                        {feedback}
+                                        {feedback.message}
                                     </div>
                                 ) : null}
 

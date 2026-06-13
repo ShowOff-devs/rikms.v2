@@ -32,8 +32,8 @@ export function AccessRequestDetailsModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-[680px] rounded-[14px] border-[#e5e7eb] p-0">
-                <DialogHeader className="border-b border-[#f3f4f6] px-6 py-5">
+            <DialogContent className="max-w-[680px] rounded-[14px] border-[#e5e7eb] bg-white p-0 text-[#1e2939] [&>button]:!text-[#4a5565] [&>button:hover]:!bg-[#f9fafb] [&>button[data-state=open]]:!bg-[#f9fafb] [&>button[data-state=open]]:!text-[#4a5565]">
+                <DialogHeader className="border-b border-[#f3f4f6] bg-white px-6 py-5">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                             <DialogTitle className="text-[20px] leading-7 font-bold text-[#1e3a8a]">
@@ -48,7 +48,7 @@ export function AccessRequestDetailsModal({
                     </div>
                 </DialogHeader>
 
-                <div className="space-y-5 px-6 py-5">
+                <div className="space-y-5 bg-white px-6 py-5">
                     <section>
                         <h3 className="text-sm font-semibold text-[#1e2939]">
                             Requester
@@ -122,7 +122,7 @@ export function AccessRequestDetailsModal({
                     ) : null}
                 </div>
 
-                <div className="flex flex-col-reverse gap-2 border-t border-[#f3f4f6] px-6 py-4 sm:flex-row sm:justify-end">
+                <div className="flex flex-col-reverse gap-2 border-t border-[#f3f4f6] bg-white px-6 py-4 sm:flex-row sm:justify-end">
                     <button
                         type="button"
                         onClick={() => onOpenChange(false)}

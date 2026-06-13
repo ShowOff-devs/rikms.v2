@@ -19,47 +19,23 @@ export function PublicationInformationSection({
         <SectionCard
             eyebrow="Publication Information"
             title="Identifiers and Institution"
-            description="Maintain publisher, DOI/ISBN, and external repository references."
+            description="Review institution details and maintain external repository references."
         >
             <div className="grid gap-4 md:grid-cols-2">
                 <FieldLabel label="Publisher / Institution">
                     <input
                         value={form.publisher}
-                        onChange={(event) =>
-                            onChange({ publisher: event.target.value })
-                        }
                         className={inputClass}
+                        readOnly
                         placeholder="Publisher or institution"
                     />
                 </FieldLabel>
                 <FieldLabel label="Agency / Contributor">
                     <input
                         value={form.agency}
-                        onChange={(event) =>
-                            onChange({ agency: event.target.value })
-                        }
                         className={inputClass}
+                        readOnly
                         placeholder="Agency"
-                    />
-                </FieldLabel>
-                <FieldLabel label="DOI">
-                    <input
-                        value={form.doi ?? ''}
-                        onChange={(event) =>
-                            onChange({ doi: event.target.value })
-                        }
-                        className={inputClass}
-                        placeholder="10.xxxx/example"
-                    />
-                </FieldLabel>
-                <FieldLabel label="ISBN">
-                    <input
-                        value={form.isbn ?? ''}
-                        onChange={(event) =>
-                            onChange({ isbn: event.target.value })
-                        }
-                        className={inputClass}
-                        placeholder="ISBN"
                     />
                 </FieldLabel>
                 <div className="md:col-span-2">

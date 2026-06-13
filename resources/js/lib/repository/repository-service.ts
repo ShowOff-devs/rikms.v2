@@ -29,6 +29,9 @@ import type {
 
 type AgencyResearchApiRecord = {
     id: number;
+    revision_parent_id?: number | null;
+    superseded_by_id?: number | null;
+    revision_number?: number | null;
     title: string;
     abstract?: string | null;
     authors: string[] | string;
@@ -42,8 +45,22 @@ type AgencyResearchApiRecord = {
     downloads?: number;
     embargo_until?: string | null;
     external_url?: string | null;
+    files?: AgencyResearchFileApiRecord[];
     created_at?: string | null;
     updated_at?: string | null;
+};
+
+type AgencyResearchFileApiRecord = {
+    id: number;
+    original_name: string;
+    mime_type?: string | null;
+    extension?: string | null;
+    size_bytes?: number | null;
+    file_type?: string | null;
+    status?: string | null;
+    metadata?: Record<string, unknown> | null;
+    uploaded_at?: string | null;
+    created_at?: string | null;
 };
 
 const normalize = (value: string | number) => String(value).toLowerCase();
@@ -77,6 +94,135 @@ const countBy = <T extends string>(
         }))
         .sort((first, second) => second.value - first.value);
 };
+
+function formatBytes(bytes?: number | null) {
+    if (!bytes || bytes <= 0) {
+        return 'Pending metadata';
+    }
+
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let value = bytes;
+    let unitIndex = 0;
+
+    while (value >= 1024 && unitIndex < units.length - 1) {
+        value /= 1024;
+        unitIndex += 1;
+    }
+
+    return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+function firstNumber(...values: unknown[]) {
+    for (const value of values) {
+        if (typeof value === 'number' && Number.isFinite(value)) {
+            return value;
+        }
+
+        if (typeof value === 'string' && value.trim()) {
+            const parsed = Number.parseInt(value, 10);
+
+            if (Number.isFinite(parsed)) {
+                return parsed;
+            }
+        }
+    }
+
+    return 0;
+}
+
+function latestActiveFile(files?: AgencyResearchFileApiRecord[]) {
+    return [...(files ?? [])]
+        .filter((file) => file.status !== 'deleted')
+        .sort(
+            (first, second) =>
+                new Date(
+                    second.uploaded_at ?? second.created_at ?? 0,
+                ).getTime() -
+                new Date(first.uploaded_at ?? first.created_at ?? 0).getTime(),
+        )[0];
+}
+
+function mapRepositoryDocumentType(
+    record: AgencyResearchApiRecord,
+    file?: AgencyResearchFileApiRecord,
+): RepositoryDocumentType {
+    const type = normalize(file?.file_type ?? record.category ?? '');
+
+    if (type.includes('terminal')) {
+        return 'terminal-report';
+    }
+
+    if (type.includes('project') || type.includes('accomplishment')) {
+        return 'project-accomplishment';
+    }
+
+    return 'research-study';
+}
+
+function mapRepositoryDocumentTypeToFileType(
+    documentType?: RepositoryDocumentType,
+) {
+    if (documentType === 'terminal-report') {
+        return 'terminal-report';
+    }
+
+    if (documentType === 'project-accomplishment') {
+        return 'project-accomplishment';
+    }
+
+    return 'research_document';
+}
+
+function mapRepositoryFileInfo(
+    record: AgencyResearchApiRecord,
+    file?: AgencyResearchFileApiRecord,
+) {
+    if (!file) {
+        return {
+            name: 'No file uploaded',
+            size: 'Pending metadata',
+            uploadedAt: record.created_at ?? new Date().toISOString(),
+            type: 'PDF',
+            pages: 0,
+            canDownload: false,
+        };
+    }
+
+    return {
+        id: String(file.id),
+        name: file.original_name,
+        size: formatBytes(file.size_bytes),
+        uploadedAt:
+            file.uploaded_at ?? file.created_at ?? record.created_at ?? new Date().toISOString(),
+        type:
+            file.mime_type ??
+            (file.extension ? file.extension.toUpperCase() : 'PDF'),
+        pages: firstNumber(file.metadata?.page_count, file.metadata?.pages),
+        canDownload: file.status !== 'deleted',
+    };
+}
+
+function calculateMetadataCompletion(
+    record: AgencyResearchApiRecord,
+    file?: AgencyResearchFileApiRecord,
+) {
+    const checks = [
+        record.title,
+        record.abstract,
+        Array.isArray(record.authors) ? record.authors.length > 0 : record.authors,
+        record.publication_year,
+        record.category,
+        record.sdgs && record.sdgs.length > 0,
+        record.keywords && record.keywords.length > 0,
+        record.access_level,
+        file?.original_name,
+        file?.size_bytes,
+    ];
+
+    const completed = checks.filter(Boolean).length;
+
+    return Math.round((completed / checks.length) * 100);
+}
 
 export function getRepositoryItemsSnapshot() {
     return [];
@@ -352,6 +498,19 @@ export async function publishRepositoryItem(
     return mapRepositoryItemFromApi(await submitAgencyResearch(id));
 }
 
+export async function createRepositoryRevision(
+    id: string,
+): Promise<RepositoryItem | null> {
+    const { data } = await fetchApi<AgencyResearchApiRecord>(
+        `/api/agency/research/${id}/revision`,
+        {
+            method: 'POST',
+        },
+    );
+
+    return mapRepositoryItemFromApi(data);
+}
+
 export async function archiveRepositoryItem(
     id: string,
 ): Promise<RepositoryItem | null> {
@@ -391,7 +550,10 @@ export async function replaceRepositoryFile(
 
     const formData = new FormData();
     formData.append('file', file.file);
-    formData.append('file_type', 'research_document');
+    formData.append(
+        'file_type',
+        mapRepositoryDocumentTypeToFileType(file.documentType),
+    );
     formData.append('visibility', 'private');
     formData.append('access_level', 'restricted');
 
@@ -401,6 +563,38 @@ export async function replaceRepositoryFile(
     });
 
     return getRepositoryItemById(id);
+}
+
+export async function downloadRepositoryFile(
+    researchId: string,
+    fileId: string,
+    fileName: string,
+) {
+    const response = await fetch(
+        `/api/agency/research/${encodeURIComponent(researchId)}/files/${encodeURIComponent(fileId)}/download`,
+        {
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'application/octet-stream',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        },
+    );
+
+    if (!response.ok) {
+        throw new Error('Unable to download the selected research file.');
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
 }
 
 async function getApiRepositoryItems() {
@@ -418,40 +612,51 @@ function mapRepositoryItemFromApi(record: AgencyResearchApiRecord): RepositoryIt
               .split(',')
               .map((author) => author.trim())
               .filter(Boolean);
+    const file = latestActiveFile(record.files);
+    const fileInfo = mapRepositoryFileInfo(record, file);
 
     return {
         id: String(record.id),
+        revisionParentId: record.revision_parent_id
+            ? String(record.revision_parent_id)
+            : undefined,
+        supersededById: record.superseded_by_id
+            ? String(record.superseded_by_id)
+            : undefined,
+        revisionNumber: record.revision_number ?? 1,
         title: record.title,
         abstract: record.abstract ?? '',
         authors: authors.map((name) => ({ name, email: '' })),
         agency: record.agency?.short_name ?? record.agency?.name ?? '',
-        documentType: 'research-study',
+        documentType: mapRepositoryDocumentType(record, file),
         year: record.publication_year ?? new Date().getFullYear(),
         status: mapRepositoryStatus(record.status),
-        accessType: mapRepositoryAccessType(record.access_level),
+        accessType: mapRepositoryAccessType(
+            record.access_level,
+            record.external_url,
+        ),
         sdgs: record.sdgs ?? [],
         category: record.category ?? 'Uncategorized',
         keywords: record.keywords ?? [],
-        metadataCompletion: 85,
+        metadataCompletion: calculateMetadataCompletion(record, file),
         digitalLibraryScore: Math.min(
             100,
-            70 + Math.min(record.downloads ?? 0, 30),
+            (file ? 70 : 45) + Math.min(record.downloads ?? 0, 30),
         ),
-        isAiTagged: false,
+        isAiTagged:
+            Boolean(file?.metadata?.ai_processing) ||
+            Boolean(file?.metadata?.ai_metadata_status),
         publisher: record.agency?.name ?? '',
         externalLink: record.external_url ?? undefined,
         embargoUntil: record.embargo_until ?? undefined,
-        file: {
-            name: `${record.title}.pdf`,
-            size: 'Pending metadata',
-            uploadedAt: record.created_at ?? new Date().toISOString(),
-            type: 'PDF',
-            pages: 0,
-        },
+        file: fileInfo,
         versions: [
             {
                 id: `${record.id}-current`,
-                label: 'Current relational record',
+                label:
+                    (record.revision_number ?? 1) > 1
+                        ? `Revision ${record.revision_number}`
+                        : 'Original version',
                 actor: 'RIKMS',
                 timestamp: record.updated_at ?? new Date().toISOString(),
             },
@@ -462,7 +667,12 @@ function mapRepositoryItemFromApi(record: AgencyResearchApiRecord): RepositoryIt
 }
 
 function mapRepositoryStatus(status: string): RepositoryStatus {
-    if (status === 'draft' || status === 'published' || status === 'archived') {
+    if (
+        status === 'draft' ||
+        status === 'published' ||
+        status === 'archived' ||
+        status === 'superseded'
+    ) {
         return status;
     }
 
@@ -473,13 +683,24 @@ function mapRepositoryStatus(status: string): RepositoryStatus {
     return 'restricted';
 }
 
-function mapRepositoryAccessType(accessLevel?: string | null): RepositoryAccessType {
-    if (accessLevel === 'public' || accessLevel === 'restricted' || accessLevel === 'embargo') {
+function mapRepositoryAccessType(
+    accessLevel?: string | null,
+    externalUrl?: string | null,
+): RepositoryAccessType {
+    if (externalUrl) {
+        return 'external-link';
+    }
+
+    if (accessLevel === 'public' || accessLevel === 'restricted') {
         return accessLevel;
     }
 
-    if (accessLevel === 'external') {
-        return 'external-link';
+    if (accessLevel === 'embargo' || accessLevel === 'embargoed') {
+        return 'embargo';
+    }
+
+    if (accessLevel === 'request_required') {
+        return 'request-access';
     }
 
     return 'request-access';
