@@ -4,7 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\PublicResearchResource;
+use App\Models\Agency;
 use App\Models\Research;
+use App\Support\PublicMetadata;
+use App\Support\ResearchAnalyticsTracker;
+use App\Support\Statuses;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
 class PublicResearchController extends Controller
@@ -34,7 +39,7 @@ class PublicResearchController extends Controller
         $query = $this->normalizeQuery($request);
         $records = Research::query()
             ->with('agency')
-            ->whereIn('status', ['published', 'archived'])
+            ->publiclyVisible()
             ->get();
 
         $filtered = $this->sortRecords(
@@ -58,28 +63,39 @@ class PublicResearchController extends Controller
         ]);
     }
 
-    public function show(Research $research): PublicResearchResource
+    public function show(Request $request, string $identifier): PublicResearchResource
     {
-        abort_unless(in_array($research->status, ['published', 'archived'], true), 404);
+        $research = $this->resolvePublicResearch($identifier);
 
-        return new PublicResearchResource($research->load('agency'));
+        ResearchAnalyticsTracker::recordView($request, $research, 'public');
+
+        return new PublicResearchResource($research);
     }
 
     public function summary()
     {
         $records = Research::query()
             ->with('agency')
-            ->whereIn('status', ['published', 'archived'])
+            ->publiclyVisible()
             ->orderByDesc('publication_year')
             ->orderByDesc('updated_at')
             ->get();
+        $latestPublicationYear = $records->pluck('publication_year')->filter()->max();
+        $latestPublicationCount = $latestPublicationYear
+            ? $records->filter(fn (Research $record): bool => (int) $record->publication_year === (int) $latestPublicationYear)->count()
+            : 0;
+        $representedSdgCount = $records
+            ->flatMap(fn (Research $record): array => $record->sdgs ?? [])
+            ->unique()
+            ->count();
 
         return response()->json([
             'researchCount' => $records->count(),
-            'agencyCount' => $records->pluck('agency_id')->unique()->count(),
-            'latestPublicationCount' => $records
-                ->filter(fn (Research $record): bool => (int) $record->publication_year >= 2025)
-                ->count(),
+            'agencyCount' => Agency::query()->where('status', 'active')->count(),
+            'representedSdgCount' => $representedSdgCount,
+            'latestPublicationYear' => $latestPublicationYear ? (int) $latestPublicationYear : null,
+            'latestPublicationCount' => $latestPublicationCount,
+            'recentPublicationCount' => $latestPublicationCount,
             'sdgCards' => collect(range(1, 17))->map(function (int $number) use ($records): array {
                 $label = "SDG {$number}";
 
@@ -141,12 +157,13 @@ class PublicResearchController extends Controller
 
             $haystack = strtolower(implode(' ', [
                 $record->title,
-                $record->abstract,
-                implode(' ', $authors),
+                $this->publicFieldIsVisible($record, 'abstract') ? $record->abstract : '',
+                $this->publicFieldIsVisible($record, 'authors') ? implode(' ', $authors) : '',
                 $agency,
                 $record->category,
                 implode(' ', $sdgs),
-                implode(' ', $keywords),
+                $this->publicFieldIsVisible($record, 'keywords') ? implode(' ', $keywords) : '',
+                implode(' ', $this->publicMetadataSearchValues($record)),
                 (string) $year,
             ]));
 
@@ -182,10 +199,25 @@ class PublicResearchController extends Controller
             'sdgs' => $this->countFacet($records, collect(range(1, 17))->map(fn (int $number): string => "SDG {$number}"), 'sdg'),
             'years' => $this->countFacet($records, $years->map(fn ($year): string => (string) $year), 'year'),
             'accessLevels' => $this->countFacet($records, collect(['public', 'restricted', 'embargo', 'external']), 'access'),
-            'statuses' => $this->countFacet($records, collect(['published', 'archived']), 'status'),
+            'statuses' => $this->countFacet($records, collect([Statuses::RESEARCH_PUBLISHED]), 'status'),
             'minYear' => (int) ($years->min() ?: now()->year),
             'maxYear' => (int) ($years->max() ?: now()->year),
         ];
+    }
+
+    private function resolvePublicResearch(string $identifier): Research
+    {
+        return Research::query()
+            ->with('agency')
+            ->publiclyVisible()
+            ->where(function (Builder $query) use ($identifier): void {
+                $query->where('slug', $identifier);
+
+                if (ctype_digit($identifier)) {
+                    $query->orWhere('id', (int) $identifier);
+                }
+            })
+            ->firstOrFail();
     }
 
     private function countFacet($records, $values, string $field)
@@ -217,5 +249,48 @@ class PublicResearchController extends Controller
             'embargoed' => 'embargo',
             default => $accessLevel,
         };
+    }
+
+    private function publicFieldIsVisible(Research $record, string $key): bool
+    {
+        if (! is_array($record->public_metadata_fields) && ! is_array($record->public_metadata)) {
+            return true;
+        }
+
+        $fields = PublicMetadata::normalizeFieldList($record->public_metadata_fields);
+
+        if ($fields === []) {
+            $fields = PublicMetadata::fieldListFromMetadata($record->public_metadata);
+        }
+
+        return in_array($key, $fields, true);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function publicMetadataSearchValues(Research $record): array
+    {
+        if (! is_array($record->public_metadata_fields) && ! is_array($record->public_metadata)) {
+            return [];
+        }
+
+        $fields = PublicMetadata::normalizeFieldList($record->public_metadata_fields);
+
+        if ($fields === []) {
+            $fields = PublicMetadata::fieldListFromMetadata($record->public_metadata);
+        }
+
+        return collect($record->public_metadata)
+            ->map(fn (mixed $field): array => is_array($field) ? $field : [])
+            ->map(fn (array $field): array => [
+                'key' => PublicMetadata::normalizeKey($field['key'] ?? null),
+                'value' => $field['value'] ?? null,
+            ])
+            ->filter(fn (array $field): bool => is_string($field['key']) && in_array($field['key'], $fields, true))
+            ->pluck('value')
+            ->filter(fn (mixed $value): bool => is_string($value) && trim($value) !== '')
+            ->values()
+            ->all();
     }
 }

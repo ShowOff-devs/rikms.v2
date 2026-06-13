@@ -35,7 +35,7 @@ Route::prefix('public')->group(function () {
     Route::get('/summary', [PublicResearchController::class, 'summary']);
     Route::get('/research', [PublicResearchController::class, 'index']);
     Route::post('/research/{research}/access-requests', [PublicAccessRequestController::class, 'store']);
-    Route::get('/research/{research:slug}', [PublicResearchController::class, 'show']);
+    Route::get('/research/{identifier}', [PublicResearchController::class, 'show']);
     Route::get('/agencies', [PublicAgencyController::class, 'index']);
     Route::get('/agencies/types', [PublicAgencyController::class, 'types']);
     Route::get('/agencies/{agency:slug}', [PublicAgencyController::class, 'show']);
@@ -66,6 +66,7 @@ Route::prefix('agency')
         Route::post('/settings/profile-photo', [AgencyProfileSettingsController::class, 'uploadProfilePhoto'])->name('settings.profile-photo.upload');
         Route::post('/settings/password', [AgencyProfileSettingsController::class, 'changePassword'])->name('settings.password.update');
         Route::post('/settings/deactivation-request', [AgencyProfileSettingsController::class, 'requestDeactivation'])->name('settings.deactivation-request');
+        Route::delete('/settings/sessions/{sessionId}', [AgencyProfileSettingsController::class, 'revokeSession'])->name('settings.sessions.revoke');
         Route::get('/research', [AgencyReadController::class, 'research'])->name('research.index');
         Route::post('/research', [AgencyResearchWriteController::class, 'store'])->name('research.store');
         Route::get('/research/{research}', [AgencyReadController::class, 'researchShow'])->name('research.show');
@@ -73,14 +74,18 @@ Route::prefix('agency')
         Route::get('/research/{research}/ai-metadata', [AiResultController::class, 'agencyAiMetadata'])->name('research.ai-metadata');
         Route::get('/research/{research}/sdg-classification', [AiResultController::class, 'agencySdgClassification'])->name('research.sdg-classification');
         Route::get('/research/{research}/ai-results', [AiResultController::class, 'agencyAiResults'])->name('research.ai-results');
+        Route::post('/research/{research}/ai-results/process', [AiResultController::class, 'agencyProcessAiResults'])->name('research.ai-results.process');
         Route::post('/research/{research}/ai-results/{result}/review', [AiResultController::class, 'agencyReview'])->name('research.ai-results.review');
         Route::post('/research/{research}/ai-results/{result}/apply', [AiResultController::class, 'agencyApply'])->name('research.ai-results.apply');
         Route::match(['put', 'patch'], '/research/{research}', [AgencyResearchWriteController::class, 'update'])->name('research.update');
         Route::post('/research/{research}/submit', [AgencyResearchWriteController::class, 'submit'])->name('research.submit');
+        Route::post('/research/{research}/revision', [AgencyResearchWriteController::class, 'createRevision'])->name('research.revision');
         Route::post('/research/{research}/archive', [AgencyArchiveController::class, 'archiveResearch'])->name('research.archive');
         Route::post('/research/{research}/restore', [AgencyArchiveController::class, 'restoreResearch'])->name('research.restore');
+        Route::delete('/research/{research}/archive', [AgencyArchiveController::class, 'destroyResearch'])->name('research.archive.destroy');
         Route::get('/research/{research}/files', [AgencyResearchWriteController::class, 'files'])->name('research.files.index');
         Route::post('/research/{research}/files', [AgencyResearchWriteController::class, 'storeFile'])->name('research.files.store');
+        Route::get('/research/{research}/files/{file}/download', [AgencyResearchWriteController::class, 'downloadFile'])->name('research.files.download');
         Route::delete('/research/{research}/files/{file}', [AgencyResearchWriteController::class, 'destroyFile'])->name('research.files.destroy');
         Route::get('/archive/research', [AgencyArchiveController::class, 'research'])->name('archive.research');
         Route::get('/access-requests', [AgencyReadController::class, 'accessRequests'])->name('access-requests.index');
@@ -88,13 +93,14 @@ Route::prefix('agency')
         Route::post('/access-requests/{accessRequest}/deny', [AgencyAccessRequestDecisionController::class, 'deny'])->name('access-requests.deny');
         Route::get('/notifications', [AgencyReadController::class, 'notifications'])->name('notifications.index');
         Route::post('/notifications/{notification}/read', [NotificationController::class, 'agencyRead'])->name('notifications.read');
+        Route::post('/notifications/{notification}/unread', [NotificationController::class, 'agencyUnread'])->name('notifications.unread');
         Route::post('/notifications/read-all', [NotificationController::class, 'agencyReadAll'])->name('notifications.read-all');
         Route::get('/research-files', [AgencyReadController::class, 'researchFiles'])->name('research-files.index');
     });
 
 Route::prefix('admin')
     ->name('api.admin.')
-    ->middleware(['auth:sanctum', 'role:super_admin'])
+    ->middleware(['auth:sanctum', 'role:super_admin', 'super_admin.2fa'])
     ->group(function () {
         Route::get('/dashboard', AdminDashboardController::class)->name('dashboard');
         Route::get('/agency-admin-users', [AdminAgencyAdminUserController::class, 'index'])->name('agency-admin-users.index');
@@ -115,6 +121,9 @@ Route::prefix('admin')
         Route::post('/agencies/{agency}/archive', [AdminAgencyManagementController::class, 'archive'])->name('agencies.archive');
         Route::get('/users', [AdminReadController::class, 'users'])->name('users.index');
         Route::get('/users/{user}', [AdminReadController::class, 'userShow'])->name('users.show');
+        Route::get('/research-moderation/duplicates', [AdminResearchModerationController::class, 'duplicates'])->name('research-moderation.duplicates');
+        Route::post('/research-moderation/duplicates/dismiss', [AdminResearchModerationController::class, 'dismissDuplicate'])->name('research-moderation.duplicates.dismiss');
+        Route::get('/research-moderation/activity', [AdminResearchModerationController::class, 'activity'])->name('research-moderation.activity');
         Route::get('/research', [AdminReadController::class, 'research'])->name('research.index');
         Route::get('/research/{research}', [AdminReadController::class, 'researchShow'])->name('research.show');
         Route::get('/research/{research}/pdf-parsing-result', [AiResultController::class, 'adminPdfParsingResult'])->name('research.pdf-parsing-result');
@@ -128,9 +137,19 @@ Route::prefix('admin')
         Route::post('/research/{research}/return', [AdminResearchModerationController::class, 'return'])->name('research.return');
         Route::post('/research/{research}/archive', [AdminResearchModerationController::class, 'archive'])->name('research.archive');
         Route::post('/research/{research}/restore', [AdminResearchModerationController::class, 'restore'])->name('research.restore');
+        Route::delete('/research/{research}/archive', [AdminArchiveController::class, 'destroyResearch'])->name('research.archive.destroy');
         Route::get('/archive/research', [AdminArchiveController::class, 'research'])->name('archive.research');
         Route::get('/archive/files', [AdminArchiveController::class, 'files'])->name('archive.files');
+        Route::get('/archive/agencies', [AdminArchiveController::class, 'agencies'])->name('archive.agencies');
+        Route::get('/archive/users', [AdminArchiveController::class, 'users'])->name('archive.users');
+        Route::get('/archive/activity', [AdminArchiveController::class, 'activity'])->name('archive.activity');
+        Route::get('/archive/export', [AdminArchiveController::class, 'export'])->name('archive.export');
         Route::post('/research-files/{file}/restore', [AdminArchiveController::class, 'restoreFile'])->name('research-files.restore');
+        Route::delete('/research-files/{file}/archive', [AdminArchiveController::class, 'destroyFile'])->name('research-files.archive.destroy')->withTrashed();
+        Route::post('/agencies/{agency}/restore', [AdminArchiveController::class, 'restoreAgency'])->name('agencies.restore')->withTrashed();
+        Route::delete('/agencies/{agency}/archive', [AdminArchiveController::class, 'destroyAgency'])->name('agencies.archive.destroy')->withTrashed();
+        Route::post('/users/{user}/restore', [AdminArchiveController::class, 'restoreUser'])->name('users.restore')->withTrashed();
+        Route::delete('/users/{user}/archive', [AdminArchiveController::class, 'destroyUser'])->name('users.archive.destroy')->withTrashed();
         Route::get('/access-monitoring', [AdminAccessMonitoringController::class, 'index'])->name('access-monitoring.index');
         Route::get('/access-monitoring/events', [AdminAccessMonitoringController::class, 'events'])->name('access-monitoring.events');
         Route::get('/access-monitoring/export', [AdminAccessMonitoringController::class, 'export'])->name('access-monitoring.export');
@@ -148,8 +167,10 @@ Route::prefix('admin')
         Route::get('/security-events', [AdminReadController::class, 'securityEvents'])->name('security-events.index');
         Route::get('/security/events', [AdminSecurityController::class, 'events'])->name('security.events');
         Route::get('/security/events/{securityEvent}', [AdminSecurityController::class, 'show'])->name('security.events.show');
+        Route::post('/security/events/{securityEvent}/acknowledge', [AdminSecurityController::class, 'acknowledge'])->name('security.events.acknowledge');
         Route::post('/security/events/{securityEvent}/resolve', [AdminSecurityController::class, 'resolve'])->name('security.events.resolve');
         Route::post('/security/events/{securityEvent}/reopen', [AdminSecurityController::class, 'reopen'])->name('security.events.reopen');
+        Route::get('/security/summary', [AdminSecurityController::class, 'summary'])->name('security.summary');
         Route::get('/security/sessions', [AdminSecurityController::class, 'sessions'])->name('security.sessions');
         Route::delete('/security/sessions/{sessionId}', [AdminSecurityController::class, 'revokeSession'])->name('security.sessions.revoke');
         Route::get('/system-activity/notifications', [AdminSystemActivityController::class, 'notifications'])->name('system-activity.notifications');
@@ -160,11 +181,14 @@ Route::prefix('admin')
         Route::get('/platform-settings', [AdminReadController::class, 'platformSettings'])->name('platform-settings.index');
         Route::patch('/platform-settings/{setting}', [AdminPlatformSettingController::class, 'update'])->name('platform-settings.update');
         Route::post('/platform-settings/bulk-update', [AdminPlatformSettingController::class, 'bulkUpdate'])->name('platform-settings.bulk-update');
+        Route::post('/platform-settings/logo', [AdminPlatformSettingController::class, 'uploadLogo'])->name('platform-settings.logo.upload');
         Route::get('/rbac/roles', [AdminRbacController::class, 'roles'])->name('rbac.roles.index');
         Route::post('/rbac/roles', [AdminRbacController::class, 'createRole'])->name('rbac.roles.store');
         Route::patch('/rbac/roles/{role}', [AdminRbacController::class, 'updateRole'])->name('rbac.roles.update');
+        Route::delete('/rbac/roles/{role}', [AdminRbacController::class, 'deleteRole'])->name('rbac.roles.destroy');
         Route::match(['put', 'patch'], '/rbac/roles/{role}/permissions', [AdminRbacController::class, 'updateRolePermissions'])->name('rbac.roles.permissions.update');
         Route::get('/rbac/permissions', [AdminRbacController::class, 'permissions'])->name('rbac.permissions.index');
+        Route::get('/rbac/history', [AdminRbacController::class, 'history'])->name('rbac.history.index');
         Route::get('/rbac/users', [AdminRbacController::class, 'users'])->name('rbac.users.index');
         Route::get('/rbac/users/{user}/roles', [AdminRbacController::class, 'userRoles'])->name('rbac.users.roles.index');
         Route::post('/rbac/users/{user}/roles', [AdminRbacController::class, 'assignUserRole'])->name('rbac.users.roles.store');

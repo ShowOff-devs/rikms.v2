@@ -31,6 +31,9 @@ export type PublicPortalSummary = {
     researchCount: number;
     agencyCount: number;
     latestPublicationCount: number;
+    latestPublicationYear: number | null;
+    recentPublicationCount: number;
+    representedSdgCount: number;
     sdgCards: Array<{
         number: string;
         label: string;
@@ -58,7 +61,7 @@ export function getResearchFacets(): ResearchFacetOptions {
         accessLevels: ['public', 'restricted', 'embargo', 'external'].map(
             defaultFacetOption,
         ),
-        statuses: ['published', 'archived'].map(defaultFacetOption),
+        statuses: ['published'].map(defaultFacetOption),
         minYear: 1900,
         maxYear: new Date().getFullYear() + 1,
     };
@@ -145,8 +148,11 @@ export async function submitPublicAccessRequest(
     researchId: string,
     payload: PublicAccessRequestPayload,
 ) {
-    return fetchApi(`/api/public/research/${encodeURIComponent(researchId)}/access-requests`, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-    });
+    return fetchApi(
+        `/api/public/research/${encodeURIComponent(researchId)}/access-requests`,
+        {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        },
+    );
 }

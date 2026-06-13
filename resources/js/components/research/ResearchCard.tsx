@@ -15,6 +15,13 @@ type ResearchCardProps = {
 const formatDownloads = (downloads: number) =>
     `${new Intl.NumberFormat('en-US').format(downloads)} downloads`;
 
+const summaryFallbackExcludedKeys = new Set([
+    'title',
+    'abstract',
+    'authors',
+    'keywords',
+]);
+
 const accessMeta = {
     public: {
         label: 'Public Download',
@@ -36,6 +43,17 @@ const accessMeta = {
 
 export default function ResearchCard({ research }: ResearchCardProps) {
     const access = accessMeta[research.accessLevel];
+    const detailHref = `/browse-research/${research.public_identifier}`;
+    const publicSummary =
+        research.abstract.trim() ||
+        research.publicMetadata
+            .find(
+                (field) =>
+                    !summaryFallbackExcludedKeys.has(field.key) &&
+                    field.value.trim(),
+            )
+            ?.value.trim() ||
+        '';
 
     return (
         <article className="rounded-[14px] border border-[#f3f4f6] bg-white px-6 pt-6 pb-[25px] shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_0px_rgba(0,0,0,0.1)]">
@@ -65,15 +83,17 @@ export default function ResearchCard({ research }: ResearchCardProps) {
             </div>
 
             <Link
-                href={`/browse-research/${research.id}`}
+                href={detailHref}
                 className="mt-2 block text-[16.8px] leading-[25.2px] font-semibold text-[#1e3a8a] hover:underline"
             >
                 {research.title}
             </Link>
 
-            <p className="text-xs leading-4 text-[#6b7280]">
-                {research.authors.join(', ')}
-            </p>
+            {research.authors.length > 0 ? (
+                <p className="text-xs leading-4 text-[#6b7280]">
+                    {research.authors.join(', ')}
+                </p>
+            ) : null}
 
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs leading-4 text-[#6b7280]">
                 <span className="inline-flex items-center gap-1">
@@ -90,13 +110,15 @@ export default function ResearchCard({ research }: ResearchCardProps) {
                 </span>
             </div>
 
-            <p className="mt-3 line-clamp-2 text-sm leading-5 text-[#6b7280]">
-                {research.abstract}
-            </p>
+            {publicSummary ? (
+                <p className="mt-3 line-clamp-2 text-sm leading-5 text-[#6b7280]">
+                    {publicSummary}
+                </p>
+            ) : null}
 
             <div className="mt-4 flex flex-wrap items-center gap-3">
                 <Link
-                    href={`/browse-research/${research.id}`}
+                    href={detailHref}
                     className="inline-flex h-[38px] items-center gap-1 rounded-[10px] bg-[#1e3a8a] px-4 text-sm leading-5 font-medium text-white"
                 >
                     <span>View Details</span>
@@ -115,9 +137,9 @@ export default function ResearchCard({ research }: ResearchCardProps) {
                     </button>
                 ) : null}
                 {research.accessLevel === 'restricted' ||
-                research.accessLevel === 'embargo' ? (
+                    research.accessLevel === 'embargo' ? (
                     <Link
-                        href={`/browse-research/${research.id}#request-access`}
+                        href={`${detailHref}#request-access`}
                         className="inline-flex h-[38px] items-center gap-1 rounded-[10px] border border-[#1e3a8a] px-4 text-sm leading-5 font-medium text-[#1e3a8a]"
                     >
                         <span>Request Access</span>

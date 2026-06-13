@@ -84,6 +84,7 @@ Route::middleware(['auth', 'role:agency_admin'])->group(function () {
     Route::inertia('/agency/notifications', 'agency/notifications')->name('agency.notifications');
     Route::inertia('/agency/profile', 'agency/profile')->name('agency.profile');
     Route::inertia('/agency/settings', 'agency/settings')->name('agency.settings');
+    Route::redirect('/agency/settings/two-factor', '/settings/two-factor')->name('agency.settings.two-factor');
     Route::inertia('/agency/upload', 'agency/upload')->name('agency.upload');
     Route::inertia('/agency/upload/research', 'agency/upload/research')->name('agency.upload.research');
     Route::inertia('/agency/upload/terminal-report', 'agency/upload/terminal-report')->name('agency.upload.terminal-report');
@@ -106,7 +107,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
     })->name('login');
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])->name('login.store');
 
-    Route::middleware(['auth', 'role:super_admin'])->group(function () {
+    Route::middleware(['auth', 'role:super_admin', 'super_admin.2fa'])->group(function () {
         Route::inertia('/dashboard', 'admin/dashboard')->name('dashboard');
         Route::inertia('/agencies', 'admin/agencies')->name('agencies');
         Route::inertia('/users', 'admin/agency-admin-users')->name('users');
