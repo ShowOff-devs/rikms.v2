@@ -303,10 +303,12 @@ export function ResearchUploadsTable({
 export function AccessRequestsTable({
     requests,
     onDecision,
+    savingRequestId,
     onViewAll,
 }: {
     requests: AgencyAccessRequest[];
     onDecision: (requestId: string, decision: 'approved' | 'denied') => void;
+    savingRequestId?: string | null;
     onViewAll: () => void;
 }) {
     return (
@@ -370,9 +372,15 @@ export function AccessRequestsTable({
                                                         'approved',
                                                     )
                                                 }
-                                                className="h-[26px] rounded-[8px] border border-[#b9f8cf] bg-[#f0fdf4] px-3 text-xs font-medium text-[#008236]"
+                                                disabled={
+                                                    savingRequestId ===
+                                                    request.id
+                                                }
+                                                className="h-[26px] rounded-[8px] border border-[#b9f8cf] bg-[#f0fdf4] px-3 text-xs font-medium text-[#008236] disabled:cursor-not-allowed disabled:opacity-60"
                                             >
-                                                Approve
+                                                {savingRequestId === request.id
+                                                    ? 'Saving'
+                                                    : 'Approve'}
                                             </button>
                                             <button
                                                 type="button"
@@ -382,7 +390,11 @@ export function AccessRequestsTable({
                                                         'denied',
                                                     )
                                                 }
-                                                className="h-[26px] rounded-[8px] border border-[#ffc9c9] bg-[#fef2f2] px-3 text-xs font-medium text-[#e7000b]"
+                                                disabled={
+                                                    savingRequestId ===
+                                                    request.id
+                                                }
+                                                className="h-[26px] rounded-[8px] border border-[#ffc9c9] bg-[#fef2f2] px-3 text-xs font-medium text-[#e7000b] disabled:cursor-not-allowed disabled:opacity-60"
                                             >
                                                 Deny
                                             </button>

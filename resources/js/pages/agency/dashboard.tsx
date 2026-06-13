@@ -10,6 +10,10 @@ import {
     ResearchUploadsTable,
 } from '@/components/agency/AgencyDashboardWidgets';
 import {
+    approveAgencyAccessRequest,
+    denyAgencyAccessRequest,
+} from '@/lib/agency/agency-access-request-service';
+import {
     filterAgencyResearchRecords,
     getAgencyDashboardData,
     updateAccessRequestStatus,
@@ -44,6 +48,13 @@ export default function AgencyDashboardPage() {
     const [dashboard, setDashboard] =
         useState<DashboardState>(emptyDashboardState);
     const [isLoading, setIsLoading] = useState(true);
+    const [savingAccessRequestId, setSavingAccessRequestId] = useState<
+        string | null
+    >(null);
+    const [accessDecisionFeedback, setAccessDecisionFeedback] = useState<{
+        message: string;
+        type: 'success' | 'error';
+    } | null>(null);
     const [search, setSearch] = useState('');
 
     useEffect(() => {
@@ -129,18 +140,46 @@ export default function AgencyDashboardPage() {
         );
     };
 
-    const handleAccessDecision = (
+    const handleAccessDecision = async (
         requestId: string,
         decision: 'approved' | 'denied',
     ) => {
-        setDashboard((current) => ({
-            ...current,
-            accessRequests: updateAccessRequestStatus(
-                current.accessRequests,
-                requestId,
-                decision,
-            ),
-        }));
+        if (savingAccessRequestId) {
+            return;
+        }
+
+        setSavingAccessRequestId(requestId);
+        setAccessDecisionFeedback(null);
+
+        try {
+            const updatedRequest =
+                decision === 'approved'
+                    ? await approveAgencyAccessRequest(requestId)
+                    : await denyAgencyAccessRequest(requestId);
+
+            setDashboard((current) => ({
+                ...current,
+                accessRequests: updateAccessRequestStatus(
+                    current.accessRequests,
+                    requestId,
+                    updatedRequest.status,
+                ),
+            }));
+            setAccessDecisionFeedback({
+                message: `Access request ${updatedRequest.status}.`,
+                type: 'success',
+            });
+        } catch (error) {
+            setAccessDecisionFeedback({
+                message:
+                    error instanceof Error
+                        ? error.message
+                        : 'Unable to save access request decision.',
+                type: 'error',
+            });
+        }
+
+        setSavingAccessRequestId(null);
     };
 
     return (
@@ -195,9 +234,22 @@ export default function AgencyDashboardPage() {
                     </section>
 
                     <section className="mt-6 scroll-mt-24">
+                        {accessDecisionFeedback ? (
+                            <div
+                                role="status"
+                                className={`mb-3 rounded-[10px] border px-4 py-3 text-sm font-medium ${
+                                    accessDecisionFeedback.type === 'success'
+                                        ? 'border-[#b9f8cf] bg-[#f0fdf4] text-[#008236]'
+                                        : 'border-[#ffc9c9] bg-[#fef2f2] text-[#e7000b]'
+                                }`}
+                            >
+                                {accessDecisionFeedback.message}
+                            </div>
+                        ) : null}
                         <AccessRequestsTable
                             requests={dashboard.accessRequests}
                             onDecision={handleAccessDecision}
+                            savingRequestId={savingAccessRequestId}
                             onViewAll={() =>
                                 router.visit('/agency/access-requests')
                             }

@@ -1,5 +1,9 @@
 import { fetchApi } from '@/lib/api-client';
-import type { AccessType, AgencyUploadState } from '@/types/agency-upload';
+import type {
+    AccessType,
+    AgencyUploadState,
+    MetadataKey,
+} from '@/types/agency-upload';
 import type {
     RepositoryAccessType,
     RepositoryAuthor,
@@ -15,10 +19,13 @@ export type AgencyResearchRecord = {
     category?: string | null;
     sdgs?: string[];
     keywords?: string[];
+    public_metadata?: PublicMetadataField[];
+    public_metadata_fields?: MetadataKey[];
     status: string;
     access_level?: string | null;
     embargo_until?: string | null;
     external_url?: string | null;
+    submitted_at?: string | null;
     created_at?: string | null;
     updated_at?: string | null;
 };
@@ -31,16 +38,29 @@ export type AgencyResearchPayload = {
     category?: string | null;
     sdg_tags?: string[];
     keywords?: string[];
+    public_metadata?: PublicMetadataField[];
+    public_metadata_fields?: MetadataKey[];
     access_level?: string;
     embargo_until?: string | null;
     external_url?: string | null;
 };
 
-export async function createAgencyResearchDraft(payload: AgencyResearchPayload) {
-    const { data } = await fetchApi<AgencyResearchRecord>('/api/agency/research', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-    });
+export type PublicMetadataField = {
+    key: MetadataKey;
+    label: string;
+    value: string;
+};
+
+export async function createAgencyResearchDraft(
+    payload: AgencyResearchPayload,
+) {
+    const { data } = await fetchApi<AgencyResearchRecord>(
+        '/api/agency/research',
+        {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        },
+    );
 
     return data;
 }
@@ -116,8 +136,19 @@ export function mapUploadStateToResearchPayload(
         category: 'Uncategorized',
         sdg_tags: state.selectedSdgs.map((sdg) => `SDG ${sdg}`),
         keywords,
+        public_metadata_fields: state.metadata
+            .filter((field) => field.isPublic)
+            .map((field) => field.key),
+        public_metadata: state.metadata
+            .filter((field) => field.isPublic)
+            .map((field) => ({
+                key: field.key,
+                label: field.label,
+                value: field.value.trim(),
+            })),
         access_level: mapAccessTypeToApi(state.accessType),
-        embargo_until: state.accessType === 'embargo' ? state.embargoDate : null,
+        embargo_until:
+            state.accessType === 'embargo' ? state.embargoDate : null,
         external_url:
             state.accessType === 'external-link'
                 ? state.externalUrl.trim()

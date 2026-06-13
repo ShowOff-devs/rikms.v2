@@ -19,6 +19,10 @@ class OpenAiResearchMetadataExtractor
      *     title: ?string,
      *     authors: array<int, string>,
      *     abstract: ?string,
+     *     methodology: ?string,
+     *     review_of_related_literature: ?string,
+     *     theoretical_framework: ?string,
+     *     results_and_discussion: ?string,
      *     keywords: array<int, string>,
      *     publication_year: ?int,
      *     research_category: ?string,
@@ -29,9 +33,22 @@ class OpenAiResearchMetadataExtractor
      */
     public function extract(string $text): array
     {
-        $apiKey = (string) config('services.openai.api_key');
+        /*$apiKey = (string) config('services.openai.api_key');
 
         if ($apiKey === '') {
+            throw new RuntimeException('OPENAI_API_KEY is not configured.');
+        }*/
+        $apiKey = trim((string) config('services.openai.api_key'));
+
+        \Log::debug('OpenAI metadata extractor config check.', [
+            'has_api_key' => $apiKey !== '',
+            'api_key_prefix' => $apiKey !== ''
+                ? substr($apiKey, 0, 7)
+                : null,
+            'model' => config('services.openai.model'),
+        ]);
+
+        if (blank($apiKey)) {
             throw new RuntimeException('OPENAI_API_KEY is not configured.');
         }
 
@@ -49,6 +66,8 @@ class OpenAiResearchMetadataExtractor
                         'content' => implode(' ', [
                             'Extract bibliographic metadata from research PDF text.',
                             'Use only information explicitly present in the text.',
+                            'For methodology, review_of_related_literature, theoretical_framework, and results_and_discussion, extract the section text only when that section is clearly present in the PDF text.',
+                            'Do not summarize unrelated content to fill section fields.',
                             'Do not invent missing data; return null or empty arrays when uncertain.',
                             'Keep warnings concise and factual.',
                         ]),
@@ -107,6 +126,10 @@ class OpenAiResearchMetadataExtractor
                 'title',
                 'authors',
                 'abstract',
+                'methodology',
+                'review_of_related_literature',
+                'theoretical_framework',
+                'results_and_discussion',
                 'keywords',
                 'publication_year',
                 'research_category',
@@ -120,6 +143,10 @@ class OpenAiResearchMetadataExtractor
                     'items' => ['type' => 'string'],
                 ],
                 'abstract' => ['type' => ['string', 'null']],
+                'methodology' => ['type' => ['string', 'null']],
+                'review_of_related_literature' => ['type' => ['string', 'null']],
+                'theoretical_framework' => ['type' => ['string', 'null']],
+                'results_and_discussion' => ['type' => ['string', 'null']],
                 'keywords' => [
                     'type' => 'array',
                     'items' => ['type' => 'string'],
@@ -150,6 +177,10 @@ class OpenAiResearchMetadataExtractor
             'title' => $this->nullableString($decoded['title'] ?? null),
             'authors' => $this->stringList($decoded['authors'] ?? []),
             'abstract' => $this->nullableString($decoded['abstract'] ?? null),
+            'methodology' => $this->nullableString($decoded['methodology'] ?? null),
+            'review_of_related_literature' => $this->nullableString($decoded['review_of_related_literature'] ?? null),
+            'theoretical_framework' => $this->nullableString($decoded['theoretical_framework'] ?? null),
+            'results_and_discussion' => $this->nullableString($decoded['results_and_discussion'] ?? null),
             'keywords' => $this->stringList($decoded['keywords'] ?? []),
             'publication_year' => $this->nullableYear($decoded['publication_year'] ?? null),
             'research_category' => $this->nullableString($decoded['research_category'] ?? null),

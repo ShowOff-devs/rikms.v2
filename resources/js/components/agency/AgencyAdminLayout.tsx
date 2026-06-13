@@ -3,7 +3,6 @@ import {
     Archive,
     BarChart3,
     Bell,
-    BookOpen,
     Building2,
     ChevronDown,
     ChevronsLeft,
@@ -18,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
+import AppLogoIcon from '@/components/app-logo-icon';
 import { useCurrentUrl } from '@/hooks/use-current-url';
 import { clearAgencySession } from '@/lib/auth/agency-auth';
 import { cn } from '@/lib/utils';
@@ -93,7 +93,11 @@ export default function AgencyAdminLayout({
 
     const handleSignOut = () => {
         clearAgencySession();
-        router.post('/logout', {}, { onFinish: () => router.visit('/agency/login') });
+        router.post(
+            '/logout',
+            {},
+            { onFinish: () => router.visit('/agency/login') },
+        );
     };
 
     const openNotifications = () => {
@@ -121,8 +125,8 @@ export default function AgencyAdminLayout({
                         )}
                         aria-label="RIKMS dashboard"
                     >
-                        <span className="flex size-8 items-center justify-center rounded-[10px] bg-[#1e3a8a] text-white">
-                            <BookOpen className="size-4" />
+                        <span className="flex size-9 items-center justify-center rounded-[10px] bg-white p-1 shadow-sm ring-1 ring-[#e5e7eb]">
+                            <AppLogoIcon className="size-8" />
                         </span>
                         <span
                             className={cn(

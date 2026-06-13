@@ -55,8 +55,6 @@ import type {
 } from '@/types/repository';
 
 const perPage = 6;
-const facets = getRepositoryFacets();
-
 const defaultQuery: RepositoryQuery = {
     search: '',
     documentType: 'all',
@@ -98,6 +96,7 @@ const statusStyles: Record<RepositoryStatus, string> = {
     pending: 'border-[#bedbff] bg-[#eff6ff] text-[#1447e6]',
     restricted: 'border-[#ffc9c9] bg-[#fef2f2] text-[#e7000b]',
     archived: 'border-[#e5e7eb] bg-[#f8fafc] text-[#4a5565]',
+    superseded: 'border-[#e5e7eb] bg-[#f8fafc] text-[#4a5565]',
 };
 
 const accessStyles: Record<RepositoryAccessType, string> = {
@@ -184,6 +183,7 @@ export default function AgencyResearchRepositoryPage() {
     }
 
     const items = result?.items ?? [];
+    const facets = result?.facets ?? getRepositoryFacets();
     const total = result?.total ?? 0;
     const page = result?.page ?? query.page;
     const totalPages = result?.totalPages ?? 1;
@@ -278,6 +278,7 @@ export default function AgencyResearchRepositoryPage() {
 
                         <FilterBar
                             query={query}
+                            facets={facets}
                             hasActiveFilters={hasActiveFilters}
                             viewMode={viewMode}
                             onQueryChange={updateQuery}
@@ -466,6 +467,7 @@ function PageHeader({
 
 function FilterBar({
     query,
+    facets,
     hasActiveFilters,
     viewMode,
     onQueryChange,
@@ -473,6 +475,7 @@ function FilterBar({
     onViewModeChange,
 }: {
     query: RepositoryQuery;
+    facets: ReturnType<typeof getRepositoryFacets>;
     hasActiveFilters: boolean;
     viewMode: RepositoryViewMode;
     onQueryChange: (query: Partial<RepositoryQuery>) => void;
@@ -891,12 +894,9 @@ function AccessPanel({ item }: { item: RepositoryItem }) {
                 {repositoryAccessTypeLabels[item.accessType]}
             </p>
             {!isOpen ? (
-                <button
-                    type="button"
-                    className="h-[23px] rounded-full bg-[#ffe2e2] px-3 text-[10px] leading-[15px] font-semibold text-[#e7000b]"
-                >
-                    Request Access
-                </button>
+                <span className="h-[23px] rounded-full bg-[#ffe2e2] px-3 py-1 text-[10px] leading-[15px] font-semibold text-[#e7000b]">
+                    Managed by agency
+                </span>
             ) : null}
         </div>
     );

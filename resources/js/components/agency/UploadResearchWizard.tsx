@@ -32,7 +32,14 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { getAgencyAiResults } from '@/lib/agency/agency-ai-results-service';
+import {
+    getAgencyAiResults,
+    processAgencyAiResults,
+} from '@/lib/agency/agency-ai-results-service';
+import type {
+    AgencyAiResults,
+    AgencyAiResultSection,
+} from '@/lib/agency/agency-ai-results-service';
 import {
     saveAgencyResearchDraft,
     submitAgencyResearch,
@@ -72,6 +79,33 @@ const toneClasses: Record<string, string> = {
     amber: 'bg-[#fffbeb] text-[#d97706]',
     cyan: 'bg-[#ecfeff] text-[#0891b2]',
 };
+
+const aiResultsPollIntervalMs = 3000;
+const aiResultsPollTimeoutMs = 30000;
+const successfulAiStatuses = ['completed', 'pending_review'];
+
+function dateInputValue(date: Date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
+}
+
+function tomorrowDateValue() {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    return dateInputValue(tomorrow);
+}
+
+function isFutureDateValue(value: string) {
+    return Boolean(value) && value >= tomorrowDateValue();
+}
+
+function hasValidExternalUrl(value: string) {
+    return /^https?:\/\//.test(value.trim());
+}
 
 function StepBadge({ step }: { step: number }) {
     return (
@@ -414,8 +448,8 @@ function StepNavigation({
         <div className="mt-4 flex items-center justify-between">
             <Button
                 type="button"
-                variant="outline"
-                className="h-[42px] rounded-[14px] border-[#e5e7eb] text-[#4a5565]"
+                // variant="outline"
+                className="h-[42px] rounded-[14px] border-[#e5e7eb] bg-[#1e3a8a] text-white hover:bg-[#172f70]"
                 disabled={currentStep < 2}
                 onClick={onBack}
             >
@@ -468,8 +502,8 @@ function UploadStep({
             return;
         }
 
-        if (file.size > 20 * 1024 * 1024) {
-            setUploadError('Maximum file size is 20 MB.');
+        if (file.size > 10 * 1024 * 1024) {
+            setUploadError('Maximum file size is 10 MB.');
             setState((current) => ({
                 ...current,
                 file: null,
@@ -508,7 +542,10 @@ function UploadStep({
             }));
         } catch (error) {
             setUploadError(
-                apiMessage(error, 'The upload failed. Try selecting the file again.'),
+                apiMessage(
+                    error,
+                    'The upload failed. Try selecting the file again.',
+                ),
             );
             setState((current) => ({
                 ...current,
@@ -565,15 +602,7 @@ function UploadStep({
                         PDF
                     </span>
                     <span>-</span>
-                    <span className="rounded bg-[#f3f4f6] px-2 py-0.5">
-                        DOCX
-                    </span>
-                    <span>-</span>
-                    <span className="rounded bg-[#f3f4f6] px-2 py-0.5">
-                        DOC
-                    </span>
-                    <span>-</span>
-                    <span>Max 50 MB</span>
+                    <span>Max 10 MB</span>
                 </div>
                 {state.file && (
                     <div className="mt-5 rounded-[10px] border border-[#bfdbfe] bg-[#eff6ff] px-4 py-2 text-sm font-semibold text-[#1e3a8a]">
@@ -616,6 +645,85 @@ function UploadStep({
     );
 }
 
+function sleep(ms: number) {
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function aiResultStatus(section: AgencyAiResultSection | undefined) {
+    return section?.processing_status ?? section?.status ?? 'not_available';
+}
+
+function isSuccessfulAiStatus(status: string) {
+    return successfulAiStatuses.includes(status);
+}
+
+function isFailedAiStatus(status: string) {
+    return status === 'failed';
+}
+
+function shouldPollAiStatus(status: string) {
+    return ['queued', 'processing', 'not_available'].includes(status);
+}
+
+function firstProcessingError(section: AgencyAiResultSection | undefined) {
+    return section?.processing_errors?.find((error) => error.trim() !== '');
+}
+
+function usefulAiMessage(
+    section: AgencyAiResultSection | undefined,
+    status: string,
+) {
+    const message = firstProcessingError(section) ?? section?.message;
+
+    if (
+        message &&
+        message !==
+            'No AI/PDF/SDG result is available for this research record yet.'
+    ) {
+        return message;
+    }
+
+    if (isSuccessfulAiStatus(status)) {
+        return null;
+    }
+
+    if (status === 'failed') {
+        return 'AI metadata extraction failed. Review the fields manually or re-run analysis.';
+    }
+
+    if (status === 'skipped') {
+        return 'AI metadata extraction is unavailable in this environment. You can continue with manual metadata.';
+    }
+
+    return 'AI metadata extraction could not be completed right now. You can continue with manual metadata or re-run analysis later.';
+}
+
+async function pollAgencyAiResults(
+    researchId: string,
+    initialResults?: AgencyAiResults,
+) {
+    const startedAt = Date.now();
+    let results = initialResults ?? (await getAgencyAiResults(researchId));
+
+    if (import.meta.env.DEV) {
+        console.debug('AI results response', results);
+    }
+
+    while (
+        shouldPollAiStatus(aiResultStatus(results.ai_metadata)) &&
+        Date.now() - startedAt < aiResultsPollTimeoutMs
+    ) {
+        await sleep(aiResultsPollIntervalMs);
+        results = await getAgencyAiResults(researchId);
+
+        if (import.meta.env.DEV) {
+            console.debug('AI results response', results);
+        }
+    }
+
+    return results;
+}
+
 async function runResearchMetadataExtraction(state: AgencyUploadState) {
     if (!state.researchId) {
         return {
@@ -625,23 +733,57 @@ async function runResearchMetadataExtraction(state: AgencyUploadState) {
                     : { ...field },
             ),
             aiSuggestedSDGs: [],
+            aiSdgResultAvailable: false,
+            aiMetadataStatus: 'not_available',
+            aiMetadataSucceeded: false,
+            aiMetadataError:
+                'No uploaded research record is available for AI metadata extraction.',
         };
     }
 
-    const results = await getAgencyAiResults(state.researchId);
+    const processedResults = await processAgencyAiResults(state.researchId);
+    const results = shouldPollAiStatus(
+        aiResultStatus(processedResults.ai_metadata),
+    )
+        ? await pollAgencyAiResults(state.researchId, processedResults)
+        : processedResults;
     const metadata = results.ai_metadata;
     const sdgClassification = results.sdg_classification;
+    const aiMetadataStatus = aiResultStatus(metadata);
+    const aiSdgStatus = aiResultStatus(sdgClassification);
+    const aiMetadataSucceeded = isSuccessfulAiStatus(aiMetadataStatus);
+    const aiMetadataError = usefulAiMessage(metadata, aiMetadataStatus);
 
     return {
         metadata: metadataFieldsTemplate.map((field) => {
             const valueMap: Record<string, string> = {
                 title:
-                    metadata.extracted_title ??
-                    state.manualTitle.trim() ??
-                    '',
+                    metadata.extracted_title ?? state.manualTitle.trim() ?? '',
                 abstract: metadata.extracted_abstract ?? '',
+                methodology: metadata.extracted_methodology ?? '',
+                review_of_related_literature:
+                    metadata.extracted_review_of_related_literature ?? '',
+                review_related_literature:
+                    metadata.extracted_review_of_related_literature ?? '',
+                reviewOfRelatedLiterature:
+                    metadata.extracted_review_of_related_literature ?? '',
+                theoretical_framework:
+                    metadata.extracted_theoretical_framework ?? '',
+                theoretical: metadata.extracted_theoretical_framework ?? '',
+                theoreticalFramework:
+                    metadata.extracted_theoretical_framework ?? '',
+                results_and_discussion:
+                    metadata.extracted_results_and_discussion ?? '',
+                results_discussion:
+                    metadata.extracted_results_and_discussion ?? '',
+                resultsAndDiscussion:
+                    metadata.extracted_results_and_discussion ?? '',
                 keywords: metadata.extracted_keywords?.join(', ') ?? '',
                 authors: metadata.extracted_authors?.join(', ') ?? '',
+                publication_year: String(metadata.publication_year ?? ''),
+                research_category: metadata.research_category ?? '',
+                category: metadata.research_category ?? '',
+                year: String(metadata.publication_year ?? ''),
             };
 
             return {
@@ -653,11 +795,18 @@ async function runResearchMetadataExtraction(state: AgencyUploadState) {
             sdgClassification.suggested_sdg_tags
                 ?.map((item) =>
                     Number(
-                        String(typeof item === 'string' ? item : item.sdg)
-                            .match(/\d+/u)?.[0],
+                        String(
+                            typeof item === 'string'
+                                ? item
+                                : (item.sdg ?? item.label),
+                        ).match(/\d+/u)?.[0],
                     ),
                 )
                 .filter((sdg) => Number.isFinite(sdg) && sdg > 0) ?? [],
+        aiSdgResultAvailable: aiSdgStatus !== 'not_available',
+        aiMetadataStatus,
+        aiMetadataSucceeded,
+        aiMetadataError,
     };
 }
 
@@ -669,6 +818,9 @@ function MetadataStep({
     setState: React.Dispatch<React.SetStateAction<AgencyUploadState>>;
 }) {
     const [isExtracting, setIsExtracting] = useState(false);
+    const [aiMetadataStatus, setAiMetadataStatus] =
+        useState<string>('not_available');
+    const [aiMetadataError, setAiMetadataError] = useState<string | null>(null);
 
     const runAi = async () => {
         setIsExtracting(true);
@@ -681,7 +833,17 @@ function MetadataStep({
                 aiHasRun: true,
                 metadata: result.metadata,
                 aiSuggestedSdgs: result.aiSuggestedSDGs,
+                aiSdgResultAvailable: result.aiSdgResultAvailable,
             }));
+            setAiMetadataStatus(result.aiMetadataStatus);
+            setAiMetadataError(
+                result.aiMetadataSucceeded ? null : result.aiMetadataError,
+            );
+        } catch (error) {
+            setAiMetadataStatus('failed');
+            setAiMetadataError(
+                apiMessage(error, 'Unable to run AI metadata extraction.'),
+            );
         } finally {
             setIsExtracting(false);
         }
@@ -695,6 +857,29 @@ function MetadataStep({
             ),
         }));
     };
+
+    const aiMetadataSucceeded = isSuccessfulAiStatus(aiMetadataStatus);
+    const aiMetadataFailed = isFailedAiStatus(aiMetadataStatus);
+    const statusBannerClass = aiMetadataSucceeded
+        ? 'border-[#bbf7d0] bg-[#f0fdf4] text-[#00a63e]'
+        : aiMetadataFailed
+          ? 'border-[#fecaca] bg-[#fef2f2] text-[#dc2626]'
+          : 'border-[#fde68a] bg-[#fffbeb] text-[#b45309]';
+    const statusButtonClass = aiMetadataSucceeded
+        ? 'border-[#bbf7d0] text-[#00a63e]'
+        : aiMetadataFailed
+          ? 'border-[#fecaca] text-[#dc2626]'
+          : 'border-[#fde68a] text-[#b45309]';
+    const statusTitle = aiMetadataSucceeded
+        ? 'Metadata extracted successfully'
+        : aiMetadataFailed
+          ? 'Metadata extraction failed'
+          : aiMetadataStatus === 'skipped'
+            ? 'Metadata extraction unavailable'
+            : 'Metadata extraction pending';
+    const statusDescription = aiMetadataSucceeded
+        ? 'All fields are editable. Review and correct as needed.'
+        : aiMetadataError;
 
     return (
         <WizardCard
@@ -731,23 +916,34 @@ function MetadataStep({
                 </div>
             ) : (
                 <div className="space-y-4">
-                    <div className="flex items-center justify-between rounded-[10px] border border-[#bbf7d0] bg-[#f0fdf4] p-4 text-sm text-[#00a63e]">
+                    <div
+                        className={cn(
+                            'flex items-center justify-between rounded-[10px] border p-4 text-sm',
+                            statusBannerClass,
+                        )}
+                    >
                         <div className="flex items-center gap-2">
-                            <Check className="size-4" />
+                            {aiMetadataSucceeded ? (
+                                <Check className="size-4" />
+                            ) : (
+                                <Info className="size-4" />
+                            )}
                             <div>
-                                <p className="font-semibold">
-                                    Metadata extracted successfully
-                                </p>
-                                <p className="text-xs">
-                                    All fields are editable. Review and correct
-                                    as needed.
-                                </p>
+                                <p className="font-semibold">{statusTitle}</p>
+                                {statusDescription ? (
+                                    <p className="text-xs">
+                                        {statusDescription}
+                                    </p>
+                                ) : null}
                             </div>
                         </div>
                         <Button
                             type="button"
                             variant="outline"
-                            className="h-8 rounded-[10px] border-[#bbf7d0] bg-white text-xs text-[#00a63e]"
+                            className={cn(
+                                'h-8 rounded-[10px] bg-white text-xs',
+                                statusButtonClass,
+                            )}
                             onClick={() => void runAi()}
                             disabled={isExtracting}
                         >
@@ -778,8 +974,17 @@ function MetadataStep({
                                     {field.label}
                                 </span>
                                 <span className="flex items-center gap-2">
-                                    <span className="rounded-full bg-[#dcfce7] px-2 py-0.5 text-[10px] font-bold text-[#00a63e]">
-                                        AI Detected
+                                    <span
+                                        className={cn(
+                                            'rounded-full px-2 py-0.5 text-[10px] font-bold',
+                                            aiMetadataSucceeded
+                                                ? 'bg-[#dcfce7] text-[#00a63e]'
+                                                : 'bg-[#fffbeb] text-[#b45309]',
+                                        )}
+                                    >
+                                        {aiMetadataSucceeded
+                                            ? 'AI Detected'
+                                            : 'Editable'}
                                     </span>
                                     <ChevronDown className="size-4 text-[#99a1af]" />
                                 </span>
@@ -894,7 +1099,9 @@ function SdgStep({
 }) {
     const suggestedSdgs = state.aiSuggestedSdgs.length
         ? state.aiSuggestedSdgs
-        : [9, 8, 17];
+        : state.aiSdgResultAvailable
+          ? []
+          : [9, 8, 17];
 
     const toggleSdg = (id: number) => {
         setState((current) => ({
@@ -922,7 +1129,9 @@ function SdgStep({
                             AI SDG Suggestion
                         </p>
                         <p className="text-xs text-[#6a7282]">
-                            Based on extracted metadata, we suggest{' '}
+                            {suggestedSdgs.length
+                                ? 'Based on extracted metadata, we suggest '
+                                : 'AI did not find a clear SDG suggestion. Select the applicable goals manually.'}
                             {suggestedSdgs.map((id) => (
                                 <span
                                     key={id}
@@ -943,6 +1152,7 @@ function SdgStep({
                 <Button
                     type="button"
                     className="rounded-[10px] bg-[#f59e0b] text-white hover:bg-[#d97706]"
+                    disabled={suggestedSdgs.length === 0}
                     onClick={() =>
                         setState((current) => ({
                             ...current,
@@ -1077,6 +1287,7 @@ function AccessStep({
                             {selected && option.id === 'embargo' && (
                                 <Input
                                     type="date"
+                                    min={tomorrowDateValue()}
                                     value={state.embargoDate}
                                     onChange={(event) =>
                                         setState((current) => ({
@@ -1158,8 +1369,8 @@ function AccessStep({
                             />
                             <Button
                                 type="button"
-                                variant="outline"
-                                className="h-10 shrink-0 rounded-[10px] border-[#bfdbfe] text-xs text-[#1e3a8a]"
+                                // variant="outline"
+                                className="h-10 shrink-0 rounded-[10px] border-[#bfdbfe] text-xs bg-[#1e3a8a] text-white hover:bg-[#172f70]"
                                 onClick={() =>
                                     setState((current) => ({
                                         ...current,
@@ -1245,7 +1456,7 @@ function AccessStep({
                         <Button
                             type="button"
                             variant="outline"
-                            className="h-9 rounded-[10px] border-[#1e3a8a] text-xs text-[#1e3a8a]"
+                            className="h-9 rounded-[10px] border-[#1e3a8a] text-xs bg-[#1e3a8a] text-white hover:bg-[#172f70]"
                         >
                             Contact Research Owner
                         </Button>
@@ -1558,15 +1769,15 @@ function SuccessState({
                     <Button
                         type="button"
                         className="rounded-[14px] bg-[#1e3a8a] text-white hover:bg-[#172f70]"
-                        onClick={() => router.visit('/browse-research')}
+                        onClick={() => router.visit('/agency/research')}
                     >
                         <ExternalLink className="size-4" />
                         View in Repository
                     </Button>
                     <Button
                         type="button"
-                        variant="outline"
-                        className="rounded-[14px] border-[#e5e7eb]"
+                        // variant="outline"
+                        className="rounded-[14px] border-[#e5e7eb] bg-[#1e3a8a] text-white hover:bg-[#172f70]"
                         onClick={onReset}
                     >
                         <Upload className="size-4" />
@@ -1607,11 +1818,11 @@ function canContinue(currentStep: number, state: AgencyUploadState) {
 
     if (currentStep === 5) {
         if (state.accessType === 'embargo') {
-            return Boolean(state.embargoDate);
+            return isFutureDateValue(state.embargoDate);
         }
 
         if (state.accessType === 'external-link') {
-            return /^https?:\/\//.test(state.externalUrl.trim());
+            return hasValidExternalUrl(state.externalUrl);
         }
 
         return true;
@@ -1641,11 +1852,11 @@ function validateResearchSubmission(state: AgencyUploadState) {
 
 function canUseAccessSettings(state: AgencyUploadState) {
     if (state.accessType === 'embargo') {
-        return Boolean(state.embargoDate);
+        return isFutureDateValue(state.embargoDate);
     }
 
     if (state.accessType === 'external-link') {
-        return Boolean(state.externalUrl.trim());
+        return hasValidExternalUrl(state.externalUrl);
     }
 
     return Boolean(state.accessType);
@@ -1817,8 +2028,8 @@ export default function UploadResearchWizard() {
                             <div className="mt-4 flex items-center justify-between">
                                 <Button
                                     type="button"
-                                    variant="outline"
-                                    className="h-[42px] rounded-[14px] border-[#e5e7eb] text-[#4a5565]"
+                                    // variant="outline"
+                                    className="h-[42px] rounded-[14px] border-[#e5e7eb] bg-[#1e3a8a] text-white hover:bg-[#172f70]"
                                     onClick={() => setCurrentStep(5)}
                                 >
                                     <ArrowLeft className="size-4" />
@@ -1830,8 +2041,8 @@ export default function UploadResearchWizard() {
                                     </span>
                                     <Button
                                         type="button"
-                                        variant="outline"
-                                        className="h-10 rounded-[14px] border-[#e5e7eb]"
+                                        // variant="outline"
+                                        className="h-10 rounded-[14px] border-[#e5e7eb] bg-[#1e3a8a] text-white hover:bg-[#172f70]"
                                         onClick={() => void saveDraft()}
                                     >
                                         <Save className="size-4" />
