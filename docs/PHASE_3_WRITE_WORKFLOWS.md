@@ -78,7 +78,7 @@ Rules:
 
 - Only agency admins can upload/delete files for their own agency research.
 - Uploads are limited to PDF files by MIME type and extension.
-- Max upload size is 20 MB.
+- Max upload size is 10 MB.
 - Physical files are stored on the Laravel `local` disk.
 - Official file metadata is stored in `research_files`.
 - Large extracted text and AI outputs are not stored in the relational database.

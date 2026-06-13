@@ -106,7 +106,7 @@ Current status:
 
 - PDF-only validation is present.
 - MIME type validation requires `application/pdf`.
-- File size is limited to 20 MB.
+- File size is limited to 10 MB.
 - SHA-256 checksum is stored.
 - Files are stored on the local private disk for pilot/local use.
 

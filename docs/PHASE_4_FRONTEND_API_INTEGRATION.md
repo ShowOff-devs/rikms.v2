@@ -102,7 +102,7 @@ Endpoint:
 
 - `POST /api/agency/research/{research}/files`
 
-The UI now validates PDF-only uploads with a 20 MB limit, uses `FormData`, stores relational file metadata through the API, and leaves AI result display mocked for Phase 5.
+The UI now validates PDF-only uploads with a 10 MB limit, uses `FormData`, stores relational file metadata through the API, and leaves AI result display mocked for Phase 5.
 
 ## 8. Agency Access Request Decision UI Integration
 
