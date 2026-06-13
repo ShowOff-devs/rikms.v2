@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Middleware\EnforceUserSessionTimeout;
 use App\Http\Middleware\EnsureAgencyScope;
+use App\Http\Middleware\EnsureSuperAdminHasTwoFactor;
 use App\Http\Middleware\EnsureUserHasPermission;
 use App\Http\Middleware\EnsureUserHasRole;
 use App\Http\Middleware\HandleAppearance;
@@ -28,12 +30,18 @@ return Application::configure(basePath: dirname(__DIR__))
             'agency.scope' => EnsureAgencyScope::class,
             'permission' => EnsureUserHasPermission::class,
             'role' => EnsureUserHasRole::class,
+            'super_admin.2fa' => EnsureSuperAdminHasTwoFactor::class,
         ]);
 
         $middleware->web(append: [
+            EnforceUserSessionTimeout::class,
             HandleAppearance::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
+        ]);
+
+        $middleware->api(append: [
+            EnforceUserSessionTimeout::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
