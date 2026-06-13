@@ -29,7 +29,7 @@ class PublicAgencyController extends Controller
                 });
             })
             ->when($type !== 'all', fn ($query) => $query->where('type', $type))
-            ->withCount(['research' => fn ($query) => $query->whereIn('status', ['published', 'archived'])])
+            ->withCount(['research' => fn ($query) => $query->publiclyVisible()])
             ->orderBy('name')
             ->get();
 
@@ -41,7 +41,7 @@ class PublicAgencyController extends Controller
         abort_unless($agency->status === 'active', 404);
 
         return new PublicAgencyResource(
-            $agency->loadCount(['research' => fn ($query) => $query->whereIn('status', ['published', 'archived'])]),
+            $agency->loadCount(['research' => fn ($query) => $query->publiclyVisible()]),
         );
     }
 
@@ -64,7 +64,7 @@ class PublicAgencyController extends Controller
         $records = $agency
             ->research()
             ->with('agency')
-            ->whereIn('status', ['published', 'archived'])
+            ->publiclyVisible()
             ->orderByDesc('publication_year')
             ->orderByDesc('updated_at')
             ->get();

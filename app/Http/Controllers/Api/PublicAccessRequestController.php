@@ -12,6 +12,7 @@ use App\Models\Research;
 use App\Models\User;
 use App\Support\ApiResponse;
 use App\Support\Statuses;
+use App\Support\UserNotificationPreferences;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -28,7 +29,7 @@ class PublicAccessRequestController extends Controller
                 $query->where('slug', $research);
 
                 if (ctype_digit($research)) {
-                    $query->orWhereKey((int) $research);
+                    $query->orWhere('id', (int) $research);
                 }
             })
             ->first();
@@ -91,7 +92,8 @@ class PublicAccessRequestController extends Controller
     {
         return $research->status === Statuses::RESEARCH_PUBLISHED
             && $research->archived_at === null
-            && $research->deleted_at === null;
+            && $research->deleted_at === null
+            && $research->access_level !== 'private';
     }
 
     private function requiresAccessRequest(Research $research): bool
@@ -151,6 +153,7 @@ class PublicAccessRequestController extends Controller
                         ->orWhereHas('roles', fn (Builder $query) => $query->where('slug', 'agency_admin'));
                 })
                 ->get()
+                ->filter(fn (User $user): bool => UserNotificationPreferences::wants($user, 'notifyNewAccessRequests'))
                 ->each(function (User $user) use ($research, $accessRequest): void {
                     Notification::create([
                         'user_id' => $user->id,
