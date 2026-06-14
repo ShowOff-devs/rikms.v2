@@ -166,27 +166,14 @@ Verification:
 
 ## 8. Mock-Backed Frontend Services
 
-Mock data files found under `resources/js/data`:
+Mock data files previously found under `resources/js/data` have been removed. Current files in that directory are display/option helpers:
 
-- `mock-access-request-monitor.ts`
-- `mock-access-requests.ts`
-- `mock-admin-agencies.ts`
-- `mock-admin-archive.ts`
-- `mock-admin-dashboard.ts`
-- `mock-agency-admin-users.ts`
-- `mock-agency-dashboard.ts`
-- `mock-agency-profile.ts`
-- `mock-analytics.ts`
-- `mock-archive.ts`
-- `mock-platform-settings.ts`
-- `mock-rbac.ts`
-- `mock-repository.ts`
-- `mock-research-moderation.ts`
-- `mock-security-center.ts`
-- `mock-settings.ts`
-- `mock-system-activity.ts`
-- `mock-system-analytics.ts`
-- `mock-system-research.ts`
+- `access-request-monitor-options.ts`
+- `admin-archive-options.ts`
+- `archive-display.ts`
+- `repository-display.ts`
+- `research-moderation-options.ts`
+- `system-research-options.ts`
 
 Mock-backed or frontend-only service areas:
 

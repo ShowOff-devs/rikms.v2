@@ -78,6 +78,7 @@ Nested user payloads expose only safe fields and do not include `password`, `rem
 Removed from the Super Admin dashboard scope:
 
 - `resources/js/data/mock-admin-dashboard.ts`
+- all remaining `resources/js/data/mock-*.ts` files in the later pilot cleanup pass
 - frontend imports of `mock-admin-dashboard`
 - fake dashboard card numbers
 - fake research-by-agency chart values

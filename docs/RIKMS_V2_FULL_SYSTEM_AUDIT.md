@@ -141,31 +141,14 @@ Broken/not verified:
 - Full interactive browser console QA was not available in this session.
 
 Frontend gaps:
-- Many admin pages still import label/static helpers from mock data files.
-- Platform settings, RBAC, security center, system activity, analytics/reporting, admin archive subtypes, agency profile/settings, report upload workflows, and some repository edit behaviors remain mock-backed.
-- Some UI operations present successful mock behavior for writes that do not persist to the relational database.
+- `resources/js/data/mock-*.ts` files have been removed; remaining `resources/js/data` files are display/option helpers.
+- Report upload workflows and legacy upload AI suggestion helpers still have mock service files under `resources/js/lib/upload/services`.
+- Some browser workflow proof remains pending for report uploads and AI review/apply flows.
 
 ## 10. Mock Data Audit
 | File/path | Module | Mock type | Classification | Reason |
 |---|---|---|---|---|
-| `resources/js/data/mock-agency-dashboard.ts` | Agency dashboard | fallback metrics/activity | Keep temporarily | Real dashboard API exists, but fallback retained pending browser proof/removal pass. |
-| `resources/js/data/mock-repository.ts` | Agency repository/edit | dataset, labels, local edit behavior | Keep temporarily | Real research APIs exist, but edit/file replacement/archive fallbacks remain. |
-| `resources/js/data/mock-access-requests.ts` | Agency access requests | fallback request records | Keep temporarily | Real decision APIs exist; listing fallback remains pending browser removal pass. |
-| `resources/js/data/mock-archive.ts` | Agency archive | fallback archive records/activity | Keep temporarily | Real archived research list/restore exists; activity/permanent delete still incomplete. |
-| `resources/js/data/mock-analytics.ts` | Agency analytics | charts/report data | Urgent replacement | Official analytics can show fake numbers; needs real queries or cache. |
-| `resources/js/data/mock-agency-profile.ts` | Agency profile | profile record | Keep temporarily | Backend profile/settings API not ready. |
-| `resources/js/data/mock-settings.ts` | Agency settings | settings state | Keep temporarily | Backend agency settings writes not ready. |
-| `resources/js/data/mock-admin-agencies.ts` | Admin agencies | agency/admin users/options | Urgent replacement | Admin agency management appears operational but write APIs are not complete. |
-| `resources/js/data/mock-agency-admin-users.ts` | Admin users | users/agencies | Urgent replacement | User management writes must persist and protect RBAC. |
-| `resources/js/data/mock-research-moderation.ts` | Admin moderation | queue labels/fallback records | Keep temporarily | Write API exists; fallback should be removed only after browser proof. |
-| `resources/js/data/mock-admin-archive.ts` | Admin archive | archived agencies/users/research/activity | Keep temporarily | Research archive API exists; agencies/users/activity/export still missing. |
-| `resources/js/data/mock-access-request-monitor.ts` | Admin access monitoring | request records/charts | Urgent replacement | Monitoring/reporting should reflect relational access requests. |
-| `resources/js/data/mock-system-analytics.ts` | Admin analytics | charts/report data | Urgent replacement | Official reporting cannot rely on fake chart data. |
-| `resources/js/data/mock-system-activity.ts` | Admin audit/activity | notifications/logs/activity | Urgent replacement | Audit/security visibility should be DB-backed. |
-| `resources/js/data/mock-security-center.ts` | Security center | alerts/sessions/events | Urgent replacement | Security workflows must reflect real security events/sessions. |
-| `resources/js/data/mock-platform-settings.ts` | Platform settings | settings state | Urgent replacement | Settings writes are UI-only and need DB/audit coverage. |
-| `resources/js/data/mock-rbac.ts` | RBAC | roles/permissions/assignments | Urgent replacement | Access control management must be real and protected. |
-| `resources/js/data/mock-system-research.ts` | System research | fallback records/labels | Keep temporarily | Admin research read API exists; some labels/detail fallback remain. |
+| `resources/js/data/mock-*.ts` | Legacy frontend mock data | static records/fallbacks | Removed for pilot | No runtime imports remain; display constants live in option/display helper files. |
 | `resources/js/lib/upload/services/mock-research-upload-service.ts` | Research upload | AI extraction/validation legacy helpers | Keep temporarily | AI jobs/results need stable browser fixtures before removal. |
 | `resources/js/lib/upload/services/mock-report-upload-service.ts` | Report uploads | upload/draft/submit/AI | Urgent replacement | Terminal/project accomplishment uploads currently do not persist real records. |
 | `resources/js/lib/upload/services/mock-ai-metadata-service.ts` | AI metadata | mock suggestions | Keep temporarily | Replace with real Mongo-backed AI results when fixtures are stable. |
@@ -173,7 +156,7 @@ Frontend gaps:
 | `resources/js/lib/upload/services/mock-upload-draft-service.ts` | Generic upload wizard | local draft save | Keep temporarily | Wizard steps still include placeholders. |
 | `routes/api.php` local Mongo test route | AI/Mongo test | sample Mongo writes | Keep local only | Useful local test route; must remain disabled outside local. |
 
-Mock data removed in this audit: none.
+Mock data removed in this audit: all remaining `resources/js/data/mock-*.ts` files.
 
 ## 11. Public Portal Status
 Working:
@@ -314,11 +297,11 @@ Critical:
 - None found during automated tests/build/smoke checks.
 
 High:
-- Mock-backed official admin analytics/RBAC/settings/security/access monitoring can display or accept fake decisions.
-  - Path: `resources/js/data/mock-*.ts`, related `resources/js/lib/admin/*`.
-  - Cause: backend write/reporting APIs are deferred.
-  - Suggested fix: implement protected relational APIs with audit logs, then remove mocks after browser verification.
-  - Status: deferred.
+- Legacy mock data files could confuse pilot sign-off if reintroduced.
+  - Path: `resources/js/data`.
+  - Cause: historical `resources/js/data/mock-*.ts` files have now been removed.
+  - Suggested fix: keep shared data limited to display/option helpers and reject new static fake datasets in pilot code.
+  - Status: resolved for `resources/js/data`; continue browser verification for admin workflows.
 - Public access request creation is missing.
   - Path: `routes/api.php`, public controllers.
   - Cause: no public submission endpoint/workflow.

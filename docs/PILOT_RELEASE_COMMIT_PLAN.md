@@ -149,10 +149,11 @@ Risk: medium.
 Staging:
 
 ```bash
-git add .env.example composer.json resources/js/app.tsx resources/js/components/app-logo-icon.tsx resources/js/components/app-logo.tsx resources/js/components/auth/agency-portal-shell.tsx resources/js/components/delete-user.tsx resources/js/components/layout/portal-footer.tsx resources/js/components/layout/portal-navbar.tsx resources/js/data/mock-repository.ts resources/js/data/repository-display.ts resources/js/layouts/AdminAuthLayout.tsx resources/js/lib/api-client.ts resources/views/app.blade.php routes/api.php routes/web.php public/assets/rikms-logo.png
+git add .env.example composer.json resources/js/app.tsx resources/js/components/app-logo-icon.tsx resources/js/components/app-logo.tsx resources/js/components/auth/agency-portal-shell.tsx resources/js/components/delete-user.tsx resources/js/components/layout/portal-footer.tsx resources/js/components/layout/portal-navbar.tsx resources/js/data resources/js/layouts/AdminAuthLayout.tsx resources/js/lib/api-client.ts resources/views/app.blade.php routes/api.php routes/web.php public/assets/rikms-logo.png
 ```
 
 Do not stage `public/.user.ini` unless confirmed.
+`resources/js/data` is intentionally staged as a directory because all `resources/js/data/mock-*.ts` files have been removed and the remaining display constants now live in option/display helpers.
 
 Validation: `npm run types:check`, `npm run lint:check`, `npm run build`, `php artisan route:list`.
 
