@@ -8,11 +8,17 @@ import type {
     AccessRequest,
     AccessRequestDateFilter,
     AccessRequestFilters,
+    EmailNotificationStatus,
 } from '@/types/access-request';
 
 type AccessRequestApiRecord = Parameters<typeof mapAccessRequestFromApi>[0];
 
 let accessRequests: AccessRequest[] = [];
+
+export type AccessRequestDecisionResult = {
+    request: AccessRequest | null;
+    emailNotification: EmailNotificationStatus;
+};
 
 const cloneRequests = (requests: AccessRequest[]) =>
     requests.map((request) => ({ ...request }));
@@ -89,22 +95,63 @@ export function filterAccessRequests(
     });
 }
 
-export async function approveAccessRequest(id: string) {
-    const updated = await approveAgencyAccessRequest(id);
+export async function approveAccessRequest(
+    id: string,
+): Promise<AccessRequestDecisionResult> {
+    const { request: updated, emailNotification } =
+        await approveAgencyAccessRequest(id);
     accessRequests = accessRequests.map((request) =>
         request.id === id ? updated : request,
     );
 
-    return getAccessRequestById(id);
+    return {
+        request: await getAccessRequestById(id),
+        emailNotification,
+    };
 }
 
-export async function denyAccessRequest(id: string, reason?: string) {
-    const updated = await denyAgencyAccessRequest(id, reason);
+export async function denyAccessRequest(
+    id: string,
+    publicReason: string,
+    internalNotes?: string,
+): Promise<AccessRequestDecisionResult> {
+    const { request: updated, emailNotification } =
+        await denyAgencyAccessRequest(id, publicReason, internalNotes);
     accessRequests = accessRequests.map((request) =>
         request.id === id ? updated : request,
     );
 
-    return getAccessRequestById(id);
+    return {
+        request: await getAccessRequestById(id),
+        emailNotification,
+    };
+}
+
+export function getAccessRequestDecisionMessage(
+    decision: 'approved' | 'denied',
+    emailNotification: EmailNotificationStatus,
+) {
+    if (decision === 'approved') {
+        if (emailNotification === 'skipped') {
+            return 'Access request approved, but no email was queued because the requester does not have a valid email address.';
+        }
+
+        if (emailNotification === 'failed_to_queue') {
+            return 'Access request approved, but the email notification could not be queued. The decision was saved successfully.';
+        }
+
+        return 'Access request approved. The requester will be notified by email.';
+    }
+
+    if (emailNotification === 'skipped') {
+        return 'Access request denied, but no email was queued because the requester does not have a valid email address.';
+    }
+
+    if (emailNotification === 'failed_to_queue') {
+        return 'Access request denied, but the email notification could not be queued. The decision was saved successfully.';
+    }
+
+    return 'Access request denied. The requester will be notified by email.';
 }
 
 export async function getAccessRequestById(id: string) {

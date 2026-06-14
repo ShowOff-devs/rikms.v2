@@ -4,7 +4,6 @@ namespace App\Policies;
 
 use App\Models\AccessRequest;
 use App\Models\User;
-use App\Support\Statuses;
 
 class AccessRequestPolicy
 {
@@ -12,7 +11,6 @@ class AccessRequestPolicy
     {
         return $user->isAgencyAdmin()
             && $user->agency_id !== null
-            && $accessRequest->status === Statuses::ACCESS_REQUEST_PENDING
             && $accessRequest->research !== null
             && (int) $accessRequest->research->agency_id === (int) $user->agency_id;
     }

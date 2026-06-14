@@ -496,7 +496,8 @@ test('agency admin can approve and deny pending access requests for own agency',
         ->assertJsonPath('data.status', 'approved');
 
     $this->actingAs($user)->postJson("/api/agency/access-requests/{$denyRequest->id}/deny", [
-        'decision_notes' => 'Insufficient purpose.',
+        'public_denial_reason' => 'Insufficient purpose.',
+        'internal_notes' => 'Internal denial note.',
     ])
         ->assertOk()
         ->assertJsonPath('data.status', 'denied');

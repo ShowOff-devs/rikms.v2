@@ -21,7 +21,9 @@ class DenyAccessRequestRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'public_denial_reason' => ['required', 'string', 'max:2000'],
             'decision_notes' => ['nullable', 'string', 'max:2000'],
+            'internal_notes' => ['nullable', 'string', 'max:2000'],
         ];
     }
 }

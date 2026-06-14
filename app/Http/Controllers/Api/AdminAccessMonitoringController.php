@@ -87,13 +87,24 @@ class AdminAccessMonitoringController extends Controller
             'reason' => ['required', 'string', 'max:1000'],
         ]);
 
-        $oldValues = $accessRequest->only(['status', 'reviewed_by', 'reviewed_at', 'review_notes']);
+        $oldValues = $accessRequest->only([
+            'status',
+            'reviewed_by',
+            'reviewed_at',
+            'review_notes',
+            'public_denial_reason',
+            'internal_review_notes',
+            'access_expires_at',
+        ]);
 
         $accessRequest->forceFill([
             'status' => 'denied',
             'reviewed_by' => $request->user()->id,
             'reviewed_at' => now(),
-            'review_notes' => $validated['reason'],
+            'review_notes' => null,
+            'public_denial_reason' => $validated['reason'],
+            'internal_review_notes' => null,
+            'access_expires_at' => null,
         ])->save();
 
         AuditLogger::record(
@@ -101,7 +112,15 @@ class AdminAccessMonitoringController extends Controller
             'access_request.override_denied',
             $accessRequest,
             $oldValues,
-            $accessRequest->only(['status', 'reviewed_by', 'reviewed_at', 'review_notes']),
+            $accessRequest->only([
+                'status',
+                'reviewed_by',
+                'reviewed_at',
+                'review_notes',
+                'public_denial_reason',
+                'internal_review_notes',
+                'access_expires_at',
+            ]),
         );
 
         return ApiResponse::success(

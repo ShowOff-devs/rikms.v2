@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Resources\AccessRequestResource;
 use App\Models\AccessRequest;
 use App\Models\Agency;
 use App\Models\AuditLog;
@@ -7,6 +8,14 @@ use App\Models\Notification;
 use App\Models\Research;
 use App\Models\Role;
 use App\Models\User;
+use App\Notifications\AccessRequestApprovedNotification;
+use App\Notifications\AccessRequestDeniedNotification;
+use App\Services\AccessRequestEmailNotificationService;
+use App\Support\AccessRequestEmailNotificationResult;
+use App\Support\AccessRequestMailFailureAuditor;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Http\Request as HttpRequest;
+use Illuminate\Support\Facades\Notification as NotificationFacade;
 
 function createPhase7Role(string $slug): Role
 {
@@ -255,10 +264,376 @@ test('agency admin can see and decide the public request for own agency only', f
 
     $this->actingAs($ownAdmin)
         ->postJson("/api/agency/access-requests/{$otherRequest->id}/deny", [
-            'decision_notes' => 'Should be forbidden.',
+            'public_denial_reason' => 'Should be forbidden.',
         ])
         ->assertForbidden();
 
     expect(AuditLog::where('event', 'access_request.approved')->count())->toBe(1);
     expect(Notification::where('type', 'access_request.approved')->count())->toBe(1);
+});
+
+test('agency access approval queues requester email notification after status update', function () {
+    NotificationFacade::fake();
+
+    $agency = createPhase7Agency('phase-7-approval-email-agency');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+    $accessRequest = AccessRequest::create([
+        'research_id' => $research->id,
+        'agency_id' => $agency->id,
+        'requester_name' => 'Email Approval Researcher',
+        'requester_email' => 'approval@example.test',
+        'purpose' => 'Email notification approval test',
+        'status' => 'pending',
+        'requested_at' => now(),
+    ]);
+
+    $this->actingAs($agencyAdmin)
+        ->postJson("/api/agency/access-requests/{$accessRequest->id}/approve")
+        ->assertOk()
+        ->assertJsonPath('data.status', 'approved')
+        ->assertJsonPath('data.access_expires_at', null)
+        ->assertJsonPath('meta.email_notification', 'queued');
+
+    expect($accessRequest->fresh()->status)->toBe('approved');
+
+    NotificationFacade::assertSentOnDemand(
+        AccessRequestApprovedNotification::class,
+        function (AccessRequestApprovedNotification $notification, array $channels, object $notifiable) use ($research): bool {
+            return $channels === ['mail']
+                && $notifiable->routeNotificationFor('mail') === 'approval@example.test'
+                && $notification instanceof ShouldQueue
+                && $notification->data['research_title'] === $research->title
+                && $notification->data['status'] === 'Approved'
+                && $notification->data['request_reference'] !== null;
+        },
+    );
+});
+
+test('agency access denial queues requester email notification with public reason only', function () {
+    NotificationFacade::fake();
+
+    $agency = createPhase7Agency('phase-7-denial-email-agency');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+    $accessRequest = AccessRequest::create([
+        'research_id' => $research->id,
+        'agency_id' => $agency->id,
+        'requester_name' => 'Email Denial Researcher',
+        'requester_email' => 'denial@example.test',
+        'purpose' => 'Email notification denial test',
+        'message' => 'Do not include this request message as an internal note.',
+        'status' => 'pending',
+        'requested_at' => now(),
+    ]);
+
+    $this->actingAs($agencyAdmin)
+        ->postJson("/api/agency/access-requests/{$accessRequest->id}/deny", [
+            'public_denial_reason' => 'Please provide a clearer research purpose.',
+            'internal_notes' => 'INTERNAL_ONLY_DO_NOT_EMAIL',
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.status', 'denied')
+        ->assertJsonPath('data.public_denial_reason', 'Please provide a clearer research purpose.')
+        ->assertJsonPath('data.internal_review_notes', 'INTERNAL_ONLY_DO_NOT_EMAIL')
+        ->assertJsonPath('data.access_expires_at', null)
+        ->assertJsonPath('meta.email_notification', 'queued');
+
+    expect($accessRequest->fresh()->public_denial_reason)->toBe('Please provide a clearer research purpose.')
+        ->and($accessRequest->fresh()->internal_review_notes)->toBe('INTERNAL_ONLY_DO_NOT_EMAIL');
+
+    NotificationFacade::assertSentOnDemand(
+        AccessRequestDeniedNotification::class,
+        function (AccessRequestDeniedNotification $notification, array $channels, object $notifiable) use ($research): bool {
+            $mail = $notification->toMail($notifiable);
+
+            return $channels === ['mail']
+                && $notifiable->routeNotificationFor('mail') === 'denial@example.test'
+                && $notification instanceof ShouldQueue
+                && $notification->data['research_title'] === $research->title
+                && $notification->data['status'] === 'Denied'
+                && $notification->data['denial_reason'] === 'Please provide a clearer research purpose.'
+                && ! str($mail->viewData['data']['denial_reason'] ?? '')->contains('INTERNAL_ONLY_DO_NOT_EMAIL');
+        },
+    );
+
+    $publicResource = (new AccessRequestResource(
+        $accessRequest->fresh()->load(['research.agency', 'requester', 'reviewer']),
+    ))->resolve(HttpRequest::create('/'));
+
+    expect($publicResource)->not->toHaveKey('internal_review_notes')
+        ->and($publicResource)->not->toHaveKey('review_notes')
+        ->and($publicResource['public_denial_reason'])->toBe('Please provide a clearer research purpose.');
+});
+
+test('denying access requires a public denial reason', function () {
+    NotificationFacade::fake();
+
+    $agency = createPhase7Agency('phase-7-required-public-reason-agency');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+    $accessRequest = AccessRequest::create([
+        'research_id' => $research->id,
+        'agency_id' => $agency->id,
+        'requester_name' => 'Required Reason Researcher',
+        'requester_email' => 'required-reason@example.test',
+        'purpose' => 'Required public reason test',
+        'status' => 'pending',
+        'requested_at' => now(),
+    ]);
+
+    $this->actingAs($agencyAdmin)
+        ->postJson("/api/agency/access-requests/{$accessRequest->id}/deny", [
+            'internal_notes' => 'Internal notes are not enough.',
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['public_denial_reason']);
+
+    expect($accessRequest->fresh()->status)->toBe('pending');
+    NotificationFacade::assertNothingSent();
+});
+
+test('duplicate finalized access decision does not send a duplicate requester email', function () {
+    NotificationFacade::fake();
+
+    $agency = createPhase7Agency('phase-7-duplicate-email-agency');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+    $accessRequest = AccessRequest::create([
+        'research_id' => $research->id,
+        'agency_id' => $agency->id,
+        'requester_name' => 'Duplicate Email Researcher',
+        'requester_email' => 'duplicate@example.test',
+        'purpose' => 'Duplicate email notification test',
+        'status' => 'pending',
+        'requested_at' => now(),
+    ]);
+
+    $this->actingAs($agencyAdmin)
+        ->postJson("/api/agency/access-requests/{$accessRequest->id}/approve")
+        ->assertOk();
+
+    $this->actingAs($agencyAdmin)
+        ->postJson("/api/agency/access-requests/{$accessRequest->id}/approve")
+        ->assertStatus(409);
+
+    NotificationFacade::assertSentOnDemandTimes(AccessRequestApprovedNotification::class, 1);
+});
+
+test('finalized access decisions cannot be reversed or repeated with new emails', function () {
+    NotificationFacade::fake();
+
+    $agency = createPhase7Agency('phase-7-finalized-email-agency');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+    $approveThenDeny = AccessRequest::create([
+        'research_id' => $research->id,
+        'agency_id' => $agency->id,
+        'requester_name' => 'Approve Then Deny',
+        'requester_email' => 'approve-deny@example.test',
+        'purpose' => 'Finalized decision test',
+        'status' => 'pending',
+        'requested_at' => now(),
+    ]);
+    $denyThenApprove = AccessRequest::create([
+        'research_id' => $research->id,
+        'agency_id' => $agency->id,
+        'requester_name' => 'Deny Then Approve',
+        'requester_email' => 'deny-approve@example.test',
+        'purpose' => 'Finalized decision test',
+        'status' => 'pending',
+        'requested_at' => now(),
+    ]);
+
+    $this->actingAs($agencyAdmin)
+        ->postJson("/api/agency/access-requests/{$approveThenDeny->id}/approve")
+        ->assertOk();
+
+    $this->actingAs($agencyAdmin)
+        ->postJson("/api/agency/access-requests/{$approveThenDeny->id}/deny", [
+            'public_denial_reason' => 'Too late to deny.',
+        ])
+        ->assertStatus(409);
+
+    $this->actingAs($agencyAdmin)
+        ->postJson("/api/agency/access-requests/{$denyThenApprove->id}/deny", [
+            'public_denial_reason' => 'Request is incomplete.',
+        ])
+        ->assertOk();
+
+    $this->actingAs($agencyAdmin)
+        ->postJson("/api/agency/access-requests/{$denyThenApprove->id}/deny", [
+            'public_denial_reason' => 'Second denial attempt.',
+        ])
+        ->assertStatus(409);
+
+    $this->actingAs($agencyAdmin)
+        ->postJson("/api/agency/access-requests/{$denyThenApprove->id}/approve")
+        ->assertStatus(409);
+
+    NotificationFacade::assertSentOnDemandTimes(AccessRequestApprovedNotification::class, 1);
+    NotificationFacade::assertSentOnDemandTimes(AccessRequestDeniedNotification::class, 1);
+});
+
+test('missing requester email skips email notification without blocking decision', function () {
+    NotificationFacade::fake();
+
+    $agency = createPhase7Agency('phase-7-missing-email-agency');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+    $accessRequest = AccessRequest::create([
+        'research_id' => $research->id,
+        'agency_id' => $agency->id,
+        'requester_name' => 'Missing Email Researcher',
+        'requester_email' => null,
+        'purpose' => 'Missing email notification test',
+        'status' => 'pending',
+        'requested_at' => now(),
+    ]);
+
+    $this->actingAs($agencyAdmin)
+        ->postJson("/api/agency/access-requests/{$accessRequest->id}/approve")
+        ->assertOk()
+        ->assertJsonPath('data.status', 'approved')
+        ->assertJsonPath('meta.email_notification', 'skipped');
+
+    expect($accessRequest->fresh()->status)->toBe('approved');
+    NotificationFacade::assertNothingSent();
+});
+
+test('email notification dispatch failure does not roll back access decision', function () {
+    $agency = createPhase7Agency('phase-7-email-failure-agency');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+    $accessRequest = AccessRequest::create([
+        'research_id' => $research->id,
+        'agency_id' => $agency->id,
+        'requester_name' => 'Failure Email Researcher',
+        'requester_email' => 'failure@example.test',
+        'purpose' => 'Email failure notification test',
+        'status' => 'pending',
+        'requested_at' => now(),
+    ]);
+
+    $this->app->bind(
+        AccessRequestEmailNotificationService::class,
+        fn () => new class extends AccessRequestEmailNotificationService
+        {
+            protected function dispatchNotification(string $email, object $notification): void
+            {
+                throw new RuntimeException('SMTP transport unavailable');
+            }
+        },
+    );
+
+    $this->actingAs($agencyAdmin)
+        ->postJson("/api/agency/access-requests/{$accessRequest->id}/approve")
+        ->assertOk()
+        ->assertJsonPath('data.status', 'approved')
+        ->assertJsonPath('meta.email_notification', 'failed_to_queue');
+
+    expect($accessRequest->fresh()->status)->toBe('approved');
+    $this->assertDatabaseHas('audit_logs', [
+        'event' => 'access_request.email_notification_failed',
+        'auditable_id' => $accessRequest->id,
+    ]);
+});
+
+test('decision rollback does not dispatch requester email notification', function () {
+    NotificationFacade::fake();
+
+    $agency = createPhase7Agency('phase-7-rollback-email-agency');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+    $accessRequest = AccessRequest::create([
+        'research_id' => $research->id,
+        'agency_id' => $agency->id,
+        'requester_name' => 'Rollback Email Researcher',
+        'requester_email' => 'rollback@example.test',
+        'purpose' => 'Rollback email notification test',
+        'status' => 'pending',
+        'requested_at' => now(),
+    ]);
+
+    $this->app->bind(
+        AccessRequestEmailNotificationService::class,
+        fn () => new class extends AccessRequestEmailNotificationService
+        {
+            public function queueDecisionNotificationAfterCommit(AccessRequest $accessRequest, string $status): AccessRequestEmailNotificationResult
+            {
+                throw new RuntimeException('Forced rollback after decision update');
+            }
+        },
+    );
+
+    $this->actingAs($agencyAdmin)
+        ->postJson("/api/agency/access-requests/{$accessRequest->id}/approve")
+        ->assertServerError();
+
+    expect($accessRequest->fresh()->status)->toBe('pending');
+    NotificationFacade::assertNothingSent();
+});
+
+test('queued notification failure writes sanitized audit entries', function (string $notificationClass, string $decisionStatus) {
+    $agency = createPhase7Agency('phase-7-mail-failure-'.$decisionStatus);
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+    $accessRequest = AccessRequest::create([
+        'research_id' => $research->id,
+        'agency_id' => $agency->id,
+        'requester_name' => 'Failure Audit Researcher',
+        'requester_email' => 'failure-audit@example.test',
+        'purpose' => 'Failure audit test',
+        'status' => $decisionStatus,
+        'requested_at' => now(),
+    ]);
+    $sensitiveMessage = 'SMTP password secret and raw server response';
+    $notification = new $notificationClass([
+        'access_request_id' => $accessRequest->id,
+        'agency_id' => $agency->id,
+        'notification_type' => 'access_request.'.$decisionStatus.'.email',
+        'decision_status' => $decisionStatus,
+        'requester_email_domain' => 'example.test',
+        'queue' => 'default',
+    ]);
+
+    $notification->failed(new RuntimeException($sensitiveMessage));
+
+    $audit = AuditLog::query()
+        ->where('event', 'access_request.email_notification_failed')
+        ->where('auditable_id', $accessRequest->id)
+        ->firstOrFail();
+
+    expect($audit->metadata['notification_type'])->toBe('access_request.'.$decisionStatus.'.email')
+        ->and($audit->metadata['decision_status'])->toBe($decisionStatus)
+        ->and($audit->metadata['failure_category'])->toBe('notification_job_failure')
+        ->and($audit->metadata['exception_class'])->toBe(RuntimeException::class)
+        ->and(json_encode($audit->metadata))->not->toContain($sensitiveMessage);
+})->with([
+    [AccessRequestApprovedNotification::class, 'approved'],
+    [AccessRequestDeniedNotification::class, 'denied'],
+]);
+
+test('queued notification failure audit fallback does not throw', function () {
+    $this->app->bind(
+        AccessRequestMailFailureAuditor::class,
+        fn () => new class extends AccessRequestMailFailureAuditor
+        {
+            public function record(array $data, Throwable $exception, ?string $category = null): void
+            {
+                throw new RuntimeException('Audit writer unavailable with secret response');
+            }
+        },
+    );
+
+    $notification = new AccessRequestApprovedNotification([
+        'access_request_id' => 987,
+        'agency_id' => 654,
+        'notification_type' => 'access_request.approved.email',
+        'decision_status' => 'approved',
+    ]);
+
+    $notification->failed(new RuntimeException('Sensitive SMTP response'));
+
+    expect(true)->toBeTrue();
 });

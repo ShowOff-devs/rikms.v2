@@ -22,6 +22,9 @@ type ApiAccessRequest = {
     status: 'approved' | 'pending' | 'denied';
     requested_at?: string;
     review_notes?: string;
+    public_denial_reason?: string;
+    internal_review_notes?: string;
+    access_expires_at?: string;
     reviewed_at?: string;
     research?: {
         id: number;
@@ -64,8 +67,8 @@ function toRecord(request: ApiAccessRequest): AccessRequestMonitorRecord {
         requestMessage: request.message ?? request.purpose,
         requestedAccessType: request.intended_use,
         researchAccessPolicy: request.research?.access_level,
-        decisionReason: request.review_notes,
-        reviewerNotes: request.review_notes,
+        decisionReason: request.public_denial_reason ?? request.review_notes,
+        reviewerNotes: request.internal_review_notes ?? request.review_notes,
         auditStatus: request.reviewed_at ? 'reviewed' : 'unreviewed',
         auditTrail: [],
     };

@@ -11,6 +11,7 @@ import {
     approveAccessRequest,
     denyAccessRequest,
     filterAccessRequests,
+    getAccessRequestDecisionMessage,
     getAccessRequests,
 } from '@/lib/access-requests/access-request-service';
 import { useAgencySession } from '@/lib/auth/agency-auth';
@@ -44,6 +45,7 @@ export function AccessRequestsPage() {
         null,
     );
     const [denialReason, setDenialReason] = useState('');
+    const [internalNotes, setInternalNotes] = useState('');
     const [feedback, setFeedback] = useState<{
         message: string;
         type: 'success' | 'error';
@@ -136,6 +138,7 @@ export function AccessRequestsPage() {
         setSelectedRequest(null);
         setDecisionState({ request, decision });
         setDenialReason('');
+        setInternalNotes('');
         setFeedback(null);
     };
 
@@ -154,13 +157,15 @@ export function AccessRequestsPage() {
         setIsSavingDecision(true);
 
         try {
-            const updatedRequest =
+            const decisionResult =
                 decisionState.decision === 'approved'
                     ? await approveAccessRequest(decisionState.request.id)
                     : await denyAccessRequest(
                           decisionState.request.id,
                           denialReason.trim(),
+                          internalNotes.trim() || undefined,
                       );
+            const updatedRequest = decisionResult.request;
 
             if (updatedRequest) {
                 setRequests((current) =>
@@ -177,11 +182,10 @@ export function AccessRequestsPage() {
                 );
                 setFeedback(
                     {
-                        message: `${updatedRequest.requesterName}'s request was ${
-                            updatedRequest.status === 'approved'
-                                ? 'approved'
-                                : 'denied'
-                        }.`,
+                        message: getAccessRequestDecisionMessage(
+                            decisionState.decision,
+                            decisionResult.emailNotification,
+                        ),
                         type: 'success',
                     },
                 );
@@ -189,6 +193,7 @@ export function AccessRequestsPage() {
 
             setDecisionState(null);
             setDenialReason('');
+            setInternalNotes('');
         } catch (error) {
             setFeedback(
                 {
@@ -317,8 +322,11 @@ export function AccessRequestsPage() {
                     if (!open && !isSavingDecision) {
                         setDecisionState(null);
                         setDenialReason('');
+                        setInternalNotes('');
                     }
                 }}
+                internalNotes={internalNotes}
+                onInternalNotesChange={setInternalNotes}
                 onConfirm={handleDecisionConfirm}
             />
         </>

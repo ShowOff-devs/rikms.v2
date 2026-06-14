@@ -24,6 +24,10 @@ class Statuses
 
     public const ACCESS_REQUEST_PENDING = 'pending';
 
+    public const ACCESS_REQUEST_APPROVED = 'approved';
+
+    public const ACCESS_REQUEST_DENIED = 'denied';
+
     public const NOTIFICATION_UNREAD = 'unread';
 
     public const NOTIFICATION_READ = 'read';

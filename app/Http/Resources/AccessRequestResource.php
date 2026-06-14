@@ -12,6 +12,8 @@ class AccessRequestResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $canViewInternalNotes = $this->canViewInternalNotes($request);
+
         return [
             'id' => $this->id,
             'research_id' => $this->research_id,
@@ -24,7 +26,10 @@ class AccessRequestResource extends JsonResource
             'intended_use' => $this->intended_use,
             'status' => $this->status,
             'requested_at' => $this->requested_at?->toISOString(),
-            'review_notes' => $this->review_notes,
+            'review_notes' => $this->when($canViewInternalNotes, $this->review_notes),
+            'public_denial_reason' => $this->public_denial_reason,
+            'internal_review_notes' => $this->when($canViewInternalNotes, $this->internal_review_notes),
+            'access_expires_at' => $this->access_expires_at?->toISOString(),
             'reviewed_at' => $this->reviewed_at?->toISOString(),
             'research' => new ResearchResource($this->whenLoaded('research')),
             'requester' => new UserResource($this->whenLoaded('requester')),
@@ -32,5 +37,22 @@ class AccessRequestResource extends JsonResource
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
         ];
+    }
+
+    private function canViewInternalNotes(Request $request): bool
+    {
+        $user = $request->user();
+
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        return $user->isAgencyAdmin()
+            && $user->agency_id !== null
+            && (int) $user->agency_id === (int) $this->agency_id;
     }
 }

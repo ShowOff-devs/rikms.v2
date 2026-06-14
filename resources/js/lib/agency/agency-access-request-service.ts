@@ -1,5 +1,8 @@
 import { fetchApi } from '@/lib/api-client';
-import type { AccessRequest } from '@/types/access-request';
+import type {
+    AccessRequest,
+    EmailNotificationStatus,
+} from '@/types/access-request';
 
 type AccessRequestApiRecord = {
     id: number;
@@ -9,6 +12,9 @@ type AccessRequestApiRecord = {
     purpose?: string | null;
     status: 'pending' | 'approved' | 'denied';
     review_notes?: string | null;
+    public_denial_reason?: string | null;
+    internal_review_notes?: string | null;
+    access_expires_at?: string | null;
     reviewed_at?: string | null;
     research?: {
         title?: string | null;
@@ -17,31 +23,55 @@ type AccessRequestApiRecord = {
     created_at?: string | null;
 };
 
+export type AccessRequestDecisionResult = {
+    request: AccessRequest;
+    emailNotification: EmailNotificationStatus;
+};
+
 export async function approveAgencyAccessRequest(
     id: string,
     notes?: string,
-) {
-    const { data } = await fetchApi<AccessRequestApiRecord>(
+) : Promise<AccessRequestDecisionResult> {
+    const { data, meta } = await fetchApi<
+        AccessRequestApiRecord,
+        { email_notification?: EmailNotificationStatus }
+    >(
         `/api/agency/access-requests/${id}/approve`,
         {
             method: 'POST',
-            body: JSON.stringify({ decision_notes: notes }),
+            body: JSON.stringify({ internal_notes: notes }),
         },
     );
 
-    return mapAccessRequestFromApi(data);
+    return {
+        request: mapAccessRequestFromApi(data),
+        emailNotification: meta.email_notification ?? 'queued',
+    };
 }
 
-export async function denyAgencyAccessRequest(id: string, notes?: string) {
-    const { data } = await fetchApi<AccessRequestApiRecord>(
+export async function denyAgencyAccessRequest(
+    id: string,
+    publicDenialReason: string,
+    internalNotes?: string,
+): Promise<AccessRequestDecisionResult> {
+    const { data, meta } = await fetchApi<
+        AccessRequestApiRecord,
+        { email_notification?: EmailNotificationStatus }
+    >(
         `/api/agency/access-requests/${id}/deny`,
         {
             method: 'POST',
-            body: JSON.stringify({ decision_notes: notes }),
+            body: JSON.stringify({
+                public_denial_reason: publicDenialReason,
+                internal_notes: internalNotes,
+            }),
         },
     );
 
-    return mapAccessRequestFromApi(data);
+    return {
+        request: mapAccessRequestFromApi(data),
+        emailNotification: meta.email_notification ?? 'queued',
+    };
 }
 
 export function mapAccessRequestFromApi(
@@ -69,7 +99,12 @@ export function mapAccessRequestFromApi(
             : 'Not available',
         status: record.status,
         requestMessage: record.purpose ?? undefined,
-        denialReason: record.status === 'denied' ? record.review_notes ?? undefined : undefined,
+        denialReason:
+            record.status === 'denied'
+                ? (record.public_denial_reason ?? undefined)
+                : undefined,
+        internalNotes: record.internal_review_notes ?? record.review_notes ?? undefined,
+        accessExpiresAt: record.access_expires_at ?? undefined,
         processedAt: reviewedAt
             ? reviewedAt.toLocaleDateString('en', {
                   month: 'short',

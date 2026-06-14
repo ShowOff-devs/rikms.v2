@@ -9,9 +9,9 @@ import {
     ResearchByYearChart,
     ResearchUploadsTable,
 } from '@/components/agency/AgencyDashboardWidgets';
+import { getAccessRequestDecisionMessage } from '@/lib/access-requests/access-request-service';
 import {
     approveAgencyAccessRequest,
-    denyAgencyAccessRequest,
 } from '@/lib/agency/agency-access-request-service';
 import {
     filterAgencyResearchRecords,
@@ -148,14 +148,18 @@ export default function AgencyDashboardPage() {
             return;
         }
 
+        if (decision === 'denied') {
+            router.visit('/agency/access-requests');
+
+            return;
+        }
+
         setSavingAccessRequestId(requestId);
         setAccessDecisionFeedback(null);
 
         try {
-            const updatedRequest =
-                decision === 'approved'
-                    ? await approveAgencyAccessRequest(requestId)
-                    : await denyAgencyAccessRequest(requestId);
+            const decisionResult = await approveAgencyAccessRequest(requestId);
+            const updatedRequest = decisionResult.request;
 
             setDashboard((current) => ({
                 ...current,
@@ -166,7 +170,10 @@ export default function AgencyDashboardPage() {
                 ),
             }));
             setAccessDecisionFeedback({
-                message: `Access request ${updatedRequest.status}.`,
+                message: getAccessRequestDecisionMessage(
+                    'approved',
+                    decisionResult.emailNotification,
+                ),
                 type: 'success',
             });
         } catch (error) {

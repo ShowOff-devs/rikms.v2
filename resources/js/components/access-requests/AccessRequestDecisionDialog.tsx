@@ -14,8 +14,10 @@ type AccessRequestDecisionDialogProps = {
     decision: AccessRequestDecision | null;
     open: boolean;
     denialReason: string;
+    internalNotes: string;
     isLoading: boolean;
     onDenialReasonChange: (reason: string) => void;
+    onInternalNotesChange: (notes: string) => void;
     onOpenChange: (open: boolean) => void;
     onConfirm: () => void;
 };
@@ -42,8 +44,10 @@ export function AccessRequestDecisionDialog({
     decision,
     open,
     denialReason,
+    internalNotes,
     isLoading,
     onDenialReasonChange,
+    onInternalNotesChange,
     onOpenChange,
     onConfirm,
 }: AccessRequestDecisionDialogProps) {
@@ -75,19 +79,38 @@ export function AccessRequestDecisionDialog({
                 </div>
 
                 {decision === 'denied' ? (
-                    <label className="block">
-                        <span className="text-sm font-medium text-[#1e2939]">
-                            Denial reason
-                        </span>
-                        <textarea
-                            value={denialReason}
-                            onChange={(event) =>
-                                onDenialReasonChange(event.target.value)
-                            }
-                            className="mt-2 min-h-[96px] w-full rounded-[10px] border border-[#e5e7eb] bg-white px-3 py-2 text-sm leading-6 text-[#1e2939] outline-none placeholder:text-[#99a1af] focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10"
-                            placeholder="Add reason for audit trail..."
-                        />
-                    </label>
+                    <div className="space-y-4">
+                        <label className="block">
+                            <span className="text-sm font-medium text-[#1e2939]">
+                                Reason shown to requester
+                            </span>
+                            <textarea
+                                value={denialReason}
+                                onChange={(event) =>
+                                    onDenialReasonChange(event.target.value)
+                                }
+                                className="mt-2 min-h-[96px] w-full rounded-[10px] border border-[#e5e7eb] bg-white px-3 py-2 text-sm leading-6 text-[#1e2939] outline-none placeholder:text-[#99a1af] focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10"
+                                placeholder="Explain what the requester needs to correct or provide."
+                            />
+                        </label>
+                        <label className="block">
+                            <span className="text-sm font-medium text-[#1e2939]">
+                                Internal notes
+                            </span>
+                            <textarea
+                                value={internalNotes}
+                                onChange={(event) =>
+                                    onInternalNotesChange(event.target.value)
+                                }
+                                className="mt-2 min-h-[80px] w-full rounded-[10px] border border-[#e5e7eb] bg-white px-3 py-2 text-sm leading-6 text-[#1e2939] outline-none placeholder:text-[#99a1af] focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10"
+                                placeholder="Optional agency-only context."
+                            />
+                        </label>
+                        <p className="text-xs leading-5 text-[#6a7282]">
+                            Only the requester-facing reason will be included in
+                            the email notification.
+                        </p>
+                    </div>
                 ) : null}
 
                 <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

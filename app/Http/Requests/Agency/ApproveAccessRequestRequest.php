@@ -22,6 +22,7 @@ class ApproveAccessRequestRequest extends FormRequest
     {
         return [
             'decision_notes' => ['nullable', 'string', 'max:2000'],
+            'internal_notes' => ['nullable', 'string', 'max:2000'],
             'expires_at' => ['nullable', 'date', 'after:today'],
         ];
     }

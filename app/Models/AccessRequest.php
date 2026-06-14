@@ -24,6 +24,9 @@ class AccessRequest extends Model
         'reviewed_by',
         'reviewed_at',
         'review_notes',
+        'public_denial_reason',
+        'internal_review_notes',
+        'access_expires_at',
         'archived_at',
         'archived_by',
         'archive_reason',
@@ -34,6 +37,7 @@ class AccessRequest extends Model
     protected $casts = [
         'requested_at' => 'datetime',
         'reviewed_at' => 'datetime',
+        'access_expires_at' => 'datetime',
         'archived_at' => 'datetime',
         'restored_at' => 'datetime',
     ];
