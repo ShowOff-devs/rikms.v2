@@ -1,6 +1,8 @@
 <?php
 
+use App\Services\PlatformSettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 /*
@@ -17,6 +19,12 @@ use Tests\TestCase;
 pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)
     ->in('Feature');
+
+beforeEach(function () {
+    if ($this instanceof TestCase && $this->app?->bound(PlatformSettingsService::class)) {
+        $this->app->make(PlatformSettingsService::class)->forgetCache();
+    }
+});
 
 /*
 |--------------------------------------------------------------------------
@@ -44,7 +52,20 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+function testPdfContent(int $bytes = 131072): string
 {
-    // ..
+    $header = "%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<<>>\n";
+    $footer = "%%EOF\n";
+    $minimum = $header.$footer;
+
+    if ($bytes <= strlen($minimum)) {
+        return substr($minimum, 0, max(0, $bytes));
+    }
+
+    return $header.str_repeat("\n", $bytes - strlen($header) - strlen($footer)).$footer;
+}
+
+function testPdfUpload(string $name = 'document.pdf', int $kilobytes = 128): UploadedFile
+{
+    return UploadedFile::fake()->createWithContent($name, testPdfContent($kilobytes * 1024));
 }

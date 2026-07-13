@@ -25,6 +25,7 @@ class AgencyResource extends JsonResource
             'address' => $this->address,
             'description' => $this->description,
             'logo_path' => $this->logo_path,
+            'logo_url' => $this->logo_url,
             'status' => $this->status,
             'total_research' => (int) ($this->research_count ?? 0),
             'agency_admins' => UserResource::collection($this->whenLoaded('users')),

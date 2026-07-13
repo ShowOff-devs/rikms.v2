@@ -96,20 +96,17 @@ export async function createAgencyAdminUser(
     const { data, message, meta } = await fetchApi<
         AdminAgencyAdminUserApiRecord,
         CreateAgencyAdminUserMeta
-    >(
-        '/api/admin/agency-admin-users',
-        {
-            method: 'POST',
-            body: JSON.stringify({
-                full_name: payload.fullName.trim(),
-                email: payload.email.trim().toLowerCase(),
-                agency_id: Number(payload.agencyId),
-                status: payload.status,
-                send_invite: payload.sendInvite,
-                temporary_password: payload.temporaryPassword?.trim() || null,
-            }),
-        },
-    );
+    >('/api/admin/agency-admin-users', {
+        method: 'POST',
+        body: JSON.stringify({
+            full_name: payload.fullName.trim(),
+            email: payload.email.trim().toLowerCase(),
+            agency_id: Number(payload.agencyId),
+            status: payload.status,
+            send_invite: payload.sendInvite,
+            temporary_password: payload.temporaryPassword?.trim() || null,
+        }),
+    });
 
     return {
         user: mapAgencyAdminUserFromApi(data),

@@ -44,7 +44,7 @@ export async function uploadAgencyLogo(
 }
 
 export async function removeAgencyLogo() {
-    const { data } = await fetchApi<{ success: boolean }>(
+    const { data } = await fetchApi<AgencyProfile & { success: boolean }>(
         '/api/agency/profile/logo',
         {
             method: 'DELETE',

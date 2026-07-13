@@ -180,30 +180,26 @@ export function AccessRequestsPage() {
                         ? updatedRequest
                         : current,
                 );
-                setFeedback(
-                    {
-                        message: getAccessRequestDecisionMessage(
-                            decisionState.decision,
-                            decisionResult.emailNotification,
-                        ),
-                        type: 'success',
-                    },
-                );
+                setFeedback({
+                    message: getAccessRequestDecisionMessage(
+                        decisionState.decision,
+                        decisionResult.emailNotification,
+                    ),
+                    type: 'success',
+                });
             }
 
             setDecisionState(null);
             setDenialReason('');
             setInternalNotes('');
         } catch (error) {
-            setFeedback(
-                {
-                    message:
-                        error instanceof Error
-                            ? error.message
-                            : 'Unable to save access request decision.',
-                    type: 'error',
-                },
-            );
+            setFeedback({
+                message:
+                    error instanceof Error
+                        ? error.message
+                        : 'Unable to save access request decision.',
+                type: 'error',
+            });
         }
 
         setIsSavingDecision(false);

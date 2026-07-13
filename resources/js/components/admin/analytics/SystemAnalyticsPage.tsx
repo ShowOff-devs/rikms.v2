@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AccessRequestStatusChart } from '@/components/admin/analytics/AccessRequestStatusChart';
+import { AdminProjectReportAnalyticsSection } from '@/components/admin/analytics/AdminProjectReportAnalyticsSection';
 import { AnalyticsEmptyState } from '@/components/admin/analytics/AnalyticsEmptyState';
 import { AnalyticsFilters } from '@/components/admin/analytics/AnalyticsFilters';
 import { AnalyticsMetricCards } from '@/components/admin/analytics/AnalyticsMetricCards';
@@ -41,6 +42,8 @@ type SystemAnalyticsState = {
     platformUsageActivity: PlatformUsageActivity[];
     filterOptions: SystemAnalyticsFilterOptions;
 };
+
+type AnalyticsView = 'system' | 'project-reports';
 
 const initialFilters: SystemAnalyticsFilters = {};
 
@@ -86,8 +89,13 @@ export function SystemAnalyticsPage() {
     const [headerRange, setHeaderRange] = useState('this-year');
     const [isExportOpen, setIsExportOpen] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
+    const [activeView, setActiveView] = useState<AnalyticsView>('system');
 
     useEffect(() => {
+        if (activeView !== 'system') {
+            return undefined;
+        }
+
         let isCurrent = true;
 
         setIsLoading(true);
@@ -117,7 +125,7 @@ export function SystemAnalyticsPage() {
         return () => {
             isCurrent = false;
         };
-    }, [filters]);
+    }, [activeView, filters]);
 
     useEffect(() => {
         if (!feedback) {
@@ -142,9 +150,9 @@ export function SystemAnalyticsPage() {
         setIsExporting(true);
 
         try {
-            const result = await exportSystemAnalyticsReport(options);
+            const result = await exportSystemAnalyticsReport(options, filters);
 
-            setFeedback(`${result.fileName} is ready for export workflow.`);
+            setFeedback(`${result.fileName} was downloaded.`);
             setIsExportOpen(false);
         } finally {
             setIsExporting(false);
@@ -156,80 +164,109 @@ export function SystemAnalyticsPage() {
             <main className="px-4 py-8 lg:px-8">
                 <div className="mx-auto flex max-w-[1230px] flex-col gap-6">
                     <SystemAnalyticsHeader
+                        title={
+                            activeView === 'system'
+                                ? 'System Analytics'
+                                : 'Project Report Analytics'
+                        }
+                        description={
+                            activeView === 'system'
+                                ? 'Analyze research activity, system usage, and agency contributions across the RIKMS platform.'
+                                : 'Review regional Terminal Report and Project Accomplishment Report metrics across agencies.'
+                        }
                         selectedRange={headerRange}
                         isExporting={isExporting}
                         onRangeChange={setHeaderRange}
-                        onExport={() => setIsExportOpen(true)}
+                        onExport={
+                            activeView === 'system'
+                                ? () => setIsExportOpen(true)
+                                : undefined
+                        }
                     />
 
-                    <AnalyticsFilters
-                        filters={filters}
-                        options={analytics.filterOptions}
-                        onFiltersChange={updateFilters}
-                        onClearFilters={clearFilters}
+                    <AnalyticsViewSwitch
+                        activeView={activeView}
+                        onViewChange={setActiveView}
                     />
 
-                    {error && (
-                        <div className="rounded-[10px] border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-sm text-[#b91c1c]">
-                            {error}
-                        </div>
-                    )}
-
-                    {feedback && (
-                        <div
-                            role="status"
-                            className="rounded-[10px] border border-[#b9f8cf] bg-[#f0fdf4] px-4 py-3 text-sm font-medium text-[#008236]"
-                        >
-                            {feedback}
-                        </div>
-                    )}
-
-                    <AnalyticsMetricCards
-                        metrics={analytics.metrics}
-                        isLoading={isLoading}
-                    />
-
-                    {!isLoading && !hasData(analytics) ? (
-                        <AnalyticsEmptyState onClearFilters={clearFilters} />
+                    {activeView === 'project-reports' ? (
+                        <AdminProjectReportAnalyticsSection />
                     ) : (
                         <>
-                            <section className="grid gap-6 xl:grid-cols-2">
-                                <ResearchUploadTrendsChart
-                                    data={analytics.uploadTrends}
-                                    isLoading={isLoading}
-                                />
-                                <ResearchByAgencyChart
-                                    data={analytics.researchByAgency}
-                                    isLoading={isLoading}
-                                />
-                            </section>
+                            <AnalyticsFilters
+                                filters={filters}
+                                options={analytics.filterOptions}
+                                onFiltersChange={updateFilters}
+                                onClearFilters={clearFilters}
+                            />
 
-                            <section className="grid gap-6 xl:grid-cols-2">
-                                <ResearchByCategoryChart
-                                    data={analytics.researchByCategory}
-                                    isLoading={isLoading}
-                                />
-                                <SDGContributionChart
-                                    data={analytics.sdgContribution}
-                                    isLoading={isLoading}
-                                />
-                            </section>
+                            {error && (
+                                <div className="rounded-[10px] border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-sm text-[#b91c1c]">
+                                    {error}
+                                </div>
+                            )}
 
-                            <MostAccessedResearchTable
-                                records={analytics.mostAccessedResearch}
+                            {feedback && (
+                                <div
+                                    role="status"
+                                    className="rounded-[10px] border border-[#b9f8cf] bg-[#f0fdf4] px-4 py-3 text-sm font-medium text-[#008236]"
+                                >
+                                    {feedback}
+                                </div>
+                            )}
+
+                            <AnalyticsMetricCards
+                                metrics={analytics.metrics}
                                 isLoading={isLoading}
                             />
 
-                            <section className="grid gap-6 xl:grid-cols-2">
-                                <AccessRequestStatusChart
-                                    data={analytics.accessRequestStatus}
-                                    isLoading={isLoading}
+                            {!isLoading && !hasData(analytics) ? (
+                                <AnalyticsEmptyState
+                                    onClearFilters={clearFilters}
                                 />
-                                <PlatformUsageActivityChart
-                                    data={analytics.platformUsageActivity}
-                                    isLoading={isLoading}
-                                />
-                            </section>
+                            ) : (
+                                <>
+                                    <section className="grid gap-6 xl:grid-cols-2">
+                                        <ResearchUploadTrendsChart
+                                            data={analytics.uploadTrends}
+                                            isLoading={isLoading}
+                                        />
+                                        <ResearchByAgencyChart
+                                            data={analytics.researchByAgency}
+                                            isLoading={isLoading}
+                                        />
+                                    </section>
+
+                                    <section className="grid gap-6 xl:grid-cols-2">
+                                        <ResearchByCategoryChart
+                                            data={analytics.researchByCategory}
+                                            isLoading={isLoading}
+                                        />
+                                        <SDGContributionChart
+                                            data={analytics.sdgContribution}
+                                            isLoading={isLoading}
+                                        />
+                                    </section>
+
+                                    <MostAccessedResearchTable
+                                        records={analytics.mostAccessedResearch}
+                                        isLoading={isLoading}
+                                    />
+
+                                    <section className="grid gap-6 xl:grid-cols-2">
+                                        <AccessRequestStatusChart
+                                            data={analytics.accessRequestStatus}
+                                            isLoading={isLoading}
+                                        />
+                                        <PlatformUsageActivityChart
+                                            data={
+                                                analytics.platformUsageActivity
+                                            }
+                                            isLoading={isLoading}
+                                        />
+                                    </section>
+                                </>
+                            )}
                         </>
                     )}
                 </div>
@@ -242,5 +279,43 @@ export function SystemAnalyticsPage() {
                 onExport={handleExport}
             />
         </AdminLayout>
+    );
+}
+
+function AnalyticsViewSwitch({
+    activeView,
+    onViewChange,
+}: {
+    activeView: AnalyticsView;
+    onViewChange: (view: AnalyticsView) => void;
+}) {
+    const views: { id: AnalyticsView; label: string }[] = [
+        { id: 'system', label: 'System Analytics' },
+        { id: 'project-reports', label: 'Project Report Analytics' },
+    ];
+
+    return (
+        <div
+            className="inline-flex w-fit rounded-[12px] border border-[#e5e7eb] bg-white p-1 shadow-[0px_1px_2px_rgba(0,0,0,0.04)]"
+            role="tablist"
+            aria-label="Analytics views"
+        >
+            {views.map((view) => (
+                <button
+                    key={view.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={activeView === view.id}
+                    onClick={() => onViewChange(view.id)}
+                    className={`rounded-[10px] px-4 py-2 text-sm font-medium transition ${
+                        activeView === view.id
+                            ? 'bg-[#1e3a8a] text-white'
+                            : 'text-[#4a5565] hover:bg-[#f9fafb]'
+                    }`}
+                >
+                    {view.label}
+                </button>
+            ))}
+        </div>
     );
 }

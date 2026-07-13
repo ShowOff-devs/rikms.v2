@@ -1,6 +1,6 @@
 import { Download, FileDown } from 'lucide-react';
 
-export function AnalyticsHeader({ onExport }: { onExport: () => void }) {
+export function AnalyticsHeader({ onExport }: { onExport?: () => void }) {
     return (
         <section className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -18,15 +18,17 @@ export function AnalyticsHeader({ onExport }: { onExport: () => void }) {
                 </p>
             </div>
 
-            <button
-                type="button"
-                onClick={onExport}
-                className="inline-flex h-10 w-fit items-center gap-2 rounded-[10px] bg-[#1e3a8a] px-4 text-sm font-medium text-white shadow-sm hover:bg-[#172f70]"
-            >
-                <FileDown className="size-4" />
-                Export Report
-                <Download className="size-3.5 opacity-80" />
-            </button>
+            {onExport ? (
+                <button
+                    type="button"
+                    onClick={onExport}
+                    className="inline-flex h-10 w-fit items-center gap-2 rounded-[10px] bg-[#1e3a8a] px-4 text-sm font-medium text-white shadow-sm hover:bg-[#172f70]"
+                >
+                    <FileDown className="size-4" />
+                    Export Report
+                    <Download className="size-3.5 opacity-80" />
+                </button>
+            ) : null}
         </section>
     );
 }

@@ -1,4 +1,5 @@
 import { fetchApi } from '@/lib/api-client';
+import { downloadResponseFile } from '@/lib/download-file';
 import type {
     AccessRequestStatusSummary,
     AnalyticsExportOptions,
@@ -110,21 +111,47 @@ export async function getSystemAnalyticsFilterOptions(): Promise<SystemAnalytics
 
 export async function exportSystemAnalyticsReport(
     options: AnalyticsExportOptions,
+    filters: SystemAnalyticsFilters = {},
 ): Promise<AnalyticsExportResult> {
-    const response = await fetch('/api/admin/reports/research/export', {
-        credentials: 'same-origin',
-        headers: { Accept: 'text/csv', 'X-Requested-With': 'XMLHttpRequest' },
-    });
+    const exportParams = new URLSearchParams(params(filters));
+
+    exportParams.set('format', options.format);
+    exportParams.set('date_range', options.dateRange);
+
+    if (options.startDate) {
+        exportParams.set('start_date', options.startDate);
+    }
+
+    if (options.endDate) {
+        exportParams.set('end_date', options.endDate);
+    }
+
+    const response = await fetch(
+        `/api/admin/reports/research/export?${exportParams.toString()}`,
+        {
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'text/csv',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        },
+    );
 
     if (!response.ok) {
         throw new Error('Unable to export analytics report.');
     }
 
+    const generatedAt = new Date().toISOString();
+    const { fileName } = await downloadResponseFile(
+        response,
+        `rikms-research-report-${generatedAt.slice(0, 10)}.csv`,
+    );
+
     return {
         id: `system-analytics-export-${Date.now()}`,
-        fileName: `rikms-system-analytics-${new Date().toISOString().slice(0, 10)}.csv`,
+        fileName,
         format: options.format,
-        generatedAt: new Date().toISOString(),
+        generatedAt,
         status: 'ready',
     };
 }

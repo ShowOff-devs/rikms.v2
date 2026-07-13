@@ -321,10 +321,7 @@ export function AgencySettingsPage() {
         setSaveError('');
 
         if (field === 'browserNotifications' && value) {
-            if (
-                typeof window === 'undefined' ||
-                !('Notification' in window)
-            ) {
+            if (typeof window === 'undefined' || !('Notification' in window)) {
                 setSaveError(
                     'Browser notifications are not supported in this browser.',
                 );
@@ -412,7 +409,10 @@ export function AgencySettingsPage() {
         const passwordErrors: Record<string, string> = {};
 
         if (!accountResult.success) {
-            Object.assign(accountErrors, zodErrorsToRecord(accountResult.error));
+            Object.assign(
+                accountErrors,
+                zodErrorsToRecord(accountResult.error),
+            );
         }
 
         if (hasPasswordChange) {

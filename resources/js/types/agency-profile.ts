@@ -12,7 +12,10 @@ export type AgencyProfile = {
     website: string;
     contactEmail: string;
     officeAddress: string;
-    logoUrl?: string;
+    logoPath?: string | null;
+    logoUrl?: string | null;
+    logo_path?: string | null;
+    logo_url?: string | null;
     slug: string;
     researchSummary: AgencyResearchSummary;
     updatedAt?: string;
@@ -27,9 +30,7 @@ export type AgencyProfileFormValues = {
     agencyOfficeAddress: string;
 };
 
-export type AgencyProfileUpdatePayload = AgencyProfileFormValues & {
-    logoUrl?: string;
-};
+export type AgencyProfileUpdatePayload = AgencyProfileFormValues;
 
 export type AgencyLogoUploadStatus =
     | 'idle'
@@ -41,13 +42,13 @@ export type AgencyLogoUploadStatus =
 
 export type AgencyLogoState = {
     logoFile: File | null;
-    logoUrl?: string;
+    logoUrl?: string | null;
     logoPreviewUrl?: string;
     logoUploadStatus: AgencyLogoUploadStatus;
     error?: string;
 };
 
-export type AgencyLogoUploadResult = {
+export type AgencyLogoUploadResult = AgencyProfile & {
     logoUrl: string;
     fileName: string;
     uploadedAt: string;

@@ -6,6 +6,8 @@ import {
     Download,
     ExternalLink,
 } from 'lucide-react';
+import { useState } from 'react';
+import { downloadPublicResearchFile } from '@/lib/research/research-service';
 import type { ResearchRecord } from '@/types/research';
 
 type ResearchCardProps = {
@@ -42,6 +44,8 @@ const accessMeta = {
 } as const;
 
 export default function ResearchCard({ research }: ResearchCardProps) {
+    const [isDownloading, setIsDownloading] = useState(false);
+    const [downloadError, setDownloadError] = useState<string | null>(null);
     const access = accessMeta[research.accessLevel];
     const detailHref = `/browse-research/${research.public_identifier}`;
     const publicSummary =
@@ -127,17 +131,42 @@ export default function ResearchCard({ research }: ResearchCardProps) {
                 {research.accessLevel === 'public' ? (
                     <button
                         type="button"
+                        disabled={isDownloading}
                         className="inline-flex h-[38px] items-center gap-1 rounded-[10px] border border-[#1e3a8a] px-4 text-sm leading-5 font-medium text-[#1e3a8a]"
-                        onClick={(event) => {
+                        onClick={async (event) => {
                             event.stopPropagation();
+
+                            if (isDownloading) {
+                                return;
+                            }
+
+                            setIsDownloading(true);
+                            setDownloadError(null);
+
+                            try {
+                                await downloadPublicResearchFile(
+                                    research.public_identifier,
+                                    research.slug ?? research.title,
+                                );
+                            } catch (error) {
+                                setDownloadError(
+                                    error instanceof Error
+                                        ? error.message
+                                        : 'Unable to download this research file.',
+                                );
+                            } finally {
+                                setIsDownloading(false);
+                            }
                         }}
                     >
                         <Download className="size-3" />
-                        <span>Download PDF</span>
+                        <span>
+                            {isDownloading ? 'Starting...' : 'Download PDF'}
+                        </span>
                     </button>
                 ) : null}
                 {research.accessLevel === 'restricted' ||
-                    research.accessLevel === 'embargo' ? (
+                research.accessLevel === 'embargo' ? (
                     <Link
                         href={`${detailHref}#request-access`}
                         className="inline-flex h-[38px] items-center gap-1 rounded-[10px] border border-[#1e3a8a] px-4 text-sm leading-5 font-medium text-[#1e3a8a]"
@@ -157,6 +186,11 @@ export default function ResearchCard({ research }: ResearchCardProps) {
                     </a>
                 ) : null}
             </div>
+            {downloadError ? (
+                <p className="mt-3 text-sm leading-5 text-[#b91c1c]">
+                    {downloadError}
+                </p>
+            ) : null}
         </article>
     );
 }

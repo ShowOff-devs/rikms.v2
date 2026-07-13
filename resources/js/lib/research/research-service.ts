@@ -131,8 +131,50 @@ export async function getResearchRecord(
     }
 }
 
+export async function downloadPublicResearchFile(
+    researchId: string,
+    fallbackFileName: string,
+) {
+    const response = await fetch(
+        `/api/public/research/${encodeURIComponent(researchId)}/download`,
+        {
+            headers: {
+                Accept: 'application/pdf,application/octet-stream',
+            },
+        },
+    );
+
+    if (!response.ok) {
+        throw new Error(await downloadErrorMessage(response));
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download =
+        downloadFileName(response) ?? `${fallbackFileName || 'research'}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
+
 export async function getPublicPortalSummary(): Promise<PublicPortalSummary> {
     return fetchJson<PublicPortalSummary>('/api/public/summary');
+}
+
+export async function getPublicPlatformSettings(): Promise<{
+    accessRequestsEnabled: boolean;
+}> {
+    const response = await fetchJson<{
+        data: { access_requests_enabled?: boolean };
+    }>('/api/public/platform-settings');
+
+    return {
+        accessRequestsEnabled: response.data.access_requests_enabled !== false,
+    };
 }
 
 export type PublicAccessRequestPayload = {
@@ -142,6 +184,8 @@ export type PublicAccessRequestPayload = {
     requester_purpose: string;
     message?: string;
     intended_use?: string;
+    website?: string;
+    captcha_token?: string;
 };
 
 export async function submitPublicAccessRequest(
@@ -155,4 +199,32 @@ export async function submitPublicAccessRequest(
             body: JSON.stringify(payload),
         },
     );
+}
+
+async function downloadErrorMessage(response: Response) {
+    try {
+        const payload = (await response.json()) as { message?: string };
+
+        return payload.message ?? 'Unable to download this research file.';
+    } catch {
+        return 'Unable to download this research file.';
+    }
+}
+
+function downloadFileName(response: Response) {
+    const disposition = response.headers.get('content-disposition');
+
+    if (!disposition) {
+        return null;
+    }
+
+    const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+
+    if (utf8Match?.[1]) {
+        return decodeURIComponent(utf8Match[1]);
+    }
+
+    const asciiMatch = disposition.match(/filename="?([^";]+)"?/i);
+
+    return asciiMatch?.[1] ?? null;
 }

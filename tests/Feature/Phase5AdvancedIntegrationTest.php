@@ -4,10 +4,32 @@ use App\Models\Agency;
 use App\Models\ArchiveRecord;
 use App\Models\AuditLog;
 use App\Models\Notification;
+use App\Models\PlatformSetting;
 use App\Models\Research;
 use App\Models\ResearchFile;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\PlatformSettingsService;
+
+function enablePhase5AiProcessing(): void
+{
+    $service = app(PlatformSettingsService::class);
+    $definition = $service->definition(PlatformSettingsService::AI_PROCESSING_ENABLED);
+
+    PlatformSetting::updateOrCreate(
+        ['key' => PlatformSettingsService::AI_PROCESSING_ENABLED],
+        [
+            'value' => 'true',
+            'type' => 'boolean',
+            'group' => $definition['group'] ?? 'ai',
+            'label' => $definition['label'] ?? 'AI Processing Enabled',
+            'is_public' => false,
+            'is_encrypted' => false,
+        ],
+    );
+
+    $service->forgetCache();
+}
 
 function createPhase5Agency(string $slug): Agency
 {
@@ -203,6 +225,8 @@ test('agency AI results expose failed relational pipeline status with processing
 });
 
 test('agency AI process endpoint rejects research records without uploaded files', function () {
+    enablePhase5AiProcessing();
+
     $agency = createPhase5Agency('phase-five-ai-process-no-file');
     $agencyAdmin = createPhase5User('agency_admin', $agency);
     $research = createPhase5Research($agency, $agencyAdmin, 'submitted');
@@ -231,6 +255,7 @@ test('agency AI process endpoint enforces agency scope', function () {
 
 test('agency AI process endpoint runs latest file pipeline synchronously when mongodb is unavailable', function () {
     config(['database.connections.mongodb.dsn' => null]);
+    enablePhase5AiProcessing();
 
     $agency = createPhase5Agency('phase-five-ai-process-skipped');
     $agencyAdmin = createPhase5User('agency_admin', $agency);

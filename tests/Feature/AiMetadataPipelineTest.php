@@ -3,6 +3,7 @@
 use App\Jobs\ExtractResearchMetadataJob;
 use App\Jobs\ParsePdfDocumentJob;
 use App\Models\Agency;
+use App\Models\PlatformSetting;
 use App\Models\Research;
 use App\Models\ResearchFile;
 use App\Models\Role;
@@ -10,9 +11,29 @@ use App\Models\User;
 use App\Services\AI\OpenAiResearchMetadataExtractor;
 use App\Services\AI\PdfTextExtractionService;
 use App\Services\AiPipelineResultWriter;
+use App\Services\PlatformSettingsService;
 use Illuminate\Support\Facades\Storage;
 use OpenAI\Responses\Chat\CreateResponse;
 use OpenAI\Testing\ClientFake;
+
+beforeEach(function () {
+    $service = app(PlatformSettingsService::class);
+    $definition = $service->definition(PlatformSettingsService::AI_PROCESSING_ENABLED);
+
+    PlatformSetting::updateOrCreate(
+        ['key' => PlatformSettingsService::AI_PROCESSING_ENABLED],
+        [
+            'value' => 'true',
+            'type' => 'boolean',
+            'group' => $definition['group'] ?? 'ai',
+            'label' => $definition['label'] ?? 'AI Processing Enabled',
+            'is_public' => false,
+            'is_encrypted' => false,
+        ],
+    );
+
+    $service->forgetCache();
+});
 
 function createAiPipelineRole(string $slug): Role
 {

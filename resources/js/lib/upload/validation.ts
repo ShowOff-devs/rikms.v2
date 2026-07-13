@@ -120,13 +120,28 @@ const beneficiarySectorSchema = z.enum([
 ]) satisfies z.ZodType<BeneficiarySector>;
 
 const reportProjectStatusSchema = z.enum([
+    'not-reported',
     'not-started',
     'in-progress',
+    'substantially-complete',
     'completed',
 ]) satisfies z.ZodType<ReportProjectStatus>;
 
 const reportUploadedFileSchema = z.custom<File | null>(
     (value) => value === null || typeof value === 'object',
+);
+
+const reportingPeriodOptions = ['Q1', 'Q2', 'Q3', 'Q4', 'Annual', 'Final'];
+
+const reportDateSchema = z.string().refine(
+    (value) => {
+        if (!value.trim()) {
+            return true;
+        }
+
+        return Number.isFinite(Date.parse(value));
+    },
+    { message: 'Enter a valid date.' },
 );
 
 const reportDetailsSchema = z
@@ -140,7 +155,14 @@ const reportDetailsSchema = z
         uploadError: z.string().nullable().optional(),
         reportTitle: z.string(),
         reportDescription: z.string(),
-        reportingQuarter: z.string().trim().min(1, 'Quarter is required.'),
+        projectStartDate: reportDateSchema,
+        projectEndDate: reportDateSchema,
+        reportingPeriod: z
+            .string()
+            .trim()
+            .refine((value) => reportingPeriodOptions.includes(value), {
+                message: 'Choose a valid reporting period.',
+            }),
         reportingYear: z.string().trim().min(1, 'Year is required.'),
         agency: z.string().trim().min(1),
         uploadStatus: z.enum(['idle', 'uploading', 'uploaded', 'error']),
@@ -169,12 +191,25 @@ const reportDetailsSchema = z
 
         if (
             value.uploadedFileSize &&
-            value.uploadedFileSize > 50 * 1024 * 1024
+            value.uploadedFileSize > 10 * 1024 * 1024
         ) {
             context.addIssue({
                 code: z.ZodIssueCode.custom,
-                message: 'Maximum file size is 50 MB.',
+                message: 'Maximum file size is 10 MB.',
                 path: ['uploadedFile'],
+            });
+        }
+
+        if (
+            value.projectStartDate &&
+            value.projectEndDate &&
+            Date.parse(value.projectEndDate) <
+                Date.parse(value.projectStartDate)
+        ) {
+            context.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: 'Project end date must be on or after start date.',
+                path: ['projectEndDate'],
             });
         }
     });
@@ -252,14 +287,19 @@ export const reportStepSchemas = {
                 z.object({
                     id: z.string().min(1),
                     projectName: z.string().trim().min(1),
-                    targetValue: z.number().positive(),
-                    actualValue: z.number().min(0),
-                    accomplishmentPercentage: z.number().min(0),
+                    targetValue: z.string().max(120).nullable(),
+                    actualValue: z.string().max(120).nullable(),
+                    accomplishmentPercentage: z
+                        .number()
+                        .min(0)
+                        .max(100)
+                        .nullable(),
                     projectStatus: reportProjectStatusSchema,
                     remarks: z.string().optional(),
                 }),
             )
             .min(1, 'Add at least one project performance row.'),
+        physicalAccomplishmentPercent: z.number().min(0).max(100).nullable(),
         performanceRemarks: z.string().optional(),
     }),
     papClassification: z.object({
@@ -276,20 +316,28 @@ export const reportStepSchemas = {
             .min(1, 'Select at least one beneficiary sector.'),
         aiSuggestionApplied: z.boolean(),
     }),
-    financials: z
-        .object({
-            allocatedBudget: z
-                .number()
-                .positive('Allocated budget is required.'),
-            usedBudget: z.number().min(0, 'Used budget is required.'),
-            remainingBalance: z.number(),
-            utilizationRate: z.number(),
-            financialValidated: z.boolean(),
-        })
-        .refine((value) => value.usedBudget <= value.allocatedBudget, {
-            message: 'Used budget cannot exceed allocated budget.',
-            path: ['usedBudget'],
-        }),
+    financials: z.object({
+        allocatedBudget: z
+            .number()
+            .min(0, 'Allocated budget must be zero or greater.')
+            .nullable(),
+        releasedAmount: z
+            .number()
+            .min(0, 'Released amount must be zero or greater.')
+            .nullable(),
+        obligatedAmount: z
+            .number()
+            .min(0, 'Obligated amount must be zero or greater.')
+            .nullable(),
+        usedBudget: z
+            .number()
+            .min(0, 'Used budget must be zero or greater.')
+            .nullable(),
+        financialAsOfDate: reportDateSchema,
+        remainingBalance: z.number().nullable(),
+        utilizationRate: z.number().nullable(),
+        financialValidated: z.boolean(),
+    }),
     highlights: z.object({
         highlightTitle: z
             .string()

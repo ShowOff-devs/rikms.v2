@@ -56,9 +56,9 @@ const initialExportState: ExportFormState = {
     includeFiles: true,
     includeAgencies: true,
     includeUsers: true,
-    includeRestoreActivity: true,
-    includeDeletionActivity: true,
-    includePendingDeletion: true,
+    includeRestoreActivity: false,
+    includeDeletionActivity: false,
+    includePendingDeletion: false,
 };
 
 const sectionOptions: Array<{ key: keyof ExportFormState; label: string }> = [
@@ -173,8 +173,8 @@ export function ExportArchiveReportModal({
                         Export Archive Report
                     </DialogTitle>
                     <DialogDescription className="text-[#6a7282]">
-                        Choose the report format, date range, and archive
-                        sections to include.
+                        Choose the date range and archive sections to include.
+                        Pilot exports are generated as CSV files.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -318,6 +318,11 @@ export function ExportArchiveReportModal({
                         <p className="text-sm font-semibold text-[#1e2939]">
                             Include Sections
                         </p>
+                        <p className="mt-1 text-xs leading-5 text-[#6a7282]">
+                            Section customization is not available during the
+                            pilot. The CSV uses the fixed implemented archive
+                            record columns.
+                        </p>
                         <div className="mt-3 grid gap-3 sm:grid-cols-2">
                             {sectionOptions.map((option) => (
                                 <label
@@ -325,6 +330,7 @@ export function ExportArchiveReportModal({
                                     className="flex items-center gap-2 text-sm text-[#4a5565]"
                                 >
                                     <Checkbox
+                                        disabled
                                         checked={form[option.key] as boolean}
                                         onCheckedChange={(checked) =>
                                             updateForm(

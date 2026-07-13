@@ -52,7 +52,8 @@ export const projectAccomplishmentUploadConfig: UploadWizardConfig = {
         {
             id: 'ai-metadata',
             title: 'AI Metadata',
-            description: 'Review extracted metadata from the backend AI pipeline.',
+            description:
+                'Review extracted metadata from the backend AI pipeline.',
             defaultValues: createReportAIMetadataData(),
             schema: reportStepSchemas.aiMetadata,
             component: ReportMetadataStep,

@@ -1,4 +1,5 @@
 import { fetchApi } from '@/lib/api-client';
+import { downloadResponseFile } from '@/lib/download-file';
 import type {
     SystemResearchExportOptions,
     SystemResearchExportResult,
@@ -161,26 +162,121 @@ export async function getSystemResearchRecordById(
 
 export async function exportSystemResearchRecords(
     options: SystemResearchExportOptions,
+    filters: SystemResearchFilters = {},
 ): Promise<SystemResearchExportResult> {
-    const response = await fetch('/api/admin/reports/research/export', {
-        credentials: 'same-origin',
-        headers: { Accept: 'text/csv', 'X-Requested-With': 'XMLHttpRequest' },
+    const params = new URLSearchParams({
+        format: options.format,
+        date_range: options.dateRange,
     });
+
+    addDateRange(params, options.startDate, options.endDate);
+    addSystemResearchFilters(params, options, filters);
+
+    const response = await fetch(
+        `/api/admin/reports/research/export?${params}`,
+        {
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'text/csv',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        },
+    );
 
     if (!response.ok) {
         throw new Error('Unable to export system research records.');
     }
 
     const generatedAt = new Date().toISOString();
-    const dateStamp = generatedAt.slice(0, 10);
+    const { fileName } = await downloadResponseFile(
+        response,
+        `rikms-research-report-${generatedAt.slice(0, 10)}.csv`,
+    );
 
     return {
         id: `system-research-export-${Date.now()}`,
-        fileName: `rikms-system-research-records-${dateStamp}.${options.format}`,
+        fileName,
         format: options.format,
         generatedAt,
         status: 'ready',
     };
+}
+
+function addDateRange(
+    params: URLSearchParams,
+    startDate?: string,
+    endDate?: string,
+) {
+    if (startDate) {
+        params.set('start_date', startDate);
+    }
+
+    if (endDate) {
+        params.set('end_date', endDate);
+    }
+}
+
+function addSystemResearchFilters(
+    params: URLSearchParams,
+    options: SystemResearchExportOptions,
+    filters: SystemResearchFilters,
+) {
+    const statuses: string[] = [];
+
+    if (options.includePublished) {
+        statuses.push('published');
+    }
+
+    if (options.includeUnderReview) {
+        statuses.push('under_review');
+    }
+
+    if (options.includeDraft) {
+        statuses.push('draft');
+    }
+
+    if (options.includeArchived) {
+        statuses.push('archived');
+    }
+
+    if (statuses.length) {
+        params.set('statuses', statuses.join(','));
+    }
+
+    if (!options.includeCurrentFilters) {
+        return;
+    }
+
+    if (filters.search?.trim()) {
+        params.set('search', filters.search.trim());
+    }
+
+    if (filters.agency && filters.agency !== 'all') {
+        params.set('agency', filters.agency);
+    }
+
+    if (filters.status && filters.status !== 'all') {
+        params.set(
+            'status',
+            filters.status === 'under-review' ? 'under_review' : filters.status,
+        );
+    }
+
+    if (filters.year && filters.year !== 'all') {
+        params.set('publicationYear', filters.year);
+    }
+
+    if (filters.category && filters.category !== 'all') {
+        params.set('researchCategory', filters.category);
+    }
+
+    if (filters.sdg && filters.sdg !== 'all') {
+        params.set('sdg', filters.sdg);
+    }
+
+    if (filters.documentType && filters.documentType !== 'all') {
+        params.set('documentType', filters.documentType);
+    }
 }
 
 function mapResearchFromApi(

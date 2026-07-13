@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\AdminAgencyManagementController;
 use App\Http\Controllers\Api\AdminAnalyticsController;
 use App\Http\Controllers\Api\AdminArchiveController;
 use App\Http\Controllers\Api\AdminPlatformSettingController;
+use App\Http\Controllers\Api\AdminProjectReportAnalyticsController;
 use App\Http\Controllers\Api\AdminRbacController;
 use App\Http\Controllers\Api\AdminReadController;
 use App\Http\Controllers\Api\AdminResearchModerationController;
@@ -16,6 +17,7 @@ use App\Http\Controllers\Api\AgencyAccessRequestDecisionController;
 use App\Http\Controllers\Api\AgencyAnalyticsController;
 use App\Http\Controllers\Api\AgencyArchiveController;
 use App\Http\Controllers\Api\AgencyProfileSettingsController;
+use App\Http\Controllers\Api\AgencyProjectReportAnalyticsController;
 use App\Http\Controllers\Api\AgencyReadController;
 use App\Http\Controllers\Api\AgencyResearchWriteController;
 use App\Http\Controllers\Api\AiResultController;
@@ -23,18 +25,27 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PublicAccessRequestController;
 use App\Http\Controllers\Api\PublicAgencyController;
 use App\Http\Controllers\Api\PublicResearchController;
+use App\Http\Resources\UserResource;
 use App\Models\Mongo\AiMetadata;
 use App\Models\Mongo\PdfParsingResult;
 use App\Models\Mongo\SdgClassification;
 use App\Models\Research;
+use App\Services\PlatformSettingsService;
 use App\Support\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('public')->group(function () {
+    Route::get('/platform-settings', function (PlatformSettingsService $settings) {
+        return ApiResponse::success('Public platform settings retrieved.', [
+            'access_requests_enabled' => $settings->accessRequestsEnabled(),
+        ]);
+    });
     Route::get('/summary', [PublicResearchController::class, 'summary']);
     Route::get('/research', [PublicResearchController::class, 'index']);
-    Route::post('/research/{research}/access-requests', [PublicAccessRequestController::class, 'store']);
+    Route::post('/research/{research}/access-requests', [PublicAccessRequestController::class, 'store'])
+        ->middleware('throttle:public-access-requests');
+    Route::get('/research/{identifier}/download', [PublicResearchController::class, 'download']);
     Route::get('/research/{identifier}', [PublicResearchController::class, 'show']);
     Route::get('/agencies', [PublicAgencyController::class, 'index']);
     Route::get('/agencies/types', [PublicAgencyController::class, 'types']);
@@ -44,7 +55,10 @@ Route::prefix('public')->group(function () {
 
 Route::prefix('auth')->name('auth.')->group(function () {
     Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-        return ApiResponse::success('Authenticated user retrieved.', $request->user());
+        return ApiResponse::success(
+            'Authenticated user retrieved.',
+            new UserResource($request->user()->loadMissing(['agency', 'roles'])),
+        );
     })->name('user');
 });
 
@@ -55,6 +69,11 @@ Route::prefix('agency')
         Route::get('/dashboard', [AgencyReadController::class, 'dashboard'])->name('dashboard');
         Route::get('/analytics', [AgencyAnalyticsController::class, 'show'])->name('analytics.show');
         Route::get('/analytics/export', [AgencyAnalyticsController::class, 'export'])->name('analytics.export');
+        Route::get('/analytics/project-reports/summary', [AgencyProjectReportAnalyticsController::class, 'summary'])->name('analytics.project-reports.summary');
+        Route::get('/analytics/project-reports/status', [AgencyProjectReportAnalyticsController::class, 'status'])->name('analytics.project-reports.status');
+        Route::get('/analytics/project-reports/budget', [AgencyProjectReportAnalyticsController::class, 'budget'])->name('analytics.project-reports.budget');
+        Route::get('/analytics/project-reports/records', [AgencyProjectReportAnalyticsController::class, 'records'])->name('analytics.project-reports.records');
+        Route::get('/analytics/project-reports/{research}', [AgencyProjectReportAnalyticsController::class, 'show'])->name('analytics.project-reports.show');
         Route::get('/profile', [AgencyProfileSettingsController::class, 'profile'])->name('profile.show');
         Route::patch('/profile', [AgencyProfileSettingsController::class, 'updateProfile'])->name('profile.update');
         Route::post('/profile/logo', [AgencyProfileSettingsController::class, 'uploadLogo'])->name('profile.logo.upload');
@@ -162,6 +181,12 @@ Route::prefix('admin')
         Route::get('/analytics/access-requests', [AdminAnalyticsController::class, 'accessRequests'])->name('analytics.access-requests');
         Route::get('/analytics/agencies', [AdminAnalyticsController::class, 'agencies'])->name('analytics.agencies');
         Route::get('/analytics/security', [AdminAnalyticsController::class, 'security'])->name('analytics.security');
+        Route::get('/analytics/project-reports/summary', [AdminProjectReportAnalyticsController::class, 'summary'])->name('analytics.project-reports.summary');
+        Route::get('/analytics/project-reports/status', [AdminProjectReportAnalyticsController::class, 'status'])->name('analytics.project-reports.status');
+        Route::get('/analytics/project-reports/budget', [AdminProjectReportAnalyticsController::class, 'budget'])->name('analytics.project-reports.budget');
+        Route::get('/analytics/project-reports/agencies', [AdminProjectReportAnalyticsController::class, 'agencies'])->name('analytics.project-reports.agencies');
+        Route::get('/analytics/project-reports/records', [AdminProjectReportAnalyticsController::class, 'records'])->name('analytics.project-reports.records');
+        Route::get('/analytics/project-reports/{research}', [AdminProjectReportAnalyticsController::class, 'show'])->name('analytics.project-reports.show');
         Route::get('/reports/{report}/export', [AdminAnalyticsController::class, 'export'])->name('reports.export');
         Route::get('/audit-logs', [AdminReadController::class, 'auditLogs'])->name('audit-logs.index');
         Route::get('/security-events', [AdminReadController::class, 'securityEvents'])->name('security-events.index');

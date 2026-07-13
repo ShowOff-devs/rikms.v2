@@ -92,6 +92,16 @@ class Research extends Model
         return $this->hasMany(ResearchFile::class);
     }
 
+    public function reportDetail()
+    {
+        return $this->hasOne(ResearchReportDetail::class);
+    }
+
+    public function performanceItems()
+    {
+        return $this->hasMany(ResearchPerformanceItem::class)->orderBy('sort_order');
+    }
+
     public function analyticsEvents()
     {
         return $this->hasMany(ResearchAnalyticsEvent::class);

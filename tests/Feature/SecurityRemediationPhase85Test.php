@@ -5,12 +5,13 @@ use App\Jobs\ExtractResearchMetadataJob;
 use App\Jobs\ParsePdfDocumentJob;
 use App\Models\AccessRequest;
 use App\Models\Agency;
+use App\Models\PlatformSetting;
 use App\Models\Research;
 use App\Models\ResearchFile;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\AiPipelineResultWriter;
-use Illuminate\Http\UploadedFile;
+use App\Services\PlatformSettingsService;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Fortify\Features;
@@ -160,6 +161,11 @@ test('ai pdf and sdg jobs skip safely when mongodb is not configured', function 
 test('pdf upload stores relational metadata and dispatches ai pipeline jobs', function () {
     Bus::fake();
     Storage::fake('local');
+    PlatformSetting::updateOrCreate(
+        ['key' => PlatformSettingsService::AI_PROCESSING_ENABLED],
+        ['value' => 'true', 'type' => 'boolean', 'group' => 'ai', 'label' => 'AI Processing Enabled'],
+    );
+    app(PlatformSettingsService::class)->forgetCache();
 
     $agency = createPhase85Agency('phase-85-upload');
     $agencyAdmin = createPhase85User('agency_admin', $agency);
@@ -167,7 +173,7 @@ test('pdf upload stores relational metadata and dispatches ai pipeline jobs', fu
 
     $this->actingAs($agencyAdmin)
         ->postJson("/api/agency/research/{$research->id}/files", [
-            'file' => UploadedFile::fake()->create('phase85.pdf', 128, 'application/pdf'),
+            'file' => testPdfUpload('phase85.pdf', 128),
             'visibility' => 'private',
             'access_level' => 'restricted',
         ])
@@ -177,7 +183,9 @@ test('pdf upload stores relational metadata and dispatches ai pipeline jobs', fu
     $file = ResearchFile::query()->where('research_id', $research->id)->firstOrFail();
 
     expect($file->checksum)->not->toBeEmpty()
-        ->and($file->metadata['ai_processing'])->toBe('queued');
+        ->and($file->metadata['ai_processing']['pdf_parsing']['status'])->toBe('queued')
+        ->and($file->metadata['ai_processing']['ai_metadata']['status'])->toBe('queued')
+        ->and($file->metadata['ai_processing']['sdg_classification']['status'])->toBe('queued');
 
     Bus::assertChained([
         new ParsePdfDocumentJob($research->id, $file->id, $agency->id, $agencyAdmin->id),

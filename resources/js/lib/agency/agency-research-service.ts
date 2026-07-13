@@ -25,9 +25,37 @@ export type AgencyResearchRecord = {
     access_level?: string | null;
     embargo_until?: string | null;
     external_url?: string | null;
+    report_detail?: AgencyResearchReportDetail | null;
+    performance_items?: AgencyResearchPerformanceItem[];
     submitted_at?: string | null;
     created_at?: string | null;
     updated_at?: string | null;
+};
+
+export type AgencyResearchReportDetail = {
+    id?: number;
+    research_id?: number;
+    reporting_period?: string | null;
+    project_start_date?: string | null;
+    project_end_date?: string | null;
+    allotted_budget?: string | number | null;
+    released_amount?: string | number | null;
+    obligated_amount?: string | number | null;
+    utilized_amount?: string | number | null;
+    physical_accomplishment_percent?: string | number | null;
+    financial_as_of_date?: string | null;
+};
+
+export type AgencyResearchPerformanceItem = {
+    id?: number;
+    research_id?: number;
+    project_name?: string | null;
+    target_value?: string | number | null;
+    actual_value?: string | number | null;
+    accomplishment_percentage?: string | number | null;
+    project_status?: string | null;
+    remarks?: string | null;
+    sort_order?: number | null;
 };
 
 export type AgencyResearchPayload = {
@@ -43,6 +71,8 @@ export type AgencyResearchPayload = {
     access_level?: string;
     embargo_until?: string | null;
     external_url?: string | null;
+    report_details?: AgencyResearchReportDetail;
+    performance_items?: AgencyResearchPerformanceItem[];
 };
 
 export type PublicMetadataField = {

@@ -46,6 +46,8 @@ class ResearchResource extends JsonResource
             'archived_by_user' => new UserResource($this->whenLoaded('archivedBy')),
             'restored_by_user' => new UserResource($this->whenLoaded('restoredBy')),
             'files' => ResearchFileResource::collection($this->whenLoaded('files')),
+            'report_detail' => new ResearchReportDetailResource($this->whenLoaded('reportDetail')),
+            'performance_items' => ResearchPerformanceItemResource::collection($this->whenLoaded('performanceItems')),
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
         ];

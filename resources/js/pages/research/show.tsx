@@ -14,6 +14,8 @@ import PortalNavbar from '@/components/layout/portal-navbar';
 import ResearchEmptyState from '@/components/research/ResearchEmptyState';
 import { ApiError } from '@/lib/api-client';
 import {
+    downloadPublicResearchFile,
+    getPublicPlatformSettings,
     getResearchRecord,
     submitPublicAccessRequest,
 } from '@/lib/research/research-service';
@@ -21,6 +23,25 @@ import type {
     PublicResearchMetadataField,
     ResearchRecord,
 } from '@/types/research';
+
+type TurnstileApi = {
+    render: (
+        element: HTMLElement,
+        options: {
+            sitekey: string;
+            callback: (token: string) => void;
+            'expired-callback': () => void;
+            'error-callback': () => void;
+        },
+    ) => string;
+    reset: (widgetId?: string) => void;
+};
+
+declare global {
+    interface Window {
+        turnstile?: TurnstileApi;
+    }
+}
 
 type ResearchDetailPageProps = {
     researchId?: string;
@@ -49,6 +70,12 @@ const optionalText = (value: string) => {
     return trimmed ? trimmed : undefined;
 };
 
+const captchaEnabled =
+    import.meta.env.VITE_PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED === 'true';
+const captchaSiteKey = import.meta.env.VITE_CAPTCHA_SITE_KEY as
+    | string
+    | undefined;
+
 export default function ResearchDetailPage({
     researchId: providedResearchId,
 }: ResearchDetailPageProps) {
@@ -58,6 +85,8 @@ export default function ResearchDetailPage({
     );
     const [research, setResearch] = useState<ResearchRecord | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isDownloading, setIsDownloading] = useState(false);
+    const [downloadError, setDownloadError] = useState<string | null>(null);
     const [requestOpen, setRequestOpen] = useState(() =>
         typeof window === 'undefined'
             ? false
@@ -67,23 +96,33 @@ export default function ResearchDetailPage({
     const [requestSubmitted, setRequestSubmitted] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+    const [accessRequestsEnabled, setAccessRequestsEnabled] = useState(true);
+    const [captchaToken, setCaptchaToken] = useState('');
+    const [captchaWidgetId, setCaptchaWidgetId] = useState<string | null>(null);
     const [form, setForm] = useState({
         name: '',
         email: '',
         affiliation: '',
         purpose: '',
         message: '',
+        website: '',
     });
 
     useEffect(() => {
         let isCurrent = true;
 
-        getResearchRecord(researchId).then((record) => {
+        Promise.all([
+            getResearchRecord(researchId),
+            getPublicPlatformSettings().catch(() => ({
+                accessRequestsEnabled: true,
+            })),
+        ]).then(([record, publicSettings]) => {
             if (!isCurrent) {
                 return;
             }
 
             setResearch(record);
+            setAccessRequestsEnabled(publicSettings.accessRequestsEnabled);
             setIsLoading(false);
         });
 
@@ -91,6 +130,67 @@ export default function ResearchDetailPage({
             isCurrent = false;
         };
     }, [researchId]);
+
+    useEffect(() => {
+        if (!requestOpen || !captchaEnabled || !captchaSiteKey) {
+            return;
+        }
+
+        const renderCaptcha = () => {
+            const container = document.getElementById(
+                'public-access-request-captcha',
+            );
+
+            if (!container || container.childElementCount > 0) {
+                return;
+            }
+
+            if (window.turnstile) {
+                const widgetId = window.turnstile.render(container, {
+                    sitekey: captchaSiteKey,
+                    callback: setCaptchaToken,
+                    'expired-callback': () => setCaptchaToken(''),
+                    'error-callback': () => setCaptchaToken(''),
+                });
+
+                setCaptchaWidgetId(widgetId);
+            }
+        };
+
+        if (window.turnstile) {
+            renderCaptcha();
+
+            return;
+        }
+
+        const existingScript = document.querySelector<HTMLScriptElement>(
+            'script[data-public-access-request-captcha]',
+        );
+
+        if (existingScript) {
+            existingScript.addEventListener('load', renderCaptcha, {
+                once: true,
+            });
+
+            return () => {
+                existingScript.removeEventListener('load', renderCaptcha);
+            };
+        }
+
+        const script = document.createElement('script');
+
+        script.src =
+            'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+        script.async = true;
+        script.defer = true;
+        script.dataset.publicAccessRequestCaptcha = 'true';
+        script.addEventListener('load', renderCaptcha, { once: true });
+        document.head.appendChild(script);
+
+        return () => {
+            script.removeEventListener('load', renderCaptcha);
+        };
+    }, [requestOpen]);
 
     const canRequestAccess =
         research?.accessLevel === 'restricted' ||
@@ -119,12 +219,19 @@ export default function ResearchDetailPage({
                 requester_purpose: purpose,
                 intended_use: purpose,
                 message: optionalText(form.message),
+                website: form.website,
+                captcha_token: captchaEnabled ? captchaToken : undefined,
             });
             setRequestSubmitted(true);
         } catch (error) {
             if (error instanceof ApiError) {
-                setSubmitError(error.message);
+                setSubmitError(submissionErrorMessage(error));
                 setFieldErrors(flattenErrors(error.errors));
+
+                if (captchaWidgetId && window.turnstile) {
+                    window.turnstile.reset(captchaWidgetId);
+                    setCaptchaToken('');
+                }
             } else {
                 setSubmitError(
                     'Unable to submit your request. Please try again.',
@@ -132,6 +239,38 @@ export default function ResearchDetailPage({
             }
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const handleDownload = async () => {
+        if (!research || isDownloading) {
+            return;
+        }
+
+        setIsDownloading(true);
+        setDownloadError(null);
+
+        try {
+            await downloadPublicResearchFile(
+                research.public_identifier,
+                research.slug ?? research.title,
+            );
+            setResearch((current) =>
+                current
+                    ? {
+                          ...current,
+                          downloads: current.downloads + 1,
+                      }
+                    : current,
+            );
+        } catch (error) {
+            setDownloadError(
+                error instanceof Error
+                    ? error.message
+                    : 'Unable to download this research file.',
+            );
+        } finally {
+            setIsDownloading(false);
         }
     };
 
@@ -255,11 +394,20 @@ export default function ResearchDetailPage({
                                         </p>
                                         <button
                                             type="button"
+                                            disabled={isDownloading}
+                                            onClick={handleDownload}
                                             className="inline-flex h-10 items-center gap-2 rounded-[10px] bg-[#1e3a8a] px-4 text-sm font-medium text-white"
                                         >
                                             <Download className="size-4" />
-                                            Download PDF
+                                            {isDownloading
+                                                ? 'Starting...'
+                                                : 'Download PDF'}
                                         </button>
+                                        {downloadError ? (
+                                            <p className="basis-full text-sm leading-5 text-[#b91c1c]">
+                                                {downloadError}
+                                            </p>
+                                        ) : null}
                                     </div>
                                 ) : null}
                                 {research.accessLevel === 'external' &&
@@ -286,17 +434,22 @@ export default function ResearchDetailPage({
                                         className="mt-3 flex flex-wrap items-center gap-3"
                                     >
                                         <p className="text-sm text-[#374151]">
-                                            This record requires agency approval
-                                            before files can be shared.
+                                            {accessRequestsEnabled
+                                                ? 'This record requires agency approval before files can be shared.'
+                                                : 'Public access requests are currently unavailable.'}
                                         </p>
-                                        <button
-                                            type="button"
-                                            onClick={() => setRequestOpen(true)}
-                                            className="inline-flex h-10 items-center gap-2 rounded-[10px] bg-[#1e3a8a] px-4 text-sm font-medium text-white"
-                                        >
-                                            <Lock className="size-4" />
-                                            Request Access
-                                        </button>
+                                        {accessRequestsEnabled ? (
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    setRequestOpen(true)
+                                                }
+                                                className="inline-flex h-10 items-center gap-2 rounded-[10px] bg-[#1e3a8a] px-4 text-sm font-medium text-white"
+                                            >
+                                                <Lock className="size-4" />
+                                                Request Access
+                                            </button>
+                                        ) : null}
                                     </div>
                                 ) : null}
                                 {research.accessLevel === 'embargo' ? (
@@ -305,21 +458,22 @@ export default function ResearchDetailPage({
                                         className="mt-3 flex flex-wrap items-center gap-3"
                                     >
                                         <p className="text-sm text-[#374151]">
-                                            This record is embargoed
-                                            {research.embargoUntil
-                                                ? ` until ${research.embargoUntil}`
-                                                : ''}
-                                            . You may still submit an access
-                                            inquiry for agency review.
+                                            {accessRequestsEnabled
+                                                ? `This record is embargoed${research.embargoUntil ? ` until ${research.embargoUntil}` : ''}. You may still submit an access inquiry for agency review.`
+                                                : 'Public access requests are currently unavailable.'}
                                         </p>
-                                        <button
-                                            type="button"
-                                            onClick={() => setRequestOpen(true)}
-                                            className="inline-flex h-10 items-center gap-2 rounded-[10px] bg-[#1e3a8a] px-4 text-sm font-medium text-white"
-                                        >
-                                            <Lock className="size-4" />
-                                            Request Access
-                                        </button>
+                                        {accessRequestsEnabled ? (
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    setRequestOpen(true)
+                                                }
+                                                className="inline-flex h-10 items-center gap-2 rounded-[10px] bg-[#1e3a8a] px-4 text-sm font-medium text-white"
+                                            >
+                                                <Lock className="size-4" />
+                                                Request Access
+                                            </button>
+                                        ) : null}
                                     </div>
                                 ) : null}
                             </section>
@@ -330,7 +484,10 @@ export default function ResearchDetailPage({
                 <PortalFooter />
             </div>
 
-            {requestOpen && research && canRequestAccess ? (
+            {requestOpen &&
+            research &&
+            canRequestAccess &&
+            accessRequestsEnabled ? (
                 <div
                     className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4"
                     role="dialog"
@@ -370,7 +527,11 @@ export default function ResearchDetailPage({
                                 onSubmit={handleRequestSubmit}
                             >
                                 {submitError ? (
-                                    <div className="rounded-[12px] border border-[#fecaca] bg-[#fef2f2] p-3 text-sm leading-5 text-[#991b1b]">
+                                    <div
+                                        className="rounded-[12px] border border-[#fecaca] bg-[#fef2f2] p-3 text-sm leading-5 text-[#991b1b]"
+                                        role="alert"
+                                        aria-live="polite"
+                                    >
                                         {submitError}
                                     </div>
                                 ) : null}
@@ -412,6 +573,25 @@ export default function ResearchDetailPage({
                                         ) : null}
                                     </label>
                                 ))}
+                                <label
+                                    className="absolute top-auto left-[-10000px] h-px w-px overflow-hidden"
+                                    aria-hidden="true"
+                                >
+                                    Website
+                                    <input
+                                        type="text"
+                                        name="website"
+                                        tabIndex={-1}
+                                        autoComplete="off"
+                                        value={form.website}
+                                        onChange={(event) =>
+                                            setForm((current) => ({
+                                                ...current,
+                                                website: event.target.value,
+                                            }))
+                                        }
+                                    />
+                                </label>
                                 <label className="block text-sm font-medium text-[#374151]">
                                     Purpose
                                     <textarea
@@ -451,6 +631,19 @@ export default function ResearchDetailPage({
                                         </span>
                                     ) : null}
                                 </label>
+                                {captchaEnabled && captchaSiteKey ? (
+                                    <div>
+                                        <div
+                                            id="public-access-request-captcha"
+                                            className="min-h-[65px]"
+                                        />
+                                        {fieldErrors.captcha_token ? (
+                                            <span className="mt-1 block text-xs leading-4 text-[#b91c1c]">
+                                                {fieldErrors.captcha_token}
+                                            </span>
+                                        ) : null}
+                                    </div>
+                                ) : null}
                                 <div className="flex flex-wrap justify-end gap-3 pt-2">
                                     <button
                                         type="button"
@@ -461,7 +654,12 @@ export default function ResearchDetailPage({
                                     </button>
                                     <button
                                         type="submit"
-                                        disabled={isSubmitting}
+                                        disabled={
+                                            isSubmitting ||
+                                            (captchaEnabled &&
+                                                Boolean(captchaSiteKey) &&
+                                                !captchaToken)
+                                        }
                                         className="inline-flex h-10 items-center rounded-[10px] bg-[#1e3a8a] px-4 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
                                     >
                                         {isSubmitting
@@ -544,6 +742,8 @@ function flattenErrors(errors: ApiError['errors']) {
         requester_affiliation: 'affiliation',
         requester_purpose: 'purpose',
         intended_use: 'purpose',
+        captcha_token: 'captcha_token',
+        website: 'website',
     };
 
     return Object.entries(errors).reduce<Record<string, string>>(
@@ -555,4 +755,24 @@ function flattenErrors(errors: ApiError['errors']) {
         },
         {},
     );
+}
+
+function submissionErrorMessage(error: ApiError) {
+    if (error.status === 409) {
+        return 'You already have an active request for this research record.';
+    }
+
+    if (error.status === 429) {
+        return 'Too many requests have been submitted. Please wait and try again later.';
+    }
+
+    if (error.errors.captcha_token) {
+        return 'We could not verify the submission. Please try again.';
+    }
+
+    if (error.status === 422) {
+        return 'Please check the submitted fields and try again.';
+    }
+
+    return error.message || 'Unable to submit your request. Please try again.';
 }

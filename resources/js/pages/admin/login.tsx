@@ -268,7 +268,9 @@ export default function AdminLoginPage() {
                         className="h-12 w-full rounded-[10px] bg-[#1e3a8a] text-base leading-6 font-semibold text-white shadow-[0_1px_1.5px_rgba(0,0,0,0.1),0_1px_1px_rgba(0,0,0,0.1)] hover:bg-[#1d3478]"
                     >
                         <LockKeyhole className="size-4" aria-hidden="true" />
-                        {isSubmitting ? 'Signing in...' : 'Access System Portal'}
+                        {isSubmitting
+                            ? 'Signing in...'
+                            : 'Access System Portal'}
                     </Button>
                 </form>
 

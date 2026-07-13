@@ -30,9 +30,9 @@ export function AdminDashboardDialog({
                     </DialogDescription>
                 </DialogHeader>
                 <div className="rounded-[10px] border border-[#e5e7eb] bg-[#f8fafc] p-4 text-sm leading-6 text-[#475569]">
-                    This placeholder detail view is ready for the Laravel
-                    moderation API. It can later show duplicate matches,
-                    metadata completeness, reviewer notes, and audit history.
+                    Pilot moderation details are limited to the selected record
+                    summary. Open the Research Moderation page for the actions,
+                    notes, and audit history available during the pilot.
                 </div>
             </DialogContent>
         </Dialog>

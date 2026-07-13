@@ -1,4 +1,5 @@
 import { fetchApi } from '@/lib/api-client';
+import { downloadResponseFile } from '@/lib/download-file';
 import type {
     ActivityExportOptions,
     ActivityLog,
@@ -128,18 +129,46 @@ export async function getActivityTimeline() {
 export async function exportActivityLogs(
     options: ActivityExportOptions,
 ): Promise<GeneratedActivityExport> {
-    const response = await fetch('/api/admin/system-activity/export', {
-        credentials: 'same-origin',
-        headers: { Accept: 'text/csv', 'X-Requested-With': 'XMLHttpRequest' },
+    const params = new URLSearchParams({
+        format: options.format,
+        date_range: options.dateRange,
+        include_notifications: String(options.includeNotifications),
+        include_activity_logs: String(options.includeActivityLogs),
+        include_timeline: String(options.includeTimeline),
+        include_security_events: String(options.includeSecurityEvents),
     });
+
+    if (options.startDate) {
+        params.set('start_date', options.startDate);
+    }
+
+    if (options.endDate) {
+        params.set('end_date', options.endDate);
+    }
+
+    const response = await fetch(
+        `/api/admin/system-activity/export?${params}`,
+        {
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'text/csv',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        },
+    );
 
     if (!response.ok) {
         throw new Error('Unable to export activity logs.');
     }
 
+    const { fileName } = await downloadResponseFile(
+        response,
+        `rikms-activity-log-${new Date().toISOString().slice(0, 10)}.csv`,
+    );
+
     return {
         id: `activity-export-${Date.now()}`,
-        fileName: `rikms-activity-log-${new Date().toISOString().slice(0, 10)}.csv`,
+        fileName,
         format: options.format,
         generatedAt: new Date().toISOString(),
         status: 'ready',

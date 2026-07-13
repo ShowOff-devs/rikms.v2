@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Agency;
 use App\Models\Research;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
@@ -12,7 +13,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
+use Throwable;
 
 class AgencyProfileSettingsController extends Controller
 {
@@ -32,7 +35,6 @@ class AgencyProfileSettingsController extends Controller
             'agencyWebsite' => ['required', 'url', 'max:255'],
             'agencyContactEmail' => ['required', 'email', 'max:255'],
             'agencyOfficeAddress' => ['required', 'string', 'max:1000'],
-            'logoUrl' => ['nullable', 'string', 'max:2048'],
         ]);
 
         $oldValues = $agency->only(['name', 'short_name', 'description', 'website', 'email', 'address', 'logo_path']);
@@ -44,7 +46,6 @@ class AgencyProfileSettingsController extends Controller
             'website' => $validated['agencyWebsite'],
             'email' => $validated['agencyContactEmail'],
             'address' => $validated['agencyOfficeAddress'],
-            'logo_path' => $validated['logoUrl'] ?? $agency->logo_path,
         ]);
 
         AuditLogger::record(
@@ -61,14 +62,47 @@ class AgencyProfileSettingsController extends Controller
     public function uploadLogo(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'logo' => ['required', 'file', 'mimes:png,jpg,jpeg,svg', 'max:5120'],
+            'logo' => ['required', 'image', 'mimes:png,jpg,jpeg,webp', 'max:2048'],
         ]);
 
-        $path = $validated['logo']->store('agency-logos', 'public');
-        $request->user()->agency->update(['logo_path' => Storage::disk('public')->url($path)]);
+        $agency = $request->user()->agency;
+        $oldLogoPath = $agency->logo_path;
+        $path = $validated['logo']->store("agency-logos/{$agency->id}", 'public');
+
+        if (! is_string($path) || $path === '') {
+            return ApiResponse::error('Unable to store agency logo.', [
+                'logo' => ['The logo could not be saved. Please try again.'],
+            ], 500);
+        }
+
+        try {
+            DB::transaction(function () use ($agency, $oldLogoPath, $path, $request, $validated): void {
+                $agency->update(['logo_path' => $path]);
+
+                AuditLogger::record(
+                    $request,
+                    'agency.logo_uploaded',
+                    $agency,
+                    ['logo_path' => $oldLogoPath],
+                    ['logo_path' => $path],
+                    [
+                        'file_name' => $validated['logo']->getClientOriginalName(),
+                        'path' => $path,
+                        'size_bytes' => $validated['logo']->getSize(),
+                    ],
+                );
+            });
+        } catch (Throwable $exception) {
+            Storage::disk('public')->delete($path);
+
+            throw $exception;
+        }
+
+        $agency->refresh();
+        $this->deletePublicDiskFile($oldLogoPath, ['agency-logos/']);
 
         return ApiResponse::success('Agency logo uploaded.', [
-            'logoUrl' => Storage::disk('public')->url($path),
+            ...$this->profilePayloadForAgency($agency, $request),
             'fileName' => $validated['logo']->getClientOriginalName(),
             'uploadedAt' => now()->toISOString(),
         ], [], 201);
@@ -76,9 +110,28 @@ class AgencyProfileSettingsController extends Controller
 
     public function removeLogo(Request $request): JsonResponse
     {
-        $request->user()->agency->update(['logo_path' => null]);
+        $agency = $request->user()->agency;
+        $oldLogoPath = $agency->logo_path;
 
-        return ApiResponse::success('Agency logo removed.', ['success' => true]);
+        DB::transaction(function () use ($agency, $oldLogoPath, $request): void {
+            $agency->update(['logo_path' => null]);
+
+            AuditLogger::record(
+                $request,
+                'agency.logo_removed',
+                $agency,
+                ['logo_path' => $oldLogoPath],
+                ['logo_path' => null],
+            );
+        });
+
+        $agency->refresh();
+        $this->deletePublicDiskFile($oldLogoPath, ['agency-logos/']);
+
+        return ApiResponse::success('Agency logo removed.', [
+            ...$this->profilePayloadForAgency($agency, $request),
+            'success' => true,
+        ]);
     }
 
     public function settings(Request $request): JsonResponse
@@ -184,11 +237,29 @@ class AgencyProfileSettingsController extends Controller
             'photo' => ['required', 'file', 'mimes:png,jpg,jpeg,svg', 'max:5120'],
         ]);
 
+        $user = $request->user();
+        $oldPhotoPath = $user->profile_photo_path;
         $path = $validated['photo']->store('profile-photos', 'public');
-        $request->user()->update(['profile_photo_path' => Storage::disk('public')->url($path)]);
+        $photoUrl = Storage::disk('public')->url($path);
+
+        $user->update(['profile_photo_path' => $photoUrl]);
+        $this->deletePublicDiskFile($oldPhotoPath, ['profile-photos/']);
+
+        AuditLogger::record(
+            $request,
+            'agency.profile_photo_uploaded',
+            $user,
+            ['profile_photo_path' => $oldPhotoPath],
+            ['profile_photo_path' => $photoUrl],
+            [
+                'file_name' => $validated['photo']->getClientOriginalName(),
+                'path' => $path,
+                'size_bytes' => $validated['photo']->getSize(),
+            ],
+        );
 
         return ApiResponse::success('Profile photo uploaded.', [
-            'profilePhotoUrl' => Storage::disk('public')->url($path),
+            'profilePhotoUrl' => $photoUrl,
             'fileName' => $validated['photo']->getClientOriginalName(),
             'uploadedAt' => now()->toISOString(),
         ], [], 201);
@@ -240,8 +311,11 @@ class AgencyProfileSettingsController extends Controller
 
     private function profilePayload(Request $request): array
     {
-        $agency = $request->user()->agency;
+        return $this->profilePayloadForAgency($request->user()->agency, $request);
+    }
 
+    private function profilePayloadForAgency(Agency $agency, Request $request): array
+    {
         return [
             'id' => (string) $agency->id,
             'name' => $agency->name,
@@ -250,7 +324,10 @@ class AgencyProfileSettingsController extends Controller
             'website' => $agency->website ?: '',
             'contactEmail' => $agency->email ?: '',
             'officeAddress' => $agency->address ?: '',
-            'logoUrl' => $agency->logo_path ?: null,
+            'logoPath' => $agency->logo_path,
+            'logoUrl' => $agency->logo_url,
+            'logo_path' => $agency->logo_path,
+            'logo_url' => $agency->logo_url,
             'slug' => $agency->slug,
             'researchSummary' => $this->researchSummary($request),
             'updatedAt' => $agency->updated_at?->toISOString(),
@@ -358,5 +435,33 @@ class AgencyProfileSettingsController extends Controller
             : (str($userAgent)->contains('Linux') ? 'Linux'
             : (str($userAgent)->contains('Android') ? 'Android'
             : (str($userAgent)->contains('iPhone') || str($userAgent)->contains('iPad') ? 'iOS' : 'Unknown OS'))));
+    }
+
+    /**
+     * @param  list<string>  $allowedDirectories
+     */
+    private function deletePublicDiskFile(?string $storedValue, array $allowedDirectories): void
+    {
+        if (! $storedValue) {
+            return;
+        }
+
+        $path = $storedValue;
+
+        if (Str::startsWith($storedValue, ['http://', 'https://', '/storage/'])) {
+            $path = parse_url($storedValue, PHP_URL_PATH);
+
+            if (! is_string($path) || ! Str::contains($path, '/storage/')) {
+                return;
+            }
+
+            $path = ltrim(Str::after($path, '/storage/'), '/');
+        }
+
+        $relativePath = ltrim((string) $path, '/');
+
+        if ($relativePath !== '' && Str::startsWith($relativePath, $allowedDirectories)) {
+            Storage::disk('public')->delete($relativePath);
+        }
     }
 }

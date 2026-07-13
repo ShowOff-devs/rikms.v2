@@ -9,7 +9,7 @@ type AgencyLogoSectionProps = {
 };
 
 const acceptedLogoTypes =
-    '.png,.svg,.jpg,.jpeg,image/png,image/svg+xml,image/jpeg';
+    '.png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp';
 
 export function AgencyLogoSection({
     logoState,
@@ -79,7 +79,7 @@ export function AgencyLogoSection({
                         <p>
                             Accepted formats:{' '}
                             <span className="font-medium text-[#6a7282]">
-                                PNG, SVG, JPG
+                                PNG, JPG, WebP
                             </span>
                         </p>
                         <p>

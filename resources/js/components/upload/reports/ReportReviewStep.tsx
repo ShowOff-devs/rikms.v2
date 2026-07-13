@@ -26,6 +26,7 @@ import {
     submitReport,
 } from '@/lib/upload/services/report-upload-service';
 import type {
+    ReportDetailsData,
     ReportDocumentType,
     ReportReviewData,
     ReportWorkflowData,
@@ -102,8 +103,17 @@ function SuccessState({ data }: { data: ReportWorkflowData }) {
 }
 
 export default function ReportReviewStep(props: UploadWizardStepProps) {
-    const { config, state, stepData, setStepData, goBack, goToStep } = props;
+    const {
+        config,
+        state,
+        stepData,
+        setStepData,
+        setWorkflowStepData,
+        goBack,
+        goToStep,
+    } = props;
     const [confirmOpen, setConfirmOpen] = useState(false);
+    const [savingDraft, setSavingDraft] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
     const data = buildReportWorkflowData(
@@ -132,16 +142,28 @@ export default function ReportReviewStep(props: UploadWizardStepProps) {
     };
 
     const saveDraft = async () => {
+        if (savingDraft || submitting) {
+            return;
+        }
+
+        setSavingDraft(true);
         setSubmitError(null);
 
         try {
-            await saveReportDraft(data);
+            const result = await saveReportDraft(data);
+
+            setWorkflowStepData(REPORT_STEP_IDS.details, {
+                ...data.details,
+                researchId: String(result.id),
+            } satisfies ReportDetailsData);
             updateReview({
                 draftStatus: 'saved',
                 submissionStatus: 'draft',
             });
         } catch (error) {
             setSubmitError(apiMessage(error, 'Unable to save report draft.'));
+        } finally {
+            setSavingDraft(false);
         }
     };
 
@@ -241,7 +263,7 @@ export default function ReportReviewStep(props: UploadWizardStepProps) {
                             />
                             <ReviewItem
                                 label="Period"
-                                value={`${data.details.reportingQuarter} ${data.details.reportingYear}`}
+                                value={`${data.details.reportingPeriod} ${data.details.reportingYear}`}
                             />
                         </div>
                     </ReviewSection>
@@ -347,9 +369,10 @@ export default function ReportReviewStep(props: UploadWizardStepProps) {
                             variant="outline"
                             className="h-10 rounded-[14px] border-[#e5e7eb]"
                             onClick={saveDraft}
+                            disabled={savingDraft || submitting}
                         >
                             <Save className="size-4" />
-                            Save as Draft
+                            {savingDraft ? 'Saving draft...' : 'Save as Draft'}
                         </Button>
                         <Button
                             type="button"

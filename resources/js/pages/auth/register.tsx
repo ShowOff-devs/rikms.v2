@@ -11,7 +11,8 @@ export default function Register() {
         >
             <Head title="Register" />
             <div className="text-center text-sm text-muted-foreground">
-                Already have an account? <TextLink href={login()}>Log in</TextLink>
+                Already have an account?{' '}
+                <TextLink href={login()}>Log in</TextLink>
             </div>
         </AuthLayout>
     );

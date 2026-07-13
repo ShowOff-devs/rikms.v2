@@ -41,6 +41,10 @@ export type UploadWizardStepProps = {
     state: UploadWizardState;
     stepData: UploadWizardStepData;
     setStepData: (data: UploadWizardStepData) => void;
+    setWorkflowStepData: (
+        stepId: UploadStepId,
+        data: UploadWizardStepData,
+    ) => void;
     goBack: () => void;
     goNext: () => void;
     goToStep: (stepId: UploadStepId) => void;

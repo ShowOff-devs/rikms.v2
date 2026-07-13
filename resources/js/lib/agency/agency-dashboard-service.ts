@@ -140,7 +140,9 @@ export function updateAccessRequestStatus(
     );
 }
 
-function mapResearchRecord(record: AgencyDashboardApiData['recent_research'][number]): AgencyResearchRecord {
+function mapResearchRecord(
+    record: AgencyDashboardApiData['recent_research'][number],
+): AgencyResearchRecord {
     const authors = Array.isArray(record.authors)
         ? record.authors.join(', ')
         : record.authors;

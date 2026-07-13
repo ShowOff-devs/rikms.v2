@@ -15,9 +15,12 @@ class PublicAgencyResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
+            'id' => $this->id,
             'slug' => $this->slug,
             'name' => $this->short_name ?: $this->name,
             'fullName' => $this->full_name ?: $this->name,
+            'short_name' => $this->short_name,
+            'logo_url' => $this->logo_url,
             'description' => $this->description ?: '',
             'type' => $this->type,
             'publications' => (int) ($this->research_count ?? 0),

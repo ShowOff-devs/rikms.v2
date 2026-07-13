@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\PlatformSettingsService;
 use App\Support\ApiResponse;
 use Closure;
 use Illuminate\Http\Request;
@@ -9,11 +10,17 @@ use Symfony\Component\HttpFoundation\Response;
 
 class EnsureSuperAdminHasTwoFactor
 {
+    public function __construct(private readonly PlatformSettingsService $settings) {}
+
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
 
-        if (! $user?->isSuperAdmin() || $user->hasEnabledTwoFactorAuthentication()) {
+        if (! $user?->isSuperAdmin()
+            || ! $this->settings->superAdminMfaRequired()
+            || $user->hasEnabledTwoFactorAuthentication()
+            || $request->routeIs('two-factor.*')
+        ) {
             return $next($request);
         }
 

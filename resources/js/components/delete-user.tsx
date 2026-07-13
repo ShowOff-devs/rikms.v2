@@ -51,9 +51,8 @@ export default function DeleteUser() {
                         <DialogDescription>
                             Your access will be disabled and your account will
                             be archived. Historical system records may be
-                            retained for security, audit, and
-                            records-management purposes. Please enter your
-                            password to confirm.
+                            retained for security, audit, and records-management
+                            purposes. Please enter your password to confirm.
                         </DialogDescription>
 
                         <Form

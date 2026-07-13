@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\PlatformSettingsService;
 use App\Support\ApiResponse;
 use Closure;
 use Illuminate\Http\Request;
@@ -11,6 +12,8 @@ use Symfony\Component\HttpFoundation\Response;
 class EnforceUserSessionTimeout
 {
     private const LAST_ACTIVITY_KEY = 'rikms_last_activity_at';
+
+    public function __construct(private readonly PlatformSettingsService $settings) {}
 
     public function handle(Request $request, Closure $next): Response
     {
@@ -53,6 +56,12 @@ class EnforceUserSessionTimeout
     {
         $timeout = (int) ($preferences['sessionTimeout'] ?? 0);
 
-        return $timeout >= 5 && $timeout <= 240 ? $timeout : null;
+        if ($timeout >= 5 && $timeout <= 240) {
+            return $timeout;
+        }
+
+        $platformTimeout = $this->settings->integer(PlatformSettingsService::SESSION_TIMEOUT_MINUTES, 60);
+
+        return $platformTimeout >= 5 && $platformTimeout <= 240 ? $platformTimeout : null;
     }
 }

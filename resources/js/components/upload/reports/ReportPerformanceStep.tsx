@@ -19,28 +19,55 @@ export default function ReportPerformanceStep(props: UploadWizardStepProps) {
     const updatePerformance = (nextData: ReportPerformanceData) => {
         setStepData(nextData);
     };
+    const numberOrNull = (value: string) => {
+        const parsed = Number(value);
+
+        return value.trim() === '' || !Number.isFinite(parsed) ? null : parsed;
+    };
 
     return (
         <ReportStepLayout
             {...props}
             icon={<BarChart3 className="size-5" />}
             title="Project Performance"
-            description="Compare targets against actual accomplishments and let the system calculate completion status."
+            description="Compare planned targets with actual accomplishments. The system calculates the row accomplishment percentage when numeric values are available."
         >
             <div className="mb-5 rounded-[14px] border border-[#bfdbfe] bg-[#eff6ff] p-4">
                 <p className="text-[11px] font-bold text-[#1e3a8a] uppercase">
-                    Auto-filled project name
+                    Report Title
                 </p>
                 <p className="mt-1 text-sm font-semibold text-[#101828]">
                     {projectName}
                 </p>
             </div>
 
-            <ReportPerformanceTable
-                data={data}
-                defaultProjectName={projectName}
-                onChange={updatePerformance}
-            />
+            <label className="mb-5 block">
+                <span className="text-sm font-semibold text-[#344054]">
+                    Overall Physical Accomplishment (%)
+                </span>
+                <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={data.physicalAccomplishmentPercent ?? ''}
+                    onChange={(event) =>
+                        updatePerformance({
+                            ...data,
+                            physicalAccomplishmentPercent: numberOrNull(
+                                event.target.value,
+                            ),
+                        })
+                    }
+                    className="mt-2 h-11 w-full rounded-[10px] border border-[#d1d5dc] px-3 text-sm outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10"
+                    placeholder="0"
+                />
+                <span className="mt-2 block text-xs leading-5 text-[#6a7282]">
+                    Enter the official overall physical accomplishment reported
+                    for the project.
+                </span>
+            </label>
+
+            <ReportPerformanceTable data={data} onChange={updatePerformance} />
         </ReportStepLayout>
     );
 }

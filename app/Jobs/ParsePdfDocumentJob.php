@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\ResearchFile;
 use App\Services\AI\PdfTextExtractionService;
 use App\Services\AiPipelineResultWriter;
+use App\Services\PlatformSettingsService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -24,6 +25,12 @@ class ParsePdfDocumentJob implements ShouldQueue
 
     public function handle(AiPipelineResultWriter $writer, ?PdfTextExtractionService $extractor = null): void
     {
+        if (! app(PlatformSettingsService::class)->aiProcessingEnabled()) {
+            $writer->markAiProcessingSkipped($this->fileId);
+
+            return;
+        }
+
         $extractor ??= app(PdfTextExtractionService::class);
         $file = ResearchFile::query()->find($this->fileId);
         $disk = $file?->disk;

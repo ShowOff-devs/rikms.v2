@@ -7,6 +7,7 @@ use App\Models\Mongo\PdfParsingResult;
 use App\Models\ResearchFile;
 use App\Services\AI\OpenAiSdgClassifier;
 use App\Services\AiPipelineResultWriter;
+use App\Services\PlatformSettingsService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Arr;
@@ -27,6 +28,12 @@ class ClassifyResearchSdgJob implements ShouldQueue
 
     public function handle(AiPipelineResultWriter $writer, ?OpenAiSdgClassifier $classifier = null): void
     {
+        if (! app(PlatformSettingsService::class)->aiProcessingEnabled()) {
+            $writer->markAiProcessingSkipped($this->fileId);
+
+            return;
+        }
+
         $classifier ??= app(OpenAiSdgClassifier::class);
 
         try {

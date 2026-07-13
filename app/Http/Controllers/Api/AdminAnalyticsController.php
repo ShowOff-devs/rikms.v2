@@ -13,6 +13,7 @@ use App\Models\SecurityEvent;
 use App\Models\User;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
+use App\Support\CsvExport;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -86,28 +87,28 @@ class AdminAnalyticsController extends Controller
             ? $this->securityExportQuery($request)
             : null;
 
-        return response()->streamDownload(function () use ($report, $securityEvents): void {
+        return response()->streamDownload(function () use ($report, $request, $securityEvents): void {
             $handle = fopen('php://output', 'w');
 
             if ($report === 'security') {
                 fputcsv($handle, ['ID', 'Type', 'Severity', 'Acknowledged At', 'Resolved At', 'Created At']);
                 $securityEvents?->orderByDesc('created_at')->chunk(200, function ($events) use ($handle): void {
                     foreach ($events as $event) {
-                        fputcsv($handle, [$event->id, $event->event_type, $event->severity, $event->acknowledged_at, $event->resolved_at, $event->created_at]);
+                        fputcsv($handle, CsvExport::row([$event->id, $event->event_type, $event->severity, $event->acknowledged_at, $event->resolved_at, $event->created_at]));
                     }
                 });
             } elseif ($report === 'access-requests') {
                 fputcsv($handle, ['ID', 'Research ID', 'Requester Email', 'Status', 'Created At']);
                 AccessRequest::query()->orderByDesc('created_at')->chunk(200, function ($requests) use ($handle): void {
                     foreach ($requests as $accessRequest) {
-                        fputcsv($handle, [$accessRequest->id, $accessRequest->research_id, $accessRequest->requester_email, $accessRequest->status, $accessRequest->created_at]);
+                        fputcsv($handle, CsvExport::row([$accessRequest->id, $accessRequest->research_id, $accessRequest->requester_email, $accessRequest->status, $accessRequest->created_at]));
                     }
                 });
             } else {
                 fputcsv($handle, ['ID', 'Title', 'Agency ID', 'Status', 'Publication Year', 'Downloads']);
-                Research::query()->orderByDesc('created_at')->chunk(200, function ($records) use ($handle): void {
+                $this->researchExportQuery($request)->orderByDesc('created_at')->chunk(200, function ($records) use ($handle): void {
                     foreach ($records as $research) {
-                        fputcsv($handle, [$research->id, $research->title, $research->agency_id, $research->status, $research->publication_year, $research->downloads]);
+                        fputcsv($handle, CsvExport::row([$research->id, $research->title, $research->agency_id, $research->status, $research->publication_year, $research->downloads]));
                     }
                 });
             }
@@ -124,6 +125,31 @@ class AdminAnalyticsController extends Controller
             'last-7-days' => $query->where('created_at', '>=', now()->subDays(7)->startOfDay()),
             'last-30-days' => $query->where('created_at', '>=', now()->subDays(30)->startOfDay()),
             'this-month' => $query->whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()]),
+            'custom' => $query
+                ->when($request->date('start_date'), fn (Builder $query, $date) => $query->where('created_at', '>=', $date->startOfDay()))
+                ->when($request->date('end_date'), fn (Builder $query, $date) => $query->where('created_at', '<=', $date->endOfDay())),
+            default => $query,
+        };
+    }
+
+    private function researchExportQuery(Request $request): Builder
+    {
+        $query = $this->researchQuery($request);
+
+        if ($request->filled('statuses')) {
+            $statuses = collect(explode(',', $request->string('statuses')->toString()))
+                ->map(fn (string $status): string => trim($status))
+                ->filter()
+                ->all();
+
+            $query->whereIn('status', $statuses);
+        }
+
+        return match ($request->query('date_range')) {
+            'last-7-days' => $query->where('created_at', '>=', now()->subDays(7)->startOfDay()),
+            'last-30-days' => $query->where('created_at', '>=', now()->subDays(30)->startOfDay()),
+            'this-month' => $query->whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()]),
+            'this-year' => $query->whereYear('created_at', now()->year),
             'custom' => $query
                 ->when($request->date('start_date'), fn (Builder $query, $date) => $query->where('created_at', '>=', $date->startOfDay()))
                 ->when($request->date('end_date'), fn (Builder $query, $date) => $query->where('created_at', '<=', $date->endOfDay())),

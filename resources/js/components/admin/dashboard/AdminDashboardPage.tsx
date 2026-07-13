@@ -10,7 +10,6 @@ import { SecurityStatusPanel } from '@/components/admin/dashboard/SecurityStatus
 import { SystemActivityFeed } from '@/components/admin/dashboard/SystemActivityFeed';
 import { AdminLayout } from '@/components/admin/layout/AdminLayout';
 import {
-    generateSystemReport,
     getAdminDashboardMetrics,
     getPendingModerationItems,
     getQuickManagementActions,
@@ -21,7 +20,6 @@ import {
 } from '@/lib/admin/dashboard-service';
 import type {
     AdminDashboardMetric,
-    GeneratedSystemReport,
     ModerationItem,
     QuickManagementAction,
     ResearchByAgency,
@@ -61,9 +59,6 @@ export function AdminDashboardPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [search, setSearch] = useState('');
-    const [isGeneratingReport, setIsGeneratingReport] = useState(false);
-    const [generatedReport, setGeneratedReport] =
-        useState<GeneratedSystemReport | null>(null);
     const [selectedModerationItem, setSelectedModerationItem] =
         useState<ModerationItem | null>(null);
 
@@ -165,26 +160,10 @@ export function AdminDashboardPage() {
         );
     }, [dashboard.moderationItems, normalizedSearch]);
 
-    const handleGenerateReport = async () => {
-        setIsGeneratingReport(true);
-        setGeneratedReport(null);
-
-        try {
-            const report = await generateSystemReport();
-            setGeneratedReport(report);
-        } finally {
-            setIsGeneratingReport(false);
-        }
-    };
-
     return (
         <AdminLayout search={search} onSearchChange={setSearch}>
             <main className="px-4 py-8 lg:px-8">
-                <AdminDashboardHeader
-                    isGeneratingReport={isGeneratingReport}
-                    generatedReport={generatedReport}
-                    onGenerateReport={handleGenerateReport}
-                />
+                <AdminDashboardHeader />
 
                 {error && (
                     <div className="mt-6 rounded-[10px] border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-sm text-[#b91c1c]">

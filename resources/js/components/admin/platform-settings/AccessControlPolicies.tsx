@@ -34,7 +34,7 @@ export function AccessControlPolicies({
             <div className="space-y-5">
                 <ToggleRow
                     title="Enable Access Request System"
-                    description="Allow users to request access to restricted research"
+                    description="Active and enforced in the public API"
                     icon={LockKeyhole}
                     checked={settings.accessRequestEnabled}
                     onChange={(accessRequestEnabled) =>
@@ -45,6 +45,7 @@ export function AccessControlPolicies({
                 <Field
                     label="Default Access Policy"
                     error={errors.defaultAccessPolicy}
+                    hint="Not yet enforced by research creation."
                 >
                     <div className="grid overflow-hidden rounded-[14px] border border-[#e5e7eb] bg-[#f9fafb] lg:grid-cols-3">
                         {accessPolicies.map((policy) => {
@@ -76,7 +77,7 @@ export function AccessControlPolicies({
 
                 <ToggleRow
                     title="Embargo Option"
-                    description="Allow time-limited embargo on newly published research"
+                    description="Not yet enforced as a global platform control"
                     checked={settings.embargoOverrideEnabled}
                     onChange={(embargoOverrideEnabled) =>
                         onChange({ embargoOverrideEnabled })
@@ -87,6 +88,7 @@ export function AccessControlPolicies({
                     <Field
                         label="Embargo Duration"
                         error={errors.embargoDurationMonths}
+                        hint="Not yet enforced as a global platform control."
                     >
                         <UnitInput
                             value={settings.embargoDurationMonths ?? ''}

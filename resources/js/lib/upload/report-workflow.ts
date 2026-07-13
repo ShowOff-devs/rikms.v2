@@ -135,7 +135,9 @@ export function createReportDetailsData(): ReportDetailsData {
         uploadError: null,
         reportTitle: '',
         reportDescription: '',
-        reportingQuarter: '',
+        projectStartDate: '',
+        projectEndDate: '',
+        reportingPeriod: '',
         reportingYear: '2026',
         agency: 'Department of Science and Technology - Region XI',
         uploadStatus: 'idle',
@@ -157,15 +159,15 @@ export function createReportAIMetadataData(): ReportAIMetadataData {
 }
 
 export function createPerformanceProject(
-    projectName = 'Untitled Report',
+    projectName = '',
 ): ReportPerformanceProject {
     return {
         id: createReportRowId(),
         projectName,
-        targetValue: 0,
-        actualValue: 0,
-        accomplishmentPercentage: 0,
-        projectStatus: 'not-started',
+        targetValue: null,
+        actualValue: null,
+        accomplishmentPercentage: null,
+        projectStatus: 'not-reported',
         remarks: '',
     };
 }
@@ -173,6 +175,7 @@ export function createPerformanceProject(
 export function createReportPerformanceData(): ReportPerformanceData {
     return {
         performanceProjects: [],
+        physicalAccomplishmentPercent: null,
         performanceRemarks: '',
     };
 }
@@ -192,10 +195,13 @@ export function createReportPAPClassificationData(): ReportPAPClassificationData
 
 export function createReportFinancialsData(): ReportFinancialsData {
     return {
-        allocatedBudget: 0,
-        usedBudget: 0,
-        remainingBalance: 0,
-        utilizationRate: 0,
+        allocatedBudget: null,
+        releasedAmount: null,
+        obligatedAmount: null,
+        usedBudget: null,
+        financialAsOfDate: '',
+        remainingBalance: null,
+        utilizationRate: null,
         financialValidated: false,
     };
 }
@@ -245,26 +251,40 @@ export function createInitialReportWorkflowData(
 }
 
 export function calculateProjectStatus(
-    accomplishmentPercentage: number,
+    accomplishmentPercentage: number | null,
 ): ReportProjectStatus {
+    if (accomplishmentPercentage === null) {
+        return 'not-reported';
+    }
+
+    if (accomplishmentPercentage <= 0) {
+        return 'not-started';
+    }
+
     if (accomplishmentPercentage >= 100) {
         return 'completed';
     }
 
-    if (accomplishmentPercentage > 0) {
-        return 'in-progress';
+    if (accomplishmentPercentage >= 80) {
+        return 'substantially-complete';
     }
 
-    return 'not-started';
+    return 'in-progress';
 }
 
 export function calculatePerformanceProject(
     project: ReportPerformanceProject,
 ): ReportPerformanceProject {
-    const accomplishmentPercentage =
-        project.targetValue > 0
-            ? Math.round((project.actualValue / project.targetValue) * 100)
-            : 0;
+    const targetValue = leadingNumericValue(project.targetValue);
+    const actualValue = leadingNumericValue(project.actualValue);
+    const canCalculate =
+        targetValue !== null &&
+        actualValue !== null &&
+        targetValue > 0 &&
+        actualValue >= 0;
+    const accomplishmentPercentage = canCalculate
+        ? Math.min(100, Math.round((actualValue / targetValue) * 10000) / 100)
+        : project.accomplishmentPercentage;
 
     return {
         ...project,
@@ -273,35 +293,132 @@ export function calculatePerformanceProject(
     };
 }
 
+function leadingNumericValue(value: string | null): number | null {
+    if (value === null || value.trim() === '') {
+        return null;
+    }
+
+    const match = value.trim().match(/^[+-]?(?:\d+\.?\d*|\.\d+)/u);
+
+    if (!match) {
+        return null;
+    }
+
+    const parsed = Number.parseFloat(match[0]);
+
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
 export function calculateFinancials(
-    allocatedBudget: number,
-    usedBudget: number,
+    allocatedBudget: number | null,
+    usedBudget: number | null,
 ): Pick<
     ReportFinancialsData,
     'remainingBalance' | 'utilizationRate' | 'financialValidated'
 > {
-    const remainingBalance = allocatedBudget - usedBudget;
+    const remainingBalance =
+        allocatedBudget !== null && usedBudget !== null
+            ? allocatedBudget - usedBudget
+            : null;
     const utilizationRate =
-        allocatedBudget > 0
+        allocatedBudget !== null && usedBudget !== null && allocatedBudget > 0
             ? Math.round((usedBudget / allocatedBudget) * 100)
-            : 0;
+            : null;
 
     return {
         remainingBalance,
         utilizationRate,
         financialValidated:
-            allocatedBudget > 0 &&
-            usedBudget >= 0 &&
-            usedBudget <= allocatedBudget,
+            allocatedBudget !== null &&
+            usedBudget !== null &&
+            allocatedBudget >= 0 &&
+            usedBudget >= 0,
     };
 }
 
-export function formatPeso(value: number) {
+export function formatPeso(value: number | null) {
     return new Intl.NumberFormat('en-PH', {
         style: 'currency',
         currency: 'PHP',
         maximumFractionDigits: 0,
-    }).format(Number.isFinite(value) ? value : 0);
+    }).format(value !== null && Number.isFinite(value) ? value : 0);
+}
+
+export function reportFinancialWarnings(
+    financials: ReportFinancialsData,
+    details: Pick<ReportDetailsData, 'projectStartDate' | 'projectEndDate'>,
+) {
+    const warnings: string[] = [];
+    const allottedBudget = financials.allocatedBudget;
+    const releasedAmount = financials.releasedAmount;
+    const obligatedAmount = financials.obligatedAmount;
+    const utilizedAmount = financials.usedBudget;
+
+    if (
+        allottedBudget !== null &&
+        releasedAmount !== null &&
+        releasedAmount > allottedBudget
+    ) {
+        warnings.push(
+            'The released amount exceeds the allotted budget. Please verify the financial figures before submission.',
+        );
+    }
+
+    if (
+        allottedBudget !== null &&
+        obligatedAmount !== null &&
+        obligatedAmount > allottedBudget
+    ) {
+        warnings.push(
+            'The obligated amount exceeds the allotted budget. Please verify the financial figures before submission.',
+        );
+    }
+
+    if (
+        allottedBudget !== null &&
+        utilizedAmount !== null &&
+        utilizedAmount > allottedBudget
+    ) {
+        warnings.push(
+            'The utilized amount exceeds the allotted budget. Please verify the financial figures before submission.',
+        );
+    }
+
+    if (
+        releasedAmount !== null &&
+        utilizedAmount !== null &&
+        utilizedAmount > releasedAmount
+    ) {
+        warnings.push(
+            'The utilized amount exceeds the released amount. Please verify the financial figures before submission.',
+        );
+    }
+
+    const asOfDate = dateValue(financials.financialAsOfDate);
+    const projectStartDate = dateValue(details.projectStartDate);
+    const projectEndDate = dateValue(details.projectEndDate);
+
+    if (
+        asOfDate !== null &&
+        ((projectStartDate !== null && asOfDate < projectStartDate) ||
+            (projectEndDate !== null && asOfDate > projectEndDate))
+    ) {
+        warnings.push(
+            'The financial as-of date is outside the project date range. Please verify the reporting date before submission.',
+        );
+    }
+
+    return warnings;
+}
+
+function dateValue(value: string): number | null {
+    if (!value.trim()) {
+        return null;
+    }
+
+    const timestamp = Date.parse(value);
+
+    return Number.isFinite(timestamp) ? timestamp : null;
 }
 
 export function getReportTypeLabel(
@@ -365,10 +482,10 @@ export function reportReadinessCount(data: ReportWorkflowData) {
         data.details.uploadStatus === 'uploaded' &&
             Boolean(
                 data.details.reportTitle.trim() ||
-                    data.aiMetadata.extractedMetadata.title.trim() ||
-                    data.details.uploadedFileName,
+                data.aiMetadata.extractedMetadata.title.trim() ||
+                data.details.uploadedFileName,
             ) &&
-            Boolean(data.details.reportingQuarter) &&
+            Boolean(data.details.reportingPeriod) &&
             Boolean(data.details.reportingYear),
         data.aiMetadata.aiAnalysisCompleted &&
             data.aiMetadata.selectedPublicMetadata.length > 0,

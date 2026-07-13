@@ -44,6 +44,7 @@ export type AgencyPasswordResetPayload = {
 export type AgencyAuthSession = {
     agencyId: string;
     agencyName: string;
+    logoUrl?: string | null;
     email: string;
     portal: 'agency-admin';
     remember: boolean;

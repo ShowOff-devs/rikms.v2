@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Statuses;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -32,6 +33,7 @@ class AccessRequest extends Model
         'archive_reason',
         'restored_at',
         'restored_by',
+        'active_duplicate_key',
     ];
 
     protected $casts = [
@@ -41,6 +43,55 @@ class AccessRequest extends Model
         'archived_at' => 'datetime',
         'restored_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (AccessRequest $accessRequest): void {
+            $accessRequest->active_duplicate_key = static::shouldCarryActiveDuplicateKey(
+                $accessRequest->status,
+                $accessRequest->requester_email,
+                $accessRequest->research_id,
+            )
+                ? static::activeDuplicateKey((int) $accessRequest->research_id, (string) $accessRequest->requester_email)
+                : null;
+        });
+    }
+
+    public static function normalizeRequesterEmail(?string $email): ?string
+    {
+        $normalized = mb_strtolower(trim((string) $email));
+
+        return $normalized !== '' ? $normalized : null;
+    }
+
+    public static function activeDuplicateKey(int $researchId, string $requesterEmail): string
+    {
+        return hash('sha256', $researchId.':'.static::normalizeRequesterEmail($requesterEmail));
+    }
+
+    public static function shouldCarryActiveDuplicateKey(
+        ?string $status,
+        ?string $requesterEmail,
+        mixed $researchId,
+    ): bool {
+        return in_array($status, static::activeDuplicateStatuses(), true)
+            && static::normalizeRequesterEmail($requesterEmail) !== null
+            && $researchId !== null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function activeDuplicateStatuses(): array
+    {
+        $statuses = config('rikms.public_access_requests.active_duplicate_statuses');
+
+        if (! is_array($statuses) || $statuses === []) {
+            return [Statuses::ACCESS_REQUEST_PENDING];
+        }
+
+        return array_values(array_filter($statuses, 'is_string'));
+    }
 
     public function research()
     {

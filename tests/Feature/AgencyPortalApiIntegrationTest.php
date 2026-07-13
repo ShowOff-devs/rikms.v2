@@ -6,8 +6,10 @@ use App\Models\AuditLog;
 use App\Models\Notification;
 use App\Models\Research;
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 
 function agencyPortalApiAgency(): Agency
 {
@@ -62,6 +64,7 @@ test('agency profile settings and analytics endpoints are database backed', func
         ->getJson('/api/agency/profile')
         ->assertOk()
         ->assertJsonPath('data.id', (string) $agency->id)
+        ->assertJsonPath('data.logoUrl', null)
         ->assertJsonPath('data.researchSummary.totalResearchPublications', 1);
 
     $this->actingAs($user)
@@ -154,6 +157,107 @@ test('agency profile settings and analytics endpoints are database backed', func
         ->assertJsonPath('data.summaryMetrics.0.value', 1)
         ->assertJsonPath('data.accessRequestBreakdown.pending', 1)
         ->assertJsonPath('data.records.0.title', 'Database Backed Agency Research');
+});
+
+test('agency logo upload replaces removes and audits public files', function () {
+    Storage::fake('public');
+
+    $agency = agencyPortalApiAgency();
+    $user = agencyPortalApiUser($agency);
+
+    Storage::disk('public')->put('agency-logos/old-logo.png', 'old logo');
+    $agency->update(['logo_path' => 'agency-logos/old-logo.png']);
+
+    $this->actingAs($user)
+        ->post('/api/agency/profile/logo', [
+            'logo' => UploadedFile::fake()->image('new-logo.png', 512, 512),
+        ])
+        ->assertCreated()
+        ->assertJsonPath('data.fileName', 'new-logo.png')
+        ->assertJsonPath('data.logo_url', $agency->fresh()->logo_url);
+
+    $agency->refresh();
+
+    expect($agency->logo_path)->not->toBeNull()
+        ->and($agency->logo_path)->toStartWith("agency-logos/{$agency->id}/")
+        ->and($agency->logo_url)->toContain("/storage/agency-logos/{$agency->id}/")
+        ->and(Storage::disk('public')->exists('agency-logos/old-logo.png'))->toBeFalse()
+        ->and(Storage::disk('public')->allFiles('agency-logos'))->toHaveCount(1)
+        ->and(AuditLog::query()->where('event', 'agency.logo_uploaded')->exists())->toBeTrue();
+
+    $this->actingAs($user)
+        ->deleteJson('/api/agency/profile/logo')
+        ->assertOk()
+        ->assertJsonPath('data.success', true)
+        ->assertJsonPath('data.logoUrl', null)
+        ->assertJsonPath('data.logo_url', null);
+
+    expect($agency->fresh()->logo_path)->toBeNull()
+        ->and(Storage::disk('public')->allFiles('agency-logos'))->toHaveCount(0)
+        ->and(AuditLog::query()->where('event', 'agency.logo_removed')->exists())->toBeTrue();
+});
+
+test('agency logo upload rejects invalid and oversized files', function () {
+    Storage::fake('public');
+
+    $agency = agencyPortalApiAgency();
+    $user = agencyPortalApiUser($agency);
+
+    $this->actingAs($user)
+        ->post('/api/agency/profile/logo', [
+            'logo' => UploadedFile::fake()->create('agency-logo.pdf', 12, 'application/pdf'),
+        ], ['Accept' => 'application/json'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('logo');
+
+    $this->actingAs($user)
+        ->post('/api/agency/profile/logo', [
+            'logo' => UploadedFile::fake()->image('huge-logo.png', 512, 512)->size(2049),
+        ], ['Accept' => 'application/json'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('logo');
+
+    expect($agency->fresh()->logo_path)->toBeNull()
+        ->and(Storage::disk('public')->allFiles('agency-logos'))->toHaveCount(0);
+});
+
+test('authenticated agency admin data includes current agency logo url', function () {
+    $agency = agencyPortalApiAgency();
+    $user = agencyPortalApiUser($agency);
+
+    $agency->update(['logo_path' => "agency-logos/{$agency->id}/auth-logo.png"]);
+
+    $this->actingAs($user)
+        ->getJson('/api/auth/user')
+        ->assertOk()
+        ->assertJsonPath('data.agency.logo_path', "agency-logos/{$agency->id}/auth-logo.png")
+        ->assertJsonPath('data.agency.logo_url', $agency->fresh()->logo_url);
+});
+
+test('agency profile photo upload replaces old public file and is audited', function () {
+    Storage::fake('public');
+
+    $agency = agencyPortalApiAgency();
+    $user = agencyPortalApiUser($agency);
+    $oldPhotoUrl = Storage::disk('public')->url('profile-photos/old-photo.png');
+
+    Storage::disk('public')->put('profile-photos/old-photo.png', 'old photo');
+    $user->update(['profile_photo_path' => $oldPhotoUrl]);
+
+    $this->actingAs($user)
+        ->post('/api/agency/settings/profile-photo', [
+            'photo' => UploadedFile::fake()->image('new-photo.jpg', 120, 120),
+        ])
+        ->assertCreated()
+        ->assertJsonPath('data.fileName', 'new-photo.jpg');
+
+    $user->refresh();
+
+    expect($user->profile_photo_path)->not->toBeNull()
+        ->and($user->profile_photo_path)->toContain('/storage/profile-photos/')
+        ->and(Storage::disk('public')->exists('profile-photos/old-photo.png'))->toBeFalse()
+        ->and(Storage::disk('public')->allFiles('profile-photos'))->toHaveCount(1)
+        ->and(AuditLog::query()->where('event', 'agency.profile_photo_uploaded')->exists())->toBeTrue();
 });
 
 test('agency settings reports confirmed two factor state from fortify fields', function () {

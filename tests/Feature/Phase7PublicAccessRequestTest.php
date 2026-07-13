@@ -15,7 +15,10 @@ use App\Support\AccessRequestEmailNotificationResult;
 use App\Support\AccessRequestMailFailureAuditor;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Http\Request as HttpRequest;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification as NotificationFacade;
+use Illuminate\Support\Facades\RateLimiter;
 
 function createPhase7Role(string $slug): Role
 {
@@ -188,6 +191,213 @@ test('public access request validation and duplicate pending requests are blocke
     )
         ->assertStatus(409)
         ->assertJsonStructure(['message', 'errors']);
+});
+
+test('public access request duplicate checks normalize requester email', function () {
+    $agency = createPhase7Agency('phase-7-normalized-duplicate-agency');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+
+    $this->postJson(
+        "/api/public/research/{$research->slug}/access-requests",
+        phase7PublicPayload(['requester_email' => ' Public.Researcher@Example.Test ']),
+    )->assertCreated();
+
+    $this->assertDatabaseHas('access_requests', [
+        'research_id' => $research->id,
+        'requester_email' => 'public.researcher@example.test',
+        'status' => 'pending',
+    ]);
+
+    $this->postJson(
+        "/api/public/research/{$research->slug}/access-requests",
+        phase7PublicPayload(['requester_email' => 'public.researcher@example.test']),
+    )
+        ->assertStatus(409)
+        ->assertJsonPath('errors.code', 'ACCESS_REQUEST_ALREADY_PENDING');
+});
+
+test('denied public access request may be resubmitted when no active duplicate exists', function () {
+    $agency = createPhase7Agency('phase-7-resubmit-denied-agency');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+
+    AccessRequest::create([
+        'research_id' => $research->id,
+        'agency_id' => $agency->id,
+        'requester_name' => 'Denied Researcher',
+        'requester_email' => 'retry@example.test',
+        'purpose' => 'Earlier denied access request',
+        'status' => 'denied',
+        'requested_at' => now(),
+    ]);
+
+    $this->postJson(
+        "/api/public/research/{$research->slug}/access-requests",
+        phase7PublicPayload(['requester_email' => 'retry@example.test']),
+    )->assertCreated();
+
+    expect(AccessRequest::query()
+        ->where('research_id', $research->id)
+        ->where('requester_email', 'retry@example.test')
+        ->count())->toBe(2);
+});
+
+test('database duplicate-key races return conflict without duplicate notifications', function () {
+    $agency = createPhase7Agency('phase-7-race-conflict-agency');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+    $duplicateKey = AccessRequest::activeDuplicateKey($research->id, 'race@example.test');
+
+    $existing = AccessRequest::create([
+        'research_id' => $research->id,
+        'agency_id' => $agency->id,
+        'requester_name' => 'Race Existing',
+        'requester_email' => 'other-race@example.test',
+        'purpose' => 'Artificial duplicate-key race fixture',
+        'status' => 'pending',
+        'requested_at' => now(),
+    ]);
+
+    DB::table('access_requests')
+        ->where('id', $existing->id)
+        ->update(['active_duplicate_key' => $duplicateKey]);
+
+    expect(DB::table('access_requests')->where('id', $existing->id)->value('active_duplicate_key'))
+        ->toBe($duplicateKey);
+
+    $this->postJson(
+        "/api/public/research/{$research->slug}/access-requests",
+        phase7PublicPayload(['requester_email' => 'race@example.test']),
+    )->assertStatus(409);
+
+    expect(AccessRequest::query()
+        ->where('research_id', $research->id)
+        ->where('requester_email', 'race@example.test')
+        ->exists())->toBeFalse();
+    expect(Notification::query()->where('type', 'access_request.submitted')->count())->toBe(0);
+});
+
+test('honeypot submissions are rejected without records audit logs or notifications', function () {
+    $agency = createPhase7Agency('phase-7-honeypot-agency');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+
+    $this->postJson(
+        "/api/public/research/{$research->slug}/access-requests",
+        phase7PublicPayload([
+            'requester_email' => 'honeypot@example.test',
+            'website' => 'https://spam.example.test',
+        ]),
+    )
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['website']);
+
+    expect(AccessRequest::query()->where('requester_email', 'honeypot@example.test')->exists())->toBeFalse();
+    expect(AuditLog::query()->where('event', 'access_request.submitted')->exists())->toBeFalse();
+    expect(Notification::query()->where('type', 'access_request.submitted')->exists())->toBeFalse();
+});
+
+test('captcha is optional by default and enforced when enabled', function () {
+    $agency = createPhase7Agency('phase-7-captcha-agency');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+
+    $this->postJson(
+        "/api/public/research/{$research->slug}/access-requests",
+        phase7PublicPayload(['requester_email' => 'captcha-disabled@example.test']),
+    )->assertCreated();
+
+    config([
+        'rikms.public_access_requests.captcha.enabled' => true,
+        'rikms.public_access_requests.captcha.secret_key' => 'test-secret',
+    ]);
+
+    Http::fakeSequence()
+        ->push(['success' => false], 200)
+        ->push(['success' => true], 200);
+
+    $this->postJson(
+        "/api/public/research/{$research->slug}/access-requests",
+        phase7PublicPayload([
+            'requester_email' => 'captcha-invalid@example.test',
+            'captcha_token' => 'invalid-token',
+        ]),
+    )
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['captcha_token']);
+
+    expect(AccessRequest::query()->where('requester_email', 'captcha-invalid@example.test')->exists())->toBeFalse();
+
+    $this->postJson(
+        "/api/public/research/{$research->slug}/access-requests",
+        phase7PublicPayload([
+            'requester_email' => 'captcha-valid@example.test',
+            'captcha_token' => 'valid-token',
+        ]),
+    )->assertCreated();
+
+    Http::assertSent(function ($request): bool {
+        $body = $request->data();
+
+        return ($body['secret'] ?? null) === 'test-secret'
+            && ($body['response'] ?? null) === 'valid-token';
+    });
+});
+
+test('public access request throttling limits repeated IP and email submissions', function () {
+    config([
+        'rikms.public_access_requests.limits.per_minute' => 2,
+        'rikms.public_access_requests.limits.per_hour' => 100,
+        'rikms.public_access_requests.limits.email_per_hour' => 100,
+    ]);
+    RateLimiter::clear('public-access-request:ip-minute:'.hash('sha256', '127.0.0.1'));
+    RateLimiter::clear('public-access-request:ip-hour:'.hash('sha256', '127.0.0.1'));
+
+    $agency = createPhase7Agency('phase-7-ip-throttle-agency');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $researchA = createPhase7Research($agency, $agencyAdmin);
+    $researchB = createPhase7Research($agency, $agencyAdmin);
+    $researchC = createPhase7Research($agency, $agencyAdmin);
+
+    $this->postJson(
+        "/api/public/research/{$researchA->slug}/access-requests",
+        phase7PublicPayload(['requester_email' => 'ip-one@example.test']),
+    )->assertCreated();
+    $this->postJson(
+        "/api/public/research/{$researchB->slug}/access-requests",
+        phase7PublicPayload(['requester_email' => 'ip-two@example.test']),
+    )->assertCreated();
+    $this->postJson(
+        "/api/public/research/{$researchC->slug}/access-requests",
+        phase7PublicPayload(['requester_email' => 'ip-three@example.test']),
+    )->assertTooManyRequests();
+
+    expect(AccessRequest::query()->where('requester_email', 'ip-three@example.test')->exists())->toBeFalse();
+
+    config([
+        'rikms.public_access_requests.limits.per_minute' => 100,
+        'rikms.public_access_requests.limits.per_hour' => 100,
+        'rikms.public_access_requests.limits.email_per_hour' => 2,
+    ]);
+    RateLimiter::clear('public-access-request:email-hour:'.hash('sha256', 'email-throttle@example.test'));
+
+    $researchD = createPhase7Research($agency, $agencyAdmin);
+    $researchE = createPhase7Research($agency, $agencyAdmin);
+    $researchF = createPhase7Research($agency, $agencyAdmin);
+
+    $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.1'])->postJson(
+        "/api/public/research/{$researchD->slug}/access-requests",
+        phase7PublicPayload(['requester_email' => 'email-throttle@example.test']),
+    )->assertCreated();
+    $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.2'])->postJson(
+        "/api/public/research/{$researchE->slug}/access-requests",
+        phase7PublicPayload(['requester_email' => 'email-throttle@example.test']),
+    )->assertCreated();
+    $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.3'])->postJson(
+        "/api/public/research/{$researchF->slug}/access-requests",
+        phase7PublicPayload(['requester_email' => 'email-throttle@example.test']),
+    )->assertTooManyRequests();
 });
 
 test('public access requests are rejected for public archived deleted or private research', function () {

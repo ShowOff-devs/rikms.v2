@@ -8,7 +8,7 @@ const policyPages = {
         body: [
             'RIKMS collects only the information needed to support public research discovery, access requests, and institutional knowledge-sharing workflows.',
             'Personal information submitted through public forms is used for evaluation and communication related to the request. It is not sold or used for unrelated marketing activity.',
-            'Detailed retention, data-sharing, and security procedures will be aligned with the final institutional data privacy policy before production launch.',
+            'During the pilot, submitted information is handled for RIKMS access review, support, and accountability purposes by authorized personnel.',
         ],
     },
     'terms-of-use': {
@@ -16,7 +16,7 @@ const policyPages = {
         body: [
             'Public users may browse research metadata, agency profiles, and open-access records for legitimate education, research, policy, and public-interest purposes.',
             'Users must not attempt to bypass access controls, scrape restricted materials, impersonate requesters, or use RIKMS in a way that disrupts service availability.',
-            'Final legal terms will be reviewed by the responsible implementing institutions before production launch.',
+            'During the pilot, continued use of RIKMS means following the access, submission, and account controls shown in the active system.',
         ],
     },
     'open-access-policy': {
@@ -24,7 +24,7 @@ const policyPages = {
         body: [
             'RIKMS supports responsible public access to validated research outputs while respecting restrictions, embargoes, institutional approvals, and third-party rights.',
             'Records marked as public may provide direct download or source access. Restricted and embargoed records require the appropriate access request or waiting period.',
-            'This placeholder will be replaced by the approved regional open access policy.',
+            'During the pilot, access decisions are handled through the responsible agency review workflow and recorded in RIKMS for accountability.',
         ],
     },
     'submission-guidelines': {

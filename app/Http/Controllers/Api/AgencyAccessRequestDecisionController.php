@@ -69,6 +69,7 @@ class AgencyAccessRequestDecisionController extends Controller
 
             $lockedAccessRequest->update([
                 'status' => $status,
+                'active_duplicate_key' => null,
                 'reviewed_by' => $request->user()->id,
                 'reviewed_at' => now(),
                 'review_notes' => $internalNotes,

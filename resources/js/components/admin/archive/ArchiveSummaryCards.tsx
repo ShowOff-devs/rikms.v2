@@ -1,4 +1,10 @@
-import { Archive, Building2, FileText, RotateCcw, UsersRound } from 'lucide-react';
+import {
+    Archive,
+    Building2,
+    FileText,
+    RotateCcw,
+    UsersRound,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { AdminArchiveSummary } from '@/types/admin-archive';
 

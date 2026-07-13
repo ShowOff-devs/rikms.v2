@@ -14,9 +14,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
-import {
-    requestAgencyPasswordReset,
-} from '@/lib/auth/agency-auth';
+import { requestAgencyPasswordReset } from '@/lib/auth/agency-auth';
 import type { AgencyOption } from '@/types/auth';
 
 type ForgotPasswordErrors = Partial<Record<'agencyId' | 'email', string>>;

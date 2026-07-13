@@ -31,17 +31,14 @@ export type AccessRequestDecisionResult = {
 export async function approveAgencyAccessRequest(
     id: string,
     notes?: string,
-) : Promise<AccessRequestDecisionResult> {
+): Promise<AccessRequestDecisionResult> {
     const { data, meta } = await fetchApi<
         AccessRequestApiRecord,
         { email_notification?: EmailNotificationStatus }
-    >(
-        `/api/agency/access-requests/${id}/approve`,
-        {
-            method: 'POST',
-            body: JSON.stringify({ internal_notes: notes }),
-        },
-    );
+    >(`/api/agency/access-requests/${id}/approve`, {
+        method: 'POST',
+        body: JSON.stringify({ internal_notes: notes }),
+    });
 
     return {
         request: mapAccessRequestFromApi(data),
@@ -57,16 +54,13 @@ export async function denyAgencyAccessRequest(
     const { data, meta } = await fetchApi<
         AccessRequestApiRecord,
         { email_notification?: EmailNotificationStatus }
-    >(
-        `/api/agency/access-requests/${id}/deny`,
-        {
-            method: 'POST',
-            body: JSON.stringify({
-                public_denial_reason: publicDenialReason,
-                internal_notes: internalNotes,
-            }),
-        },
-    );
+    >(`/api/agency/access-requests/${id}/deny`, {
+        method: 'POST',
+        body: JSON.stringify({
+            public_denial_reason: publicDenialReason,
+            internal_notes: internalNotes,
+        }),
+    });
 
     return {
         request: mapAccessRequestFromApi(data),
@@ -88,7 +82,8 @@ export function mapAccessRequestFromApi(
             record.research?.agency?.short_name ??
             record.research?.agency?.name ??
             'Agency',
-        researchTitle: record.research?.title ?? `Research #${record.research_id}`,
+        researchTitle:
+            record.research?.title ?? `Research #${record.research_id}`,
         researchId: String(record.research_id),
         requestDate: createdAt
             ? createdAt.toLocaleDateString('en', {
@@ -103,7 +98,8 @@ export function mapAccessRequestFromApi(
             record.status === 'denied'
                 ? (record.public_denial_reason ?? undefined)
                 : undefined,
-        internalNotes: record.internal_review_notes ?? record.review_notes ?? undefined,
+        internalNotes:
+            record.internal_review_notes ?? record.review_notes ?? undefined,
         accessExpiresAt: record.access_expires_at ?? undefined,
         processedAt: reviewedAt
             ? reviewedAt.toLocaleDateString('en', {

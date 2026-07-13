@@ -296,7 +296,12 @@ export function AdminArchivePage() {
     );
 
     const allRecords = useMemo(
-        () => [...researchRecords, ...fileRecords, ...agencyRecords, ...userRecords],
+        () => [
+            ...researchRecords,
+            ...fileRecords,
+            ...agencyRecords,
+            ...userRecords,
+        ],
         [agencyRecords, fileRecords, researchRecords, userRecords],
     );
 

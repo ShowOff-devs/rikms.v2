@@ -6,6 +6,7 @@ type ApiSetting = {
     value: string | null;
     type: 'string' | 'integer' | 'boolean' | 'json' | 'encrypted';
     is_encrypted?: boolean;
+    effective_value?: string | number | boolean | null;
 };
 
 type LogoUploadResponse = {
@@ -22,6 +23,7 @@ const defaultPlatformSettings: PlatformSettings = {
     },
     repository: {
         maxUploadSizeMb: 25,
+        effectiveMaxUploadSizeMb: 25,
         allowedFileTypes: ['PDF', 'DOCX', 'XLSX'],
         defaultResearchStatus: 'draft',
         requireAuthors: true,
@@ -54,6 +56,9 @@ const defaultPlatformSettings: PlatformSettings = {
         maintenanceModeEnabled: false,
         maintenanceMessage:
             'RIKMS is temporarily unavailable while maintenance is in progress.',
+    },
+    ai: {
+        processingEnabled: false,
     },
     // Backup execution is not configured in the pilot; these settings are informational only.
     backup: {
@@ -126,6 +131,10 @@ function toPlatformSettings(settings: ApiSetting[]): PlatformSettings {
                     map.get('uploads.max_file_size_mb'),
                     fallback.repository.maxUploadSizeMb,
                 ),
+            ),
+            effectiveMaxUploadSizeMb: Number(
+                map.get('uploads.max_file_size_mb')?.effective_value ??
+                    fallback.repository.effectiveMaxUploadSizeMb,
             ),
             allowedFileTypes: parseValue(
                 map.get('uploads.allowed_file_types'),
@@ -268,6 +277,14 @@ function toPlatformSettings(settings: ApiSetting[]): PlatformSettings {
                 ),
             ),
         },
+        ai: {
+            processingEnabled: Boolean(
+                parseValue(
+                    map.get('ai.processing.enabled'),
+                    fallback.ai.processingEnabled,
+                ),
+            ),
+        },
         backup: {
             lastBackupAt: String(
                 parseValue(
@@ -334,6 +351,7 @@ function toApiSettings(settings: PlatformSettings) {
             settings.notifications.notifyWeeklyActivityDigest,
         'maintenance.enabled': settings.maintenance.maintenanceModeEnabled,
         'maintenance.notice_text': settings.maintenance.maintenanceMessage,
+        'ai.processing.enabled': settings.ai.processingEnabled,
         'backup.last_backup_at': settings.backup.lastBackupAt,
         'backup.frequency': settings.backup.backupFrequency,
         'backup.status': settings.backup.backupStatus,

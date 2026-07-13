@@ -193,7 +193,10 @@ function mapRepositoryFileInfo(
         name: file.original_name,
         size: formatBytes(file.size_bytes),
         uploadedAt:
-            file.uploaded_at ?? file.created_at ?? record.created_at ?? new Date().toISOString(),
+            file.uploaded_at ??
+            file.created_at ??
+            record.created_at ??
+            new Date().toISOString(),
         type:
             file.mime_type ??
             (file.extension ? file.extension.toUpperCase() : 'PDF'),
@@ -209,7 +212,9 @@ function calculateMetadataCompletion(
     const checks = [
         record.title,
         record.abstract,
-        Array.isArray(record.authors) ? record.authors.length > 0 : record.authors,
+        Array.isArray(record.authors)
+            ? record.authors.length > 0
+            : record.authors,
         record.publication_year,
         record.category,
         record.sdgs && record.sdgs.length > 0,
@@ -545,7 +550,9 @@ export async function replaceRepositoryFile(
     file: RepositoryFileReplacement,
 ): Promise<RepositoryItem | null> {
     if (!file.file) {
-        throw new Error('A selected file is required for repository file upload.');
+        throw new Error(
+            'A selected file is required for repository file upload.',
+        );
     }
 
     const formData = new FormData();
@@ -605,7 +612,9 @@ async function getApiRepositoryItems() {
     return data.map(mapRepositoryItemFromApi);
 }
 
-function mapRepositoryItemFromApi(record: AgencyResearchApiRecord): RepositoryItem {
+function mapRepositoryItemFromApi(
+    record: AgencyResearchApiRecord,
+): RepositoryItem {
     const authors = Array.isArray(record.authors)
         ? record.authors
         : record.authors

@@ -36,6 +36,33 @@ const categoryMeta: Record<
 
 type TypeFilter = PublicAgencyKind | 'all';
 
+function AgencyLogoMark({
+    agency,
+    iconBg,
+}: {
+    agency: PublicAgency;
+    iconBg: string;
+}) {
+    const [hasImageError, setHasImageError] = useState(false);
+
+    return (
+        <span
+            className={`flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[14px] ${iconBg}`}
+        >
+            {agency.logo_url && !hasImageError ? (
+                <img
+                    src={agency.logo_url}
+                    alt={`${agency.short_name || agency.name} logo`}
+                    className="size-full object-contain p-2"
+                    onError={() => setHasImageError(true)}
+                />
+            ) : (
+                <Building2 className="size-7 text-[#1e3a8a]" />
+            )}
+        </span>
+    );
+}
+
 export default function Agencies() {
     const [search, setSearch] = useState('');
     const [type, setType] = useState<TypeFilter>('all');
@@ -170,11 +197,10 @@ export default function Agencies() {
                                     className="rounded-[14px] border border-[#f3f4f6] bg-white px-6 pt-6 pb-[25px] shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_0px_rgba(0,0,0,0.1)]"
                                 >
                                     <div className="flex items-start justify-between gap-3">
-                                        <span
-                                            className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-[14px] ${meta.iconBg}`}
-                                        >
-                                            <Building2 className="size-7 text-[#1e3a8a]" />
-                                        </span>
+                                        <AgencyLogoMark
+                                            agency={agency}
+                                            iconBg={meta.iconBg}
+                                        />
                                         <span
                                             className={`rounded-full px-2.5 py-1 text-xs leading-4 font-medium ${meta.pillBg} ${meta.pillText}`}
                                         >

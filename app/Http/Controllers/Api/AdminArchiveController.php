@@ -15,6 +15,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
+use App\Support\CsvExport;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -162,7 +163,7 @@ class AdminArchiveController extends Controller
             fputcsv($handle, ['Type', 'Title', 'Agency', 'Archived By', 'Archive Date', 'Status']);
 
             foreach ($rows as $row) {
-                fputcsv($handle, $row);
+                fputcsv($handle, CsvExport::row($row));
             }
 
             fclose($handle);

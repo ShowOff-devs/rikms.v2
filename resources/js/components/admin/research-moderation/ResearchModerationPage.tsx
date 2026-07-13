@@ -292,11 +292,7 @@ export function ResearchModerationPage() {
                 ),
             );
             setActivities((current) => [
-                createActivity(
-                    'approved',
-                    'Approved research:',
-                    record.title,
-                ),
+                createActivity('approved', 'Approved research:', record.title),
                 ...current,
             ]);
             setFeedback(`${record.title} was approved.`);
@@ -559,8 +555,8 @@ export function ResearchModerationPage() {
         setIsExporting(true);
 
         try {
-            const result = await exportModerationReport(options);
-            setFeedback(`${result.fileName} is ready for export workflow.`);
+            const result = await exportModerationReport(options, filters);
+            setFeedback(`${result.fileName} was downloaded.`);
             setIsExportOpen(false);
         } finally {
             setIsExporting(false);

@@ -10,9 +10,7 @@ import {
     ResearchUploadsTable,
 } from '@/components/agency/AgencyDashboardWidgets';
 import { getAccessRequestDecisionMessage } from '@/lib/access-requests/access-request-service';
-import {
-    approveAgencyAccessRequest,
-} from '@/lib/agency/agency-access-request-service';
+import { approveAgencyAccessRequest } from '@/lib/agency/agency-access-request-service';
 import {
     filterAgencyResearchRecords,
     getAgencyDashboardData,
@@ -120,9 +118,7 @@ export default function AgencyDashboardPage() {
         action: 'view' | 'edit' | 'archive',
     ) => {
         if (action === 'edit' && record.repositoryId) {
-            router.visit(
-                `/agency/research/${record.repositoryId}`,
-            );
+            router.visit(`/agency/research/${record.repositoryId}`);
 
             return;
         }
@@ -234,9 +230,7 @@ export default function AgencyDashboardPage() {
                         <ResearchUploadsTable
                             records={filteredResearchRecords}
                             onAction={handleResearchAction}
-                            onViewAll={() =>
-                                router.visit('/agency/research')
-                            }
+                            onViewAll={() => router.visit('/agency/research')}
                         />
                     </section>
 

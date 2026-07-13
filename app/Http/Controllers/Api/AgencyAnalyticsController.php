@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AccessRequest;
 use App\Models\Research;
 use App\Support\ApiResponse;
+use App\Support\CsvExport;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -45,7 +46,7 @@ class AgencyAnalyticsController extends Controller
             $handle = fopen('php://output', 'w');
             fputcsv($handle, ['ID', 'Title', 'Category', 'Year', 'Status', 'Access Type', 'Downloads', 'Views']);
 
-            $records->each(fn (Research $research) => fputcsv($handle, [
+            $records->each(fn (Research $research) => fputcsv($handle, CsvExport::row([
                 $research->id,
                 $research->title,
                 $research->category,
@@ -54,7 +55,7 @@ class AgencyAnalyticsController extends Controller
                 $this->accessType($research->access_level),
                 (int) $research->downloads,
                 0,
-            ]));
+            ])));
 
             fclose($handle);
         }, $fileName, ['Content-Type' => 'text/csv']);

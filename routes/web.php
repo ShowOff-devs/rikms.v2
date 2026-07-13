@@ -81,6 +81,9 @@ Route::middleware(['auth', 'role:agency_admin'])->group(function () {
     Route::inertia('/agency/archive', 'agency/archive')->name('agency.archive');
     Route::inertia('/agency/access-requests', 'agency/access-requests')->name('agency.access-requests');
     Route::inertia('/agency/analytics', 'agency/analytics')->name('agency.analytics');
+    Route::get('/agency/analytics/project-reports/{research}', fn (string $research) => Inertia::render('agency/analytics/project-reports/show', [
+        'researchId' => $research,
+    ]))->name('agency.analytics.project-reports.show');
     Route::inertia('/agency/notifications', 'agency/notifications')->name('agency.notifications');
     Route::inertia('/agency/profile', 'agency/profile')->name('agency.profile');
     Route::inertia('/agency/settings', 'agency/settings')->name('agency.settings');
@@ -125,6 +128,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::inertia('/access-requests', 'admin/access-request-monitor')->name('access-requests');
         Route::inertia('/access-request-monitor', 'admin/access-request-monitor')->name('access-request-monitor');
         Route::inertia('/analytics', 'admin/analytics')->name('analytics');
+        Route::get('/analytics/project-reports/{research}', fn (string $research) => Inertia::render('admin/analytics/project-reports/show', [
+            'researchId' => $research,
+        ]))->name('analytics.project-reports.show');
         Route::inertia('/audit-logs', 'admin/system-activity')->name('audit-logs');
         Route::inertia('/system-activity', 'admin/system-activity')->name('system-activity');
         Route::inertia('/rbac', 'admin/rbac')->name('rbac');

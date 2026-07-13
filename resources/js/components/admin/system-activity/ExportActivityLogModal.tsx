@@ -156,8 +156,8 @@ export function ExportActivityLogModal({
                         Export Activity Log
                     </DialogTitle>
                     <DialogDescription className="text-[#6a7282]">
-                        Choose the export format and date range for the activity
-                        logs you want to generate.
+                        Choose the date range and activity sections to include.
+                        Pilot exports are generated as CSV files.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -187,8 +187,6 @@ export function ExportActivityLogModal({
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="csv">CSV</SelectItem>
-                                    <SelectItem value="pdf">PDF</SelectItem>
-                                    <SelectItem value="excel">Excel</SelectItem>
                                 </SelectContent>
                             </Select>
                             {errors.format && (
@@ -303,6 +301,11 @@ export function ExportActivityLogModal({
                         <p className="text-sm font-semibold text-[#1e2939]">
                             Include Sections
                         </p>
+                        <p className="mt-1 text-xs leading-5 text-[#6a7282]">
+                            Section customization is not available during the
+                            pilot. The CSV uses the fixed implemented activity
+                            log columns.
+                        </p>
                         <div className="mt-3 grid gap-3 sm:grid-cols-2">
                             {[
                                 [
@@ -318,6 +321,7 @@ export function ExportActivityLogModal({
                                     className="flex items-center gap-2 text-sm text-[#4a5565]"
                                 >
                                     <Checkbox
+                                        disabled
                                         checked={
                                             form[
                                                 key as keyof ExportFormState

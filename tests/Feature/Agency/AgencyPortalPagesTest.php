@@ -86,6 +86,16 @@ test('agency analytics page can be rendered', function () {
     );
 });
 
+test('agency project report analytics detail page can be rendered', function () {
+    $response = $this->actingAs(createAgencyPortalUser())->get('/agency/analytics/project-reports/123');
+
+    $response->assertOk();
+    $response->assertInertia(fn (Assert $page) => $page
+        ->component('agency/analytics/project-reports/show')
+        ->where('researchId', '123'),
+    );
+});
+
 test('agency notifications page can be rendered', function () {
     $response = $this->actingAs(createAgencyPortalUser())->get('/agency/notifications');
 

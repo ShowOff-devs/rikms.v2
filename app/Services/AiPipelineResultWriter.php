@@ -357,6 +357,13 @@ class AiPipelineResultWriter
         return filled(config('database.connections.mongodb.dsn'));
     }
 
+    public function markAiProcessingSkipped(int $fileId, string $message = 'AI-assisted processing is currently disabled.'): void
+    {
+        foreach (['pdf_parsing', 'ai_metadata', 'sdg_classification'] as $pipeline) {
+            $this->markFilePipeline($fileId, $pipeline, 'skipped', $message);
+        }
+    }
+
     private function agencyIdsMatch(mixed $storedAgencyId, int $agencyId): bool
     {
         if (is_numeric($storedAgencyId)) {

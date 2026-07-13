@@ -10,23 +10,28 @@ import {
     saveReportDraft,
     uploadReportFile,
 } from '@/lib/upload/services/report-upload-service';
+import {
+    uploadLimitBytes,
+    uploadLimitLabel,
+    useEffectiveUploadLimitMb,
+} from '@/lib/upload/upload-limits';
 import type {
     ReportDetailsData,
     ReportDocumentType,
 } from '@/types/upload/reportWorkflow';
 import type { UploadWizardStepProps } from '@/types/uploadWizard';
 
-const quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
+const reportingPeriods = ['Q1', 'Q2', 'Q3', 'Q4', 'Annual', 'Final'];
 
-function getFileError(file: File) {
+function getFileError(file: File, uploadLimitMb: number) {
     const extension = file.name.split('.').pop()?.toLowerCase();
 
     if (!extension || extension !== 'pdf') {
         return 'Upload a PDF report document.';
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-        return 'Maximum file size is 10 MB.';
+    if (file.size > uploadLimitBytes(uploadLimitMb)) {
+        return `Maximum file size is ${uploadLimitLabel(uploadLimitMb)}.`;
     }
 
     return null;
@@ -35,9 +40,12 @@ function getFileError(file: File) {
 export default function ReportDetailsStep(props: UploadWizardStepProps) {
     const { config, state, stepData, setStepData, errors } = props;
     const data = stepData as ReportDetailsData;
+    const uploadLimitMb = useEffectiveUploadLimitMb();
+    const uploadLimitText = uploadLimitLabel(uploadLimitMb);
     const fileError =
         data.uploadStatus === 'error'
-            ? (data.uploadError ?? 'Upload a PDF file up to 10 MB.')
+            ? (data.uploadError ??
+              `Upload a PDF file up to ${uploadLimitText}.`)
             : errors.uploadedFile?.message?.toString();
 
     const updateDetails = (updates: Partial<ReportDetailsData>) => {
@@ -48,7 +56,7 @@ export default function ReportDetailsStep(props: UploadWizardStepProps) {
     };
 
     const handleFile = async (file: File) => {
-        const error = getFileError(file);
+        const error = getFileError(file, uploadLimitMb);
 
         if (error) {
             updateDetails({
@@ -125,7 +133,7 @@ export default function ReportDetailsStep(props: UploadWizardStepProps) {
                     helperText={
                         data.uploadStatus === 'uploading'
                             ? 'Uploading to RIKMS...'
-                            : 'PDF - Max 10 MB'
+                            : `PDF - Max ${uploadLimitText}`
                     }
                     error={fileError}
                     onFileSelect={handleFile}
@@ -168,29 +176,75 @@ export default function ReportDetailsStep(props: UploadWizardStepProps) {
                 <div className="grid gap-4 md:grid-cols-2">
                     <label className="block">
                         <span className="text-sm font-semibold text-[#344054]">
-                            Quarter<span className="text-[#fb2c36]">*</span>
+                            Project Start Date
                         </span>
-                        <select
-                            value={data.reportingQuarter}
+                        <input
+                            type="date"
+                            value={data.projectStartDate}
                             onChange={(event) =>
                                 updateDetails({
-                                    reportingQuarter: event.target.value,
+                                    projectStartDate: event.target.value,
                                 })
                             }
                             className="mt-2 h-11 w-full rounded-[10px] border border-[#d1d5dc] px-3 text-sm outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10"
-                        >
-                            <option value="">Select quarter</option>
-                            {quarters.map((quarter) => (
-                                <option key={quarter} value={quarter}>
-                                    {quarter}
-                                </option>
-                            ))}
-                        </select>
+                        />
                     </label>
 
                     <label className="block">
                         <span className="text-sm font-semibold text-[#344054]">
-                            Year<span className="text-[#fb2c36]">*</span>
+                            Project End Date
+                        </span>
+                        <input
+                            type="date"
+                            value={data.projectEndDate}
+                            onChange={(event) =>
+                                updateDetails({
+                                    projectEndDate: event.target.value,
+                                })
+                            }
+                            className="mt-2 h-11 w-full rounded-[10px] border border-[#d1d5dc] px-3 text-sm outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10"
+                        />
+                        {errors.projectEndDate?.message ? (
+                            <span className="mt-1 block text-xs text-[#fb2c36]">
+                                {errors.projectEndDate.message.toString()}
+                            </span>
+                        ) : null}
+                    </label>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                    <label className="block">
+                        <span className="text-sm font-semibold text-[#344054]">
+                            Reporting Period
+                            <span className="text-[#fb2c36]">*</span>
+                        </span>
+                        <select
+                            value={data.reportingPeriod}
+                            onChange={(event) =>
+                                updateDetails({
+                                    reportingPeriod: event.target.value,
+                                })
+                            }
+                            className="mt-2 h-11 w-full rounded-[10px] border border-[#d1d5dc] px-3 text-sm outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10"
+                        >
+                            <option value="">Select period</option>
+                            {reportingPeriods.map((period) => (
+                                <option key={period} value={period}>
+                                    {period}
+                                </option>
+                            ))}
+                        </select>
+                        {errors.reportingPeriod?.message ? (
+                            <span className="mt-1 block text-xs text-[#fb2c36]">
+                                {errors.reportingPeriod.message.toString()}
+                            </span>
+                        ) : null}
+                    </label>
+
+                    <label className="block">
+                        <span className="text-sm font-semibold text-[#344054]">
+                            Reporting Year
+                            <span className="text-[#fb2c36]">*</span>
                         </span>
                         <input
                             value={data.reportingYear}

@@ -1,4 +1,5 @@
 import { fetchApi } from '@/lib/api-client';
+import { downloadResponseFile } from '@/lib/download-file';
 import type {
     AdminArchiveSummary,
     AdminArchivedRecord,
@@ -208,15 +209,10 @@ export async function exportArchiveReport(
         throw new Error('Unable to export archive report.');
     }
 
-    const blob = await response.blob();
-    const fileName = downloadFileName(response) ?? `admin-archive-report.csv`;
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-
-    link.href = url;
-    link.download = fileName;
-    link.click();
-    URL.revokeObjectURL(url);
+    const { fileName } = await downloadResponseFile(
+        response,
+        'admin-archive-report.csv',
+    );
 
     return {
         id: `archive-report-${Date.now()}`,
@@ -275,13 +271,6 @@ function deleteEndpoint(recordType: ArchiveRecordType, id: number) {
     }
 
     return `/api/admin/users/${id}/archive`;
-}
-
-function downloadFileName(response: Response) {
-    const disposition = response.headers.get('Content-Disposition') ?? '';
-    const match = /filename="?([^"]+)"?/i.exec(disposition);
-
-    return match?.[1];
 }
 
 function mapApiResearchRecord(
@@ -349,13 +338,11 @@ function mapApiUserRecord(record: UserApiRecord): ArchivedUserRecord {
         fullName: record.name,
         email: record.email,
         role:
-            record.roles?.includes('agency_admin') || record.role === 'agency_admin'
+            record.roles?.includes('agency_admin') ||
+            record.role === 'agency_admin'
                 ? 'Agency Admin'
-                : record.role ?? 'User',
-        agency:
-            record.agency?.short_name ??
-            record.agency?.name ??
-            undefined,
+                : (record.role ?? 'User'),
+        agency: record.agency?.short_name ?? record.agency?.name ?? undefined,
         archivedBy:
             record.archived_by_user?.name ??
             record.archived_by_user?.email ??

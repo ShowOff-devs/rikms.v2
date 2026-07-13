@@ -79,7 +79,9 @@ export async function deleteRole(id: string): Promise<void> {
 }
 
 export async function getPermissions(): Promise<Permission[]> {
-    const response = await fetchApi<Permission[]>('/api/admin/rbac/permissions');
+    const response = await fetchApi<Permission[]>(
+        '/api/admin/rbac/permissions',
+    );
 
     cachedPermissions = response.data.map(toPermission);
 
@@ -87,13 +89,17 @@ export async function getPermissions(): Promise<Permission[]> {
 }
 
 export async function getRoleChangeHistory(): Promise<RoleChangeHistory[]> {
-    const response = await fetchApi<RoleChangeHistory[]>('/api/admin/rbac/history');
+    const response = await fetchApi<RoleChangeHistory[]>(
+        '/api/admin/rbac/history',
+    );
 
     return response.data;
 }
 
 export async function getUserRoleAssignments(): Promise<UserRoleAssignment[]> {
-    const response = await fetchApi<UserRoleAssignment[]>('/api/admin/rbac/users');
+    const response = await fetchApi<UserRoleAssignment[]>(
+        '/api/admin/rbac/users',
+    );
 
     cachedAssignments = response.data;
 
@@ -104,7 +110,9 @@ export async function updateUserRole(
     userId: string,
     roleId: string,
 ): Promise<UserRoleAssignment> {
-    const existingAssignment = cachedAssignments.find((assignment) => assignment.id === userId);
+    const existingAssignment = cachedAssignments.find(
+        (assignment) => assignment.id === userId,
+    );
 
     if (existingAssignment?.roleId && existingAssignment.roleId !== roleId) {
         await fetchApi<UserRoleAssignment>(
@@ -133,7 +141,9 @@ export async function updateUserRole(
 
 export function getPermissionKeyDiff(permissionIds: string[]) {
     return permissionIds
-        .map((id) => cachedPermissions.find((permission) => permission.id === id))
+        .map((id) =>
+            cachedPermissions.find((permission) => permission.id === id),
+        )
         .filter((permission): permission is Permission => Boolean(permission))
         .map((permission) => permission.key);
 }

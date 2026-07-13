@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnforcePlatformMaintenanceMode;
 use App\Http\Middleware\EnforceUserSessionTimeout;
 use App\Http\Middleware\EnsureAgencyScope;
 use App\Http\Middleware\EnsureSuperAdminHasTwoFactor;
@@ -34,6 +35,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->web(append: [
+            EnforcePlatformMaintenanceMode::class,
             EnforceUserSessionTimeout::class,
             HandleAppearance::class,
             HandleInertiaRequests::class,
@@ -41,6 +43,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->api(append: [
+            EnforcePlatformMaintenanceMode::class,
             EnforceUserSessionTimeout::class,
         ]);
     })

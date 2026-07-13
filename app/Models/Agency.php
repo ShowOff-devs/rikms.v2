@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class Agency extends Model
 {
@@ -33,6 +35,23 @@ class Agency extends Model
         'archived_at' => 'datetime',
         'restored_at' => 'datetime',
     ];
+
+    protected $appends = [
+        'logo_url',
+    ];
+
+    public function getLogoUrlAttribute(): ?string
+    {
+        if (! $this->logo_path) {
+            return null;
+        }
+
+        if (Str::startsWith($this->logo_path, ['http://', 'https://', '/storage/'])) {
+            return $this->logo_path;
+        }
+
+        return Storage::disk('public')->url($this->logo_path);
+    }
 
     public function users()
     {

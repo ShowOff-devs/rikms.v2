@@ -61,6 +61,25 @@ function sdgTextColors(number: string) {
     };
 }
 
+function LandingAgencyLogo({ agency }: { agency: PublicAgency }) {
+    const [hasImageError, setHasImageError] = useState(false);
+
+    return (
+        <div className="mx-auto flex size-14 items-center justify-center overflow-hidden rounded-full bg-[rgba(30,58,138,0.1)] text-[#1e3a8a]">
+            {agency.logo_url && !hasImageError ? (
+                <img
+                    src={agency.logo_url}
+                    alt={`${agency.short_name || agency.name} logo`}
+                    className="size-full object-contain p-2"
+                    onError={() => setHasImageError(true)}
+                />
+            ) : (
+                <Building2 className="size-7" />
+            )}
+        </div>
+    );
+}
+
 export default function Welcome() {
     const [summary, setSummary] = useState<PublicPortalSummary>(defaultSummary);
     const [agencies, setAgencies] = useState<PublicAgency[]>([]);
@@ -459,9 +478,7 @@ export default function Welcome() {
                                         href={`/agencies/${agency.slug}`}
                                         className="rounded-[14px] border border-[#f3f4f6] bg-white px-6 py-6 text-center shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_0px_rgba(0,0,0,0.1)] transition hover:-translate-y-0.5"
                                     >
-                                        <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-[rgba(30,58,138,0.1)] text-[#1e3a8a]">
-                                            <Building2 className="size-7" />
-                                        </div>
+                                        <LandingAgencyLogo agency={agency} />
                                         <h3 className="mt-3 text-xl font-semibold text-[#1e3a8a]">
                                             {agency.name}
                                         </h3>

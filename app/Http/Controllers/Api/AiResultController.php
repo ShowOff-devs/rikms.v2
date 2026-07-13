@@ -11,6 +11,7 @@ use App\Models\Mongo\PdfParsingResult;
 use App\Models\Mongo\SdgClassification;
 use App\Models\Research;
 use App\Models\ResearchFile;
+use App\Services\PlatformSettingsService;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use Illuminate\Http\JsonResponse;
@@ -91,6 +92,12 @@ class AiResultController extends Controller
     {
         if (! $this->canViewAgencyResearch($request, $research)) {
             return ApiResponse::error('This research record is outside your agency scope.', [], 403);
+        }
+
+        if (! app(PlatformSettingsService::class)->aiProcessingEnabled()) {
+            return ApiResponse::error('AI-assisted processing is currently disabled.', [
+                'code' => 'AI_PROCESSING_DISABLED',
+            ], 503);
         }
 
         $file = $this->latestResearchFile($research);

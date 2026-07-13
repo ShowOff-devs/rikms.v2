@@ -33,9 +33,7 @@ export function SecuritySettingsPanel({
             />
             <ActiveSessionsCard
                 sessions={security.activeSessions}
-                sessionManagementAvailable={
-                    security.sessionManagementAvailable
-                }
+                sessionManagementAvailable={security.sessionManagementAvailable}
                 revokingSessionId={revokingSessionId}
                 onRevokeSession={onRevokeSession}
             />
@@ -83,9 +81,7 @@ function SecuritySettingsCard({
                                     : 'bg-[#fee2e2] text-[#c10007]'
                             }`}
                         >
-                            {security.twoFactorEnabled
-                                ? 'Enabled'
-                                : 'Disabled'}
+                            {security.twoFactorEnabled ? 'Enabled' : 'Disabled'}
                         </span>
                         <a
                             href="/agency/settings/two-factor"

@@ -1,4 +1,5 @@
 import { fetchApi } from '@/lib/api-client';
+import { downloadResponseFile } from '@/lib/download-file';
 import type {
     AccessRequestBreakdown,
     AgencyAnalyticsPayload,
@@ -107,19 +108,10 @@ export async function exportAgencyAnalyticsReport(
         throw new Error('Unable to export agency analytics report.');
     }
 
-    const blob = await response.blob();
-    const downloadUrl = window.URL.createObjectURL(blob);
-    const fileName =
-        response.headers
-            .get('content-disposition')
-            ?.match(/filename="?([^"]+)"?/i)?.[1] ??
-        `agency-research-analytics-${filters.year ?? 'all-years'}.csv`;
-    const link = document.createElement('a');
-
-    link.href = downloadUrl;
-    link.download = fileName;
-    link.click();
-    window.URL.revokeObjectURL(downloadUrl);
+    const { fileName } = await downloadResponseFile(
+        response,
+        `agency-research-analytics-${filters.year ?? 'all-years'}.csv`,
+    );
 
     return {
         success: true,

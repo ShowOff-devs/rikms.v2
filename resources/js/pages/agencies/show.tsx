@@ -24,6 +24,25 @@ const getAgencySlugFromPath = () => {
     return decodeURIComponent(window.location.pathname.split('/').pop() ?? '');
 };
 
+function AgencyProfileLogo({ agency }: { agency: PublicAgency }) {
+    const [hasImageError, setHasImageError] = useState(false);
+
+    return (
+        <span className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-[18px] bg-[#eff6ff] text-[#1e3a8a]">
+            {agency.logo_url && !hasImageError ? (
+                <img
+                    src={agency.logo_url}
+                    alt={`${agency.short_name || agency.name} logo`}
+                    className="size-full object-contain p-3"
+                    onError={() => setHasImageError(true)}
+                />
+            ) : (
+                <Building2 className="size-10" />
+            )}
+        </span>
+    );
+}
+
 export default function AgencyProfilePage({
     agencySlug,
 }: AgencyProfilePageProps) {
@@ -100,9 +119,7 @@ export default function AgencyProfilePage({
                         <>
                             <section className="mt-6 rounded-[14px] border border-[#f3f4f6] bg-white px-6 py-6 shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_0px_rgba(0,0,0,0.1)]">
                                 <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
-                                    <span className="flex size-20 shrink-0 items-center justify-center rounded-[18px] bg-[#eff6ff] text-[#1e3a8a]">
-                                        <Building2 className="size-10" />
-                                    </span>
+                                    <AgencyProfileLogo agency={agency} />
                                     <div className="min-w-0 flex-1">
                                         <p className="inline-flex rounded-full bg-[#dbeafe] px-3 py-1 text-xs font-medium text-[#1447e6]">
                                             {agency.type}
@@ -206,7 +223,7 @@ export default function AgencyProfilePage({
                                     ) : (
                                         <ResearchEmptyState
                                             title="No related research yet"
-                                            description="This agency does not have public research records in the mock directory."
+                                            description="No research records are currently available for this agency."
                                         />
                                     )}
                                 </div>

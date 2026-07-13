@@ -145,7 +145,9 @@ export async function restoreArchivedResearch(
         });
     }
 
-    throw new Error('Archived research restore requires a persisted API record.');
+    throw new Error(
+        'Archived research restore requires a persisted API record.',
+    );
 }
 
 export async function permanentlyDeleteArchivedResearch(
@@ -168,7 +170,9 @@ export async function permanentlyDeleteArchivedResearch(
         });
     }
 
-    throw new Error('Archived research delete requires a persisted API record.');
+    throw new Error(
+        'Archived research delete requires a persisted API record.',
+    );
 }
 
 export async function getArchiveActivity(): Promise<ArchiveActivity[]> {

@@ -156,7 +156,7 @@ class AdminReadController extends Controller
     public function research(Request $request): JsonResponse
     {
         $query = Research::query()
-            ->with(['agency', 'uploader'])
+            ->with(['agency', 'uploader', 'reportDetail', 'performanceItems'])
             ->when($request->filled('agency_id'), fn (Builder $query) => $query->where('agency_id', $request->integer('agency_id')))
             ->when($request->filled('status'), fn (Builder $query) => $query->where('status', $request->string('status')))
             ->when($request->filled('publication_year'), fn (Builder $query) => $query->where('publication_year', $request->integer('publication_year')))
@@ -185,7 +185,7 @@ class AdminReadController extends Controller
     {
         return ApiResponse::success(
             'Admin research detail retrieved.',
-            (new ResearchResource($research->load(['agency', 'uploader', 'files'])))->resolve($request),
+            (new ResearchResource($research->load(['agency', 'uploader', 'files', 'reportDetail', 'performanceItems'])))->resolve($request),
         );
     }
 

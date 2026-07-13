@@ -26,7 +26,7 @@ export default function ReportPreviewCard({
             ? Math.round(
                   data.performance.performanceProjects.reduce(
                       (total, project) =>
-                          total + project.accomplishmentPercentage,
+                          total + (project.accomplishmentPercentage ?? 0),
                       0,
                   ) / data.performance.performanceProjects.length,
               )

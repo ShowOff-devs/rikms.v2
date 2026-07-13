@@ -55,6 +55,11 @@ import {
     sdgOptions,
 } from '@/lib/agency/upload-research-service';
 import { apiMessage } from '@/lib/api-client';
+import {
+    uploadLimitBytes,
+    uploadLimitLabel,
+    useEffectiveUploadLimitMb,
+} from '@/lib/upload/upload-limits';
 import { cn } from '@/lib/utils';
 import type {
     AccessType,
@@ -483,6 +488,8 @@ function UploadStep({
 }) {
     const inputRef = useRef<HTMLInputElement | null>(null);
     const [uploadError, setUploadError] = useState<string | null>(null);
+    const uploadLimitMb = useEffectiveUploadLimitMb();
+    const uploadLimitText = uploadLimitLabel(uploadLimitMb);
 
     const handleFile = async (file: File | undefined) => {
         if (!file) {
@@ -502,8 +509,8 @@ function UploadStep({
             return;
         }
 
-        if (file.size > 10 * 1024 * 1024) {
-            setUploadError('Maximum file size is 10 MB.');
+        if (file.size > uploadLimitBytes(uploadLimitMb)) {
+            setUploadError(`Maximum file size is ${uploadLimitText}.`);
             setState((current) => ({
                 ...current,
                 file: null,
@@ -602,7 +609,7 @@ function UploadStep({
                         PDF
                     </span>
                     <span>-</span>
-                    <span>Max 10 MB</span>
+                    <span>Max {uploadLimitText}</span>
                 </div>
                 {state.file && (
                     <div className="mt-5 rounded-[10px] border border-[#bfdbfe] bg-[#eff6ff] px-4 py-2 text-sm font-semibold text-[#1e3a8a]">
@@ -1370,7 +1377,7 @@ function AccessStep({
                             <Button
                                 type="button"
                                 // variant="outline"
-                                className="h-10 shrink-0 rounded-[10px] border-[#bfdbfe] text-xs bg-[#1e3a8a] text-white hover:bg-[#172f70]"
+                                className="h-10 shrink-0 rounded-[10px] border-[#bfdbfe] bg-[#1e3a8a] text-xs text-white hover:bg-[#172f70]"
                                 onClick={() =>
                                     setState((current) => ({
                                         ...current,
@@ -1456,7 +1463,7 @@ function AccessStep({
                         <Button
                             type="button"
                             variant="outline"
-                            className="h-9 rounded-[10px] border-[#1e3a8a] text-xs bg-[#1e3a8a] text-white hover:bg-[#172f70]"
+                            className="h-9 rounded-[10px] border-[#1e3a8a] bg-[#1e3a8a] text-xs text-white hover:bg-[#172f70]"
                         >
                             Contact Research Owner
                         </Button>
@@ -1870,6 +1877,7 @@ export default function UploadResearchWizard() {
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [success, setSuccess] = useState(false);
     const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+    const [isSavingDraft, setIsSavingDraft] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -1903,6 +1911,12 @@ export default function UploadResearchWizard() {
     };
 
     const saveDraft = async () => {
+        if (isSavingDraft || isSubmitting) {
+            return;
+        }
+
+        setIsSavingDraft(true);
+        setSubmitError(null);
         setState((current) => ({
             ...current,
             submissionStatus: 'draft',
@@ -1931,6 +1945,8 @@ export default function UploadResearchWizard() {
                 ...current,
                 submissionStatus: 'error',
             }));
+        } finally {
+            setIsSavingDraft(false);
         }
     };
 
@@ -2044,11 +2060,14 @@ export default function UploadResearchWizard() {
                                         // variant="outline"
                                         className="h-10 rounded-[14px] border-[#e5e7eb] bg-[#1e3a8a] text-white hover:bg-[#172f70]"
                                         onClick={() => void saveDraft()}
+                                        disabled={isSavingDraft || isSubmitting}
                                     >
                                         <Save className="size-4" />
-                                        {draftSavedAt
-                                            ? `Draft saved ${draftSavedAt}`
-                                            : 'Save Draft'}
+                                        {isSavingDraft
+                                            ? 'Saving draft...'
+                                            : draftSavedAt
+                                              ? `Draft saved ${draftSavedAt}`
+                                              : 'Save Draft'}
                                     </Button>
                                     <Button
                                         type="button"

@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\PlatformSetting;
+use App\Services\PlatformSettingsService;
 use Illuminate\Database\Seeder;
 
 class PlatformSettingSeeder extends Seeder
@@ -12,46 +13,27 @@ class PlatformSettingSeeder extends Seeder
      */
     public function run(): void
     {
-        collect([
-            [
-                'key' => 'site.name',
-                'value' => 'RIKMS v2',
-                'type' => 'string',
-                'group' => 'general',
-                'label' => 'Site Name',
-                'description' => 'Public and administrative platform name.',
-                'is_public' => true,
-            ],
-            [
-                'key' => 'maintenance.enabled',
-                'value' => 'false',
-                'type' => 'boolean',
-                'group' => 'maintenance',
-                'label' => 'Maintenance Mode',
-                'description' => 'Controls future platform maintenance behavior.',
-                'is_public' => false,
-            ],
-            [
-                'key' => 'uploads.max_file_size_mb',
-                'value' => '25',
-                'type' => 'integer',
-                'group' => 'uploads',
-                'label' => 'Maximum Upload Size',
-                'description' => 'Default upload size limit for future upload APIs.',
-                'is_public' => false,
-            ],
-            [
-                'key' => 'ai.processing.enabled',
-                'value' => 'false',
-                'type' => 'boolean',
-                'group' => 'ai',
-                'label' => 'AI Processing Enabled',
-                'description' => 'Future toggle for AI-assisted extraction jobs.',
-                'is_public' => false,
-            ],
-        ])->each(fn (array $setting) => PlatformSetting::updateOrCreate(
-            ['key' => $setting['key']],
-            $setting + ['is_encrypted' => false],
-        ));
+        $settings = app(PlatformSettingsService::class);
+
+        collect($settings->allDefinitions())->each(function (array $definition, string $key) use ($settings): void {
+            $setting = PlatformSetting::query()->firstOrNew(['key' => $key]);
+
+            if (! $setting->exists) {
+                $setting->value = $settings->serialize($key, $definition['default'] ?? null);
+            }
+
+            $setting->forceFill(
+                [
+                    'type' => $definition['type'],
+                    'group' => $definition['group'],
+                    'label' => $definition['label'],
+                    'description' => $definition['description'] ?? null,
+                    'is_public' => (bool) ($definition['is_public'] ?? false),
+                    'is_encrypted' => false,
+                ],
+            )->save();
+        });
+
+        $settings->forgetCache();
     }
 }

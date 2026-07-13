@@ -8,25 +8,28 @@ import {
 } from '@/components/ui/select';
 
 export function SystemAnalyticsHeader({
+    title = 'System Analytics',
+    description = 'Analyze research activity, system usage, and agency contributions across the RIKMS platform.',
     selectedRange,
     isExporting,
     onRangeChange,
     onExport,
 }: {
+    title?: string;
+    description?: string;
     selectedRange: string;
     isExporting: boolean;
     onRangeChange: (value: string) => void;
-    onExport: () => void;
+    onExport?: () => void;
 }) {
     return (
         <section className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
                 <h1 className="text-[24px] leading-9 font-bold tracking-normal text-[#0f172a]">
-                    System Analytics
+                    {title}
                 </h1>
                 <p className="mt-0.5 text-sm leading-5 text-[#6b7280]">
-                    Analyze research activity, system usage, and agency
-                    contributions across the RIKMS platform.
+                    {description}
                 </p>
             </div>
 
@@ -44,22 +47,24 @@ export function SystemAnalyticsHeader({
                     </SelectContent>
                 </Select>
 
-                <button
-                    type="button"
-                    onClick={onExport}
-                    disabled={isExporting}
-                    className="inline-flex h-[42px] items-center justify-center gap-2 rounded-[14px] border border-[#e5e7eb] bg-white px-5 text-sm font-medium text-[#4a5565] shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_0px_rgba(0,0,0,0.1)] transition hover:bg-[#f9fafb] disabled:cursor-wait disabled:opacity-70"
-                >
-                    {isExporting ? (
-                        <Loader2
-                            className="size-4 animate-spin"
-                            aria-hidden="true"
-                        />
-                    ) : (
-                        <Download className="size-4" aria-hidden="true" />
-                    )}
-                    Export Analytics Report
-                </button>
+                {onExport ? (
+                    <button
+                        type="button"
+                        onClick={onExport}
+                        disabled={isExporting}
+                        className="inline-flex h-[42px] items-center justify-center gap-2 rounded-[14px] border border-[#e5e7eb] bg-white px-5 text-sm font-medium text-[#4a5565] shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_0px_rgba(0,0,0,0.1)] transition hover:bg-[#f9fafb] disabled:cursor-wait disabled:opacity-70"
+                    >
+                        {isExporting ? (
+                            <Loader2
+                                className="size-4 animate-spin"
+                                aria-hidden="true"
+                            />
+                        ) : (
+                            <Download className="size-4" aria-hidden="true" />
+                        )}
+                        Export Analytics Report
+                    </button>
+                ) : null}
             </div>
         </section>
     );

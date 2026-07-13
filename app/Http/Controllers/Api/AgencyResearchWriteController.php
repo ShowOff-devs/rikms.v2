@@ -16,6 +16,8 @@ use App\Jobs\ParsePdfDocumentJob;
 use App\Models\Notification;
 use App\Models\Research;
 use App\Models\ResearchFile;
+use App\Services\AiPipelineResultWriter;
+use App\Services\PlatformSettingsService;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use App\Support\PublicMetadata;
@@ -32,13 +34,16 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AgencyResearchWriteController extends Controller
 {
+    public function __construct(private readonly PlatformSettingsService $settings) {}
+
     public function store(StoreAgencyResearchRequest $request): JsonResponse
     {
         $user = $request->user();
 
         $research = DB::transaction(function () use ($request, $user): Research {
+            $validated = $request->validated();
             $research = Research::create(array_merge(
-                $this->researchPayload($request->validated()),
+                $this->researchPayload($validated),
                 [
                     'slug' => ResearchSlugger::generateUniqueResearchSlug($request->string('title')->toString()),
                     'agency_id' => $user->agency_id,
@@ -47,6 +52,8 @@ class AgencyResearchWriteController extends Controller
                     'access_level' => $request->validated('access_level', 'request_required'),
                 ],
             ));
+
+            $this->syncReportData($research, $validated);
 
             AuditLogger::record($request, 'research.created', $research, null, $research->only([
                 'id',
@@ -64,7 +71,7 @@ class AgencyResearchWriteController extends Controller
 
         return ApiResponse::success(
             'Agency research draft created.',
-            (new ResearchResource($research->load(['agency', 'uploader'])))->resolve($request),
+            (new ResearchResource($this->loadResearchResponseRelations($research)))->resolve($request),
             [],
             201,
         );
@@ -88,13 +95,15 @@ class AgencyResearchWriteController extends Controller
         ]);
 
         DB::transaction(function () use ($request, $research, $oldValues): void {
-            $payload = $this->researchPayload($request->validated());
+            $validated = $request->validated();
+            $payload = $this->researchPayload($validated);
 
             if (! $research->slug && ! empty($payload['title'])) {
                 $payload['slug'] = ResearchSlugger::generateUniqueResearchSlug((string) $payload['title'], (int) $research->id);
             }
 
             $research->update($payload);
+            $this->syncReportData($research->refresh(), $validated);
 
             AuditLogger::record(
                 $request,
@@ -107,7 +116,7 @@ class AgencyResearchWriteController extends Controller
 
         return ApiResponse::success(
             'Agency research draft updated.',
-            (new ResearchResource($research->refresh()->load(['agency', 'uploader'])))->resolve($request),
+            (new ResearchResource($this->loadResearchResponseRelations($research->refresh())))->resolve($request),
         );
     }
 
@@ -133,7 +142,7 @@ class AgencyResearchWriteController extends Controller
 
         return ApiResponse::success(
             'Agency research submitted for moderation.',
-            (new ResearchResource($research->refresh()->load(['agency', 'uploader'])))->resolve($request),
+            (new ResearchResource($this->loadResearchResponseRelations($research->refresh())))->resolve($request),
         );
     }
 
@@ -186,6 +195,8 @@ class AgencyResearchWriteController extends Controller
                 'external_url' => $research->external_url,
             ]);
 
+            $this->copyReportDataToRevision($research, $revision);
+
             AuditLogger::record($request, 'research.revision_created', $revision, null, [
                 'source_research_id' => $research->id,
                 'revision_number' => $revision->revision_number,
@@ -197,7 +208,7 @@ class AgencyResearchWriteController extends Controller
 
         return ApiResponse::success(
             'Draft revision created.',
-            (new ResearchResource($revision->load(['agency', 'uploader'])))->resolve($request),
+            (new ResearchResource($this->loadResearchResponseRelations($revision)))->resolve($request),
             [],
             201,
         );
@@ -221,11 +232,27 @@ class AgencyResearchWriteController extends Controller
     {
         $uploadedFile = $request->file('file');
         $checksum = hash_file('sha256', $uploadedFile->getRealPath());
+
+        if ($research->files()
+            ->whereNull('archived_at')
+            ->where('status', 'active')
+            ->where('checksum', $checksum)
+            ->exists()
+        ) {
+            return ApiResponse::error(
+                'This PDF has already been uploaded for this research record.',
+                ['file' => ['This PDF has already been uploaded for this research record.']],
+                422,
+            );
+        }
+
         $storedName = (string) Str::uuid().'.'.$uploadedFile->getClientOriginalExtension();
         // TODO Phase 9: Move production uploads through quarantine/scanning storage before final private storage.
         $path = $uploadedFile->storeAs('research/'.$research->id, $storedName, 'local');
 
-        $researchFile = DB::transaction(function () use ($request, $research, $uploadedFile, $checksum, $storedName, $path): ResearchFile {
+        $aiEnabled = $this->settings->aiProcessingEnabled();
+
+        $researchFile = DB::transaction(function () use ($request, $research, $uploadedFile, $checksum, $storedName, $path, $aiEnabled): ResearchFile {
             $researchFile = ResearchFile::create([
                 'research_id' => $research->id,
                 'agency_id' => $research->agency_id,
@@ -243,7 +270,17 @@ class AgencyResearchWriteController extends Controller
                 'access_level' => $request->validated('access_level', 'restricted'),
                 'status' => 'active',
                 'metadata' => [
-                    'ai_processing' => 'queued',
+                    'ai_processing' => $aiEnabled
+                        ? [
+                            'pdf_parsing' => ['status' => 'queued'],
+                            'ai_metadata' => ['status' => 'queued'],
+                            'sdg_classification' => ['status' => 'queued'],
+                        ]
+                        : [
+                            'pdf_parsing' => ['status' => 'skipped', 'message' => 'AI-assisted processing is currently disabled.'],
+                            'ai_metadata' => ['status' => 'skipped', 'message' => 'AI-assisted processing is currently disabled.'],
+                            'sdg_classification' => ['status' => 'skipped', 'message' => 'AI-assisted processing is currently disabled.'],
+                        ],
                 ],
                 'uploaded_at' => now(),
             ]);
@@ -263,14 +300,20 @@ class AgencyResearchWriteController extends Controller
             return $researchFile;
         });
 
-        Bus::chain([
-            new ParsePdfDocumentJob($research->id, $researchFile->id, $research->agency_id, $request->user()->id),
-            new ExtractResearchMetadataJob($research->id, $researchFile->id, $research->agency_id, $request->user()->id),
-            new ClassifyResearchSdgJob($research->id, $researchFile->id, $research->agency_id, $request->user()->id),
-        ])->dispatch();
+        if ($aiEnabled) {
+            Bus::chain([
+                new ParsePdfDocumentJob($research->id, $researchFile->id, $research->agency_id, $request->user()->id),
+                new ExtractResearchMetadataJob($research->id, $researchFile->id, $research->agency_id, $request->user()->id),
+                new ClassifyResearchSdgJob($research->id, $researchFile->id, $research->agency_id, $request->user()->id),
+            ])->dispatch();
+        } else {
+            app(AiPipelineResultWriter::class)->markAiProcessingSkipped((int) $researchFile->id);
+        }
 
         return ApiResponse::success(
-            'Research file uploaded and AI processing jobs queued.',
+            $aiEnabled
+                ? 'Research file uploaded and AI processing jobs queued.'
+                : 'Research file uploaded. AI-assisted processing is currently disabled.',
             (new ResearchFileResource($researchFile->load(['research', 'uploader'])))->resolve($request),
             [],
             201,
@@ -365,6 +408,142 @@ class AgencyResearchWriteController extends Controller
             'embargo_until',
             'external_url',
         ])->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function syncReportData(Research $research, array $validated): void
+    {
+        if (! $this->isReportResearch($research)) {
+            return;
+        }
+
+        if (array_key_exists('report_details', $validated) && is_array($validated['report_details'])) {
+            $detailPayload = collect($validated['report_details'])
+                ->only([
+                    'reporting_period',
+                    'project_start_date',
+                    'project_end_date',
+                    'allotted_budget',
+                    'released_amount',
+                    'obligated_amount',
+                    'utilized_amount',
+                    'physical_accomplishment_percent',
+                    'financial_as_of_date',
+                ])
+                ->all();
+
+            if ($detailPayload !== []) {
+                $research->reportDetail()->updateOrCreate([], $detailPayload);
+            }
+        }
+
+        if (array_key_exists('performance_items', $validated) && is_array($validated['performance_items'])) {
+            $research->performanceItems()->delete();
+
+            foreach (array_values($validated['performance_items']) as $index => $item) {
+                if (! is_array($item)) {
+                    continue;
+                }
+
+                if ($this->isBlankPerformanceItem($item)) {
+                    continue;
+                }
+
+                $payload = collect($item)
+                    ->only([
+                        'project_name',
+                        'target_value',
+                        'actual_value',
+                        'accomplishment_percentage',
+                        'project_status',
+                        'remarks',
+                    ])
+                    ->all();
+
+                $research->performanceItems()->create(array_merge($payload, [
+                    'sort_order' => (int) ($item['sort_order'] ?? $index),
+                ]));
+            }
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $item
+     */
+    private function isBlankPerformanceItem(array $item): bool
+    {
+        foreach ([
+            'project_name',
+            'target_value',
+            'actual_value',
+            'accomplishment_percentage',
+            'remarks',
+        ] as $key) {
+            if (! array_key_exists($key, $item)) {
+                continue;
+            }
+
+            $value = $item[$key];
+
+            if ($value !== null && (! is_string($value) || trim($value) !== '')) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function isReportResearch(Research $research): bool
+    {
+        $category = str((string) $research->category)->lower()->toString();
+
+        if (str_contains($category, 'terminal report') || str_contains($category, 'project accomplishment')) {
+            return true;
+        }
+
+        return $research->files()
+            ->whereIn('file_type', ['terminal-report', 'project-accomplishment'])
+            ->exists();
+    }
+
+    private function copyReportDataToRevision(Research $source, Research $revision): void
+    {
+        $source->loadMissing(['reportDetail', 'performanceItems']);
+
+        if ($source->reportDetail) {
+            $revision->reportDetail()->create($source->reportDetail->only([
+                'reporting_period',
+                'project_start_date',
+                'project_end_date',
+                'allotted_budget',
+                'released_amount',
+                'obligated_amount',
+                'utilized_amount',
+                'physical_accomplishment_percent',
+                'financial_as_of_date',
+            ]));
+        }
+
+        $source->performanceItems->each(function ($item) use ($revision): void {
+            $revision->performanceItems()->create($item->only([
+                'project_name',
+                'target_value',
+                'actual_value',
+                'accomplishment_percentage',
+                'project_status',
+                'remarks',
+                'sort_order',
+            ]));
+        });
+    }
+
+    private function loadResearchResponseRelations(Research $research): Research
+    {
+        return Research::query()
+            ->with(['agency', 'uploader', 'reportDetail', 'performanceItems'])
+            ->findOrFail($research->id);
     }
 
     private function canAccessAgencyResearch(Request $request, Research $research): bool

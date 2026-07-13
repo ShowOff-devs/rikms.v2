@@ -10,6 +10,7 @@ use App\Models\AccessRequest;
 use App\Models\AuditLog;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
+use App\Support\CsvExport;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -167,7 +168,7 @@ class AdminAccessMonitoringController extends Controller
             $this->filteredQuery($request)
                 ->chunk(200, function ($accessRequests) use ($handle): void {
                     foreach ($accessRequests as $accessRequest) {
-                        fputcsv($handle, [
+                        fputcsv($handle, CsvExport::row([
                             $accessRequest->id,
                             $accessRequest->research?->title,
                             $accessRequest->research?->agency?->short_name ?: $accessRequest->research?->agency?->name,
@@ -175,7 +176,7 @@ class AdminAccessMonitoringController extends Controller
                             $accessRequest->status,
                             $accessRequest->requested_at?->toDateTimeString() ?: $accessRequest->created_at?->toDateTimeString(),
                             $accessRequest->reviewed_at?->toDateTimeString(),
-                        ]);
+                        ]));
                     }
                 });
 
@@ -196,6 +197,7 @@ class AdminAccessMonitoringController extends Controller
                 });
             })
             ->when($request->filled('status'), fn (Builder $query) => $query->where('status', $request->string('status')))
+            ->when($request->filled('statuses'), fn (Builder $query) => $query->whereIn('status', collect(explode(',', $request->string('statuses')->toString()))->map(fn (string $status): string => trim($status))->filter()->all()))
             ->when($request->filled('decision_status'), fn (Builder $query) => $query->where('status', $request->string('decision_status')))
             ->when($request->filled('research_id'), fn (Builder $query) => $query->where('research_id', $request->integer('research_id')))
             ->when($request->filled('requester_email'), fn (Builder $query) => $query->where('requester_email', 'like', '%'.$request->string('requester_email')->trim().'%'))

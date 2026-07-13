@@ -16,11 +16,8 @@ import { ResearchClassificationSection } from '@/components/repository/edit/Rese
 import { ResearchStatusPanel } from '@/components/repository/edit/ResearchStatusPanel';
 import { SectionCard } from '@/components/repository/edit/SectionCard';
 import { VersionHistorySection } from '@/components/repository/edit/VersionHistorySection';
-import {
-    getAgencyAiResults
-    
-} from '@/lib/agency/agency-ai-results-service';
-import type {AgencyAiResults} from '@/lib/agency/agency-ai-results-service';
+import { getAgencyAiResults } from '@/lib/agency/agency-ai-results-service';
+import type { AgencyAiResults } from '@/lib/agency/agency-ai-results-service';
 import { useAgencySession } from '@/lib/auth/agency-auth';
 import {
     archiveRepositoryItem,
@@ -423,9 +420,7 @@ export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
                 <div className="mx-auto max-w-[1200px]">
                     <button
                         type="button"
-                        onClick={() =>
-                            router.visit('/agency/research')
-                        }
+                        onClick={() => router.visit('/agency/research')}
                         className="mb-4 inline-flex h-8 items-center gap-2 rounded-[10px] px-2 text-sm font-medium text-[#6a7282] hover:bg-white hover:text-[#1e3a8a]"
                     >
                         <ArrowLeft className="size-4" />

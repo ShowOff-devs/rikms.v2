@@ -185,8 +185,14 @@ export function SystemResearchPage() {
         setIsExporting(true);
 
         try {
-            const result = await exportSystemResearchRecords(options);
-            setFeedback(`${result.fileName} is ready for export workflow.`);
+            const result = await exportSystemResearchRecords(options, {
+                ...filters,
+                search: [filters.search, topbarSearch]
+                    .filter(Boolean)
+                    .join(' ')
+                    .trim(),
+            });
+            setFeedback(`${result.fileName} was downloaded.`);
             setIsExportOpen(false);
         } finally {
             setIsExporting(false);

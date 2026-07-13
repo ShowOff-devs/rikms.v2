@@ -216,9 +216,9 @@ export function AccessRequestMonitorPage() {
         setIsExporting(true);
 
         try {
-            const result = await exportAccessRequestReport(options);
+            const result = await exportAccessRequestReport(options, filters);
 
-            setFeedback(`${result.fileName} is ready for export workflow.`);
+            setFeedback(`${result.fileName} was downloaded.`);
             setIsExportOpen(false);
         } finally {
             setIsExporting(false);

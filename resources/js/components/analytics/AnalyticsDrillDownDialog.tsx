@@ -32,7 +32,7 @@ export function AnalyticsDrillDownDialog({
                     </DialogTitle>
                     <DialogDescription>
                         {drillDown?.description ??
-                            'Detailed analytics are ready for backend drill-down data.'}
+                            'Select an analytics item to review the available pilot summary.'}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -55,9 +55,9 @@ export function AnalyticsDrillDownDialog({
                 ) : null}
 
                 <div className="rounded-[10px] border border-[#e5e7eb] bg-[#f9fafb] p-4 text-sm leading-6 text-[#4a5565]">
-                    Future Laravel integration can load the selected records,
-                    request logs, requester organizations, and export-ready
-                    detail rows from this drill-down entry point.
+                    Detailed drill-down records are not available during the
+                    pilot. Use the summary cards and tables on this page for the
+                    currently implemented analytics view.
                 </div>
             </DialogContent>
         </Dialog>

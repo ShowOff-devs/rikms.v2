@@ -8,6 +8,7 @@ import {
     returnAdminResearch,
 } from '@/lib/admin/admin-moderation-service';
 import { fetchApi } from '@/lib/api-client';
+import { downloadResponseFile } from '@/lib/download-file';
 import type {
     DuplicateResearchMatch,
     FlaggedResearchRecord,
@@ -200,21 +201,65 @@ export async function archiveFlaggedResearch(
 
 export async function exportModerationReport(
     options: ModerationReportExportOptions,
+    filters: Partial<ModerationFilters> = {},
 ): Promise<ModerationReportExportResult> {
-    const response = await fetch('/api/admin/reports/research/export', {
-        credentials: 'same-origin',
-        headers: { Accept: 'text/csv', 'X-Requested-With': 'XMLHttpRequest' },
+    const params = new URLSearchParams({
+        format: options.format,
+        date_range: options.dateRange,
     });
+
+    if (options.startDate) {
+        params.set('start_date', options.startDate);
+    }
+
+    if (options.endDate) {
+        params.set('end_date', options.endDate);
+    }
+
+    if (options.includeCurrentFilters) {
+        if (filters.search?.trim()) {
+            params.set('search', filters.search.trim());
+        }
+
+        if (filters.agency && filters.agency !== 'all') {
+            params.set('agency', filters.agency);
+        }
+
+        if (filters.status && filters.status !== 'all') {
+            params.set('moderation_status', filters.status);
+        }
+
+        if (filters.year && filters.year !== 'all') {
+            params.set('publicationYear', filters.year);
+        }
+    }
+
+    const response = await fetch(
+        `/api/admin/reports/moderation/export?${params}`,
+        {
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'text/csv',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        },
+    );
 
     if (!response.ok) {
         throw new Error('Unable to export moderation report.');
     }
 
+    const generatedAt = new Date().toISOString();
+    const { fileName } = await downloadResponseFile(
+        response,
+        `rikms-moderation-report-${generatedAt.slice(0, 10)}.csv`,
+    );
+
     return {
         id: `research-moderation-export-${Date.now()}`,
-        fileName: `rikms-moderation-report-${new Date().toISOString().slice(0, 10)}.csv`,
+        fileName,
         format: options.format,
-        generatedAt: new Date().toISOString(),
+        generatedAt,
         status: 'ready',
     };
 }

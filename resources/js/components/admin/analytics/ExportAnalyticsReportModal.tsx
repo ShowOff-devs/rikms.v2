@@ -43,7 +43,7 @@ type ExportFormErrors = Partial<
 >;
 
 const initialExportState: ExportFormState = {
-    format: 'pdf',
+    format: 'csv',
     dateRange: 'last-30-days',
     startDate: '',
     endDate: '',
@@ -178,8 +178,8 @@ export function ExportAnalyticsReportModal({
                         Export Analytics Report
                     </DialogTitle>
                     <DialogDescription className="text-[#6a7282]">
-                        Choose the report format, date range, and analytics
-                        sections to include.
+                        Choose the date range and analytics sections to include.
+                        Pilot exports are generated as CSV files.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -208,9 +208,7 @@ export function ExportAnalyticsReportModal({
                                     <SelectValue placeholder="Select format" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="pdf">PDF</SelectItem>
                                     <SelectItem value="csv">CSV</SelectItem>
-                                    <SelectItem value="excel">Excel</SelectItem>
                                 </SelectContent>
                             </Select>
                             {errors.format && (
@@ -328,6 +326,11 @@ export function ExportAnalyticsReportModal({
                         <p className="text-sm font-semibold text-[#1e2939]">
                             Include Sections
                         </p>
+                        <p className="mt-1 text-xs leading-5 text-[#6a7282]">
+                            Section customization is not available during the
+                            pilot. The CSV uses the fixed implemented analytics
+                            export columns.
+                        </p>
                         <div className="mt-3 grid gap-3 sm:grid-cols-2">
                             {sectionOptions.map((option) => (
                                 <label
@@ -335,6 +338,7 @@ export function ExportAnalyticsReportModal({
                                     className="flex items-center gap-2 text-sm text-[#4a5565]"
                                 >
                                     <Checkbox
+                                        disabled
                                         checked={form[option.key] as boolean}
                                         onCheckedChange={(checked) =>
                                             updateForm(

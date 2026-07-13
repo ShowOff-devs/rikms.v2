@@ -14,10 +14,13 @@ import {
 import type {
     AgencyResearchPayload,
     AgencyResearchRecord,
+    AgencyResearchPerformanceItem,
+    AgencyResearchReportDetail,
     PublicMetadataField,
 } from '@/lib/agency/agency-research-service';
 import { fetchApi } from '@/lib/api-client';
 import {
+    calculateFinancials,
     getReportTypeLabel,
     metadataFieldLabels,
 } from '@/lib/upload/report-workflow';
@@ -27,6 +30,7 @@ import type {
     ReportDetailsData,
     ReportDocumentType,
     ReportMetadataKey,
+    ReportProjectStatus,
     ReportWorkflowData,
 } from '@/types/upload/reportWorkflow';
 
@@ -39,6 +43,14 @@ type ReportFileRecord = {
     status: string;
     uploaded_at?: string | null;
 };
+
+const reportProjectStatuses: ReportProjectStatus[] = [
+    'not-reported',
+    'not-started',
+    'in-progress',
+    'substantially-complete',
+    'completed',
+];
 
 export type ReportFileUploadResult = {
     id: string;
@@ -144,10 +156,7 @@ function fileBaseName(fileName?: string) {
     return fileName?.replace(/\.[^/.]+$/u, '') ?? '';
 }
 
-function textValue(
-    metadata: ReportAIMetadataFields,
-    key: ReportMetadataKey,
-) {
+function textValue(metadata: ReportAIMetadataFields, key: ReportMetadataKey) {
     const value = metadata[key];
 
     return Array.isArray(value) ? value.join(', ') : value;
@@ -175,7 +184,9 @@ function metadataFromAi(
 
 function defaultMetadata(details: ReportDetailsData): ReportAIMetadataFields {
     return {
-        title: details.reportTitle.trim() || fileBaseName(details.uploadedFileName),
+        title:
+            details.reportTitle.trim() ||
+            fileBaseName(details.uploadedFileName),
         abstract: '',
         methodology: '',
         reviewOfRelatedLiterature: '',
@@ -199,6 +210,108 @@ function publicMetadataEntries(
 function selectedPublicApiKeys(data: ReportWorkflowData): MetadataKey[] {
     return data.aiMetadata.selectedPublicMetadata.map(
         (key) => reportKeyToApiKey[key],
+    );
+}
+
+function nullableNumber(value: number | string | null | undefined) {
+    if (value === null || value === undefined || value === '') {
+        return null;
+    }
+
+    const numericValue =
+        typeof value === 'number' ? value : Number.parseFloat(value);
+
+    return Number.isFinite(numericValue) ? numericValue : null;
+}
+
+function nullableString(value: string | null | undefined) {
+    const trimmed = value?.trim();
+
+    return trimmed ? trimmed : null;
+}
+
+function nullableText(value: string | number | null | undefined) {
+    if (value === null || value === undefined) {
+        return null;
+    }
+
+    const trimmed = String(value).trim();
+
+    return trimmed ? trimmed : null;
+}
+
+function hydratedReportRowId(item: AgencyResearchPerformanceItem) {
+    if (item.id !== undefined) {
+        return String(item.id);
+    }
+
+    if (item.sort_order !== null && item.sort_order !== undefined) {
+        return `performance-item-${item.sort_order}`;
+    }
+
+    if (globalThis.crypto?.randomUUID) {
+        return globalThis.crypto.randomUUID();
+    }
+
+    return `performance-item-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function reportProjectStatus(value: string | null | undefined) {
+    const normalized = value?.replaceAll('_', '-') as
+        | ReportProjectStatus
+        | undefined;
+
+    return normalized && reportProjectStatuses.includes(normalized)
+        ? normalized
+        : 'not-reported';
+}
+
+function mapReportDetails(
+    data: ReportWorkflowData,
+): AgencyResearchReportDetail {
+    return {
+        reporting_period: nullableString(data.details.reportingPeriod),
+        project_start_date: nullableString(data.details.projectStartDate),
+        project_end_date: nullableString(data.details.projectEndDate),
+        allotted_budget: data.financials.allocatedBudget,
+        released_amount: data.financials.releasedAmount,
+        obligated_amount: data.financials.obligatedAmount,
+        utilized_amount: data.financials.usedBudget,
+        physical_accomplishment_percent:
+            data.performance.physicalAccomplishmentPercent,
+        financial_as_of_date: nullableString(data.financials.financialAsOfDate),
+    };
+}
+
+function mapPerformanceItems(
+    data: ReportWorkflowData,
+): AgencyResearchPerformanceItem[] {
+    return data.performance.performanceProjects
+        .filter(hasMeaningfulPerformanceProject)
+        .map((project, index) => ({
+            project_name: nullableString(project.projectName),
+            target_value: project.targetValue,
+            actual_value: project.actualValue,
+            accomplishment_percentage: project.accomplishmentPercentage,
+            project_status: project.projectStatus,
+            remarks: nullableString(project.remarks),
+            sort_order: index,
+        }));
+}
+
+function hasMeaningfulPerformanceProject(project: {
+    projectName: string;
+    targetValue: string | null;
+    actualValue: string | null;
+    accomplishmentPercentage: number | null;
+    remarks?: string;
+}) {
+    return Boolean(
+        nullableString(project.projectName) ||
+        nullableString(project.targetValue ?? '') ||
+        nullableString(project.actualValue ?? '') ||
+        project.accomplishmentPercentage !== null ||
+        nullableString(project.remarks),
     );
 }
 
@@ -229,6 +342,8 @@ export function mapReportWorkflowToResearchPayload(
         access_level: 'request_required',
         embargo_until: null,
         external_url: null,
+        report_details: mapReportDetails(data),
+        performance_items: mapPerformanceItems(data),
     };
 }
 
@@ -305,5 +420,59 @@ export function mergeReportDetailsWithRecord(
     return {
         ...details,
         researchId: String(record.id),
+        reportingPeriod:
+            record.report_detail?.reporting_period ?? details.reportingPeriod,
+        projectStartDate:
+            record.report_detail?.project_start_date ??
+            details.projectStartDate,
+        projectEndDate:
+            record.report_detail?.project_end_date ?? details.projectEndDate,
+    };
+}
+
+export function reportFinancialsFromRecord(
+    record: AgencyResearchRecord,
+): Partial<ReportWorkflowData['financials']> {
+    const allocatedBudget = nullableNumber(
+        record.report_detail?.allotted_budget,
+    );
+    const releasedAmount = nullableNumber(
+        record.report_detail?.released_amount,
+    );
+    const obligatedAmount = nullableNumber(
+        record.report_detail?.obligated_amount,
+    );
+    const usedBudget = nullableNumber(record.report_detail?.utilized_amount);
+
+    return {
+        allocatedBudget,
+        releasedAmount,
+        obligatedAmount,
+        usedBudget,
+        financialAsOfDate: record.report_detail?.financial_as_of_date ?? '',
+        ...calculateFinancials(allocatedBudget, usedBudget),
+    };
+}
+
+export function reportPerformanceFromRecord(
+    record: AgencyResearchRecord,
+): Partial<ReportWorkflowData['performance']> {
+    return {
+        physicalAccomplishmentPercent: nullableNumber(
+            record.report_detail?.physical_accomplishment_percent,
+        ),
+        performanceProjects: (record.performance_items ?? []).map((item) => {
+            return {
+                id: hydratedReportRowId(item),
+                projectName: item.project_name ?? '',
+                targetValue: nullableText(item.target_value),
+                actualValue: nullableText(item.actual_value),
+                accomplishmentPercentage: nullableNumber(
+                    item.accomplishment_percentage,
+                ),
+                projectStatus: reportProjectStatus(item.project_status),
+                remarks: item.remarks ?? '',
+            };
+        }),
     };
 }

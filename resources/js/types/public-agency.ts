@@ -4,9 +4,12 @@ export type PublicAgencyKind =
     | 'Higher Education Institution';
 
 export type PublicAgency = {
+    id: number;
     slug: string;
     name: string;
     fullName: string;
+    short_name?: string | null;
+    logo_url: string | null;
     description: string;
     type: PublicAgencyKind;
     publications: number;

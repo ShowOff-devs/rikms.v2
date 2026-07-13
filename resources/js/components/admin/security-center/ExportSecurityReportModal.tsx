@@ -326,7 +326,6 @@ export function ExportSecurityReportModal({
                             </div>
                         </div>
                     )}
-
                 </div>
 
                 <DialogFooter>

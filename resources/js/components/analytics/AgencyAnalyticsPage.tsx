@@ -10,6 +10,7 @@ import { CategoryDistributionChart } from '@/components/analytics/CategoryDistri
 import { DownloadActivityChart } from '@/components/analytics/DownloadActivityChart';
 import { ExportReportDialog } from '@/components/analytics/ExportReportDialog';
 import { MostAccessedResearchTable } from '@/components/analytics/MostAccessedResearchTable';
+import { ProjectReportAnalyticsSection } from '@/components/analytics/ProjectReportAnalyticsSection';
 import { SDGContributionChart } from '@/components/analytics/SDGContributionChart';
 import { SummaryMetricCards } from '@/components/analytics/SummaryMetricCards';
 import { YearlyPublicationsChart } from '@/components/analytics/YearlyPublicationsChart';
@@ -34,8 +35,11 @@ const initialFilters: AnalyticsFiltersValue = {
     status: 'all',
 };
 
+type AnalyticsView = 'repository' | 'project-reports';
+
 export function AgencyAnalyticsPage() {
     const session = useAgencySession();
+    const [activeView, setActiveView] = useState<AnalyticsView>('repository');
     const [filters, setFilters] =
         useState<AnalyticsFiltersValue>(initialFilters);
     const [analytics, setAnalytics] = useState<AgencyAnalyticsPayload | null>(
@@ -55,6 +59,10 @@ export function AgencyAnalyticsPage() {
     }, [session]);
 
     useEffect(() => {
+        if (activeView !== 'repository') {
+            return;
+        }
+
         let isCurrent = true;
 
         getAgencyAnalytics(filters).then((payload) => {
@@ -69,7 +77,7 @@ export function AgencyAnalyticsPage() {
         return () => {
             isCurrent = false;
         };
-    }, [filters]);
+    }, [activeView, filters]);
 
     const filterOptions =
         analytics?.filterOptions ?? getAnalyticsFilterOptions();
@@ -149,64 +157,92 @@ export function AgencyAnalyticsPage() {
                 <main className="px-4 py-8 lg:px-[47px]">
                     <div className="mx-auto flex max-w-[1280px] flex-col gap-5">
                         <AnalyticsHeader
-                            onExport={() => setIsExportOpen(true)}
+                            onExport={
+                                activeView === 'repository'
+                                    ? () => setIsExportOpen(true)
+                                    : undefined
+                            }
                         />
 
-                        <AnalyticsFilters
-                            filters={filters}
-                            options={filterOptions}
-                            onFiltersChange={updateFilters}
-                            onClearFilters={() => updateFilters(initialFilters)}
+                        <AnalyticsViewSwitch
+                            activeView={activeView}
+                            onViewChange={(view) => {
+                                setActiveView(view);
+                                setFeedback('');
+                            }}
                         />
 
-                        {feedback ? (
-                            <div
-                                role="status"
-                                className="rounded-[10px] border border-[#b9f8cf] bg-[#f0fdf4] px-4 py-3 text-sm font-medium text-[#008236]"
-                            >
-                                {feedback}
-                            </div>
-                        ) : null}
-
-                        {isLoading || !analytics ? (
-                            <AnalyticsLoadingState />
+                        {activeView === 'project-reports' ? (
+                            <ProjectReportAnalyticsSection />
                         ) : (
                             <>
-                                <SummaryMetricCards
-                                    metrics={analytics.summaryMetrics}
+                                <AnalyticsFilters
+                                    filters={filters}
+                                    options={filterOptions}
+                                    onFiltersChange={updateFilters}
+                                    onClearFilters={() =>
+                                        updateFilters(initialFilters)
+                                    }
                                 />
 
-                                <section className="grid gap-5 xl:grid-cols-2">
-                                    <YearlyPublicationsChart
-                                        data={analytics.yearlyPublications}
-                                        onSelect={openChartDrillDown}
-                                    />
-                                    <CategoryDistributionChart
-                                        data={analytics.categoryDistribution}
-                                        onSelect={openChartDrillDown}
-                                    />
-                                </section>
+                                {feedback ? (
+                                    <div
+                                        role="status"
+                                        className="rounded-[10px] border border-[#b9f8cf] bg-[#f0fdf4] px-4 py-3 text-sm font-medium text-[#008236]"
+                                    >
+                                        {feedback}
+                                    </div>
+                                ) : null}
 
-                                <section className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
-                                    <SDGContributionChart
-                                        data={analytics.sdgContributions}
-                                        onSelect={openChartDrillDown}
-                                    />
-                                    <AccessRequestsStatusChart
-                                        data={analytics.accessRequestBreakdown}
-                                        onSelect={openChartDrillDown}
-                                    />
-                                </section>
+                                {isLoading || !analytics ? (
+                                    <AnalyticsLoadingState />
+                                ) : (
+                                    <>
+                                        <SummaryMetricCards
+                                            metrics={analytics.summaryMetrics}
+                                        />
 
-                                <DownloadActivityChart
-                                    data={analytics.downloadTrends}
-                                    onSelect={openChartDrillDown}
-                                />
+                                        <section className="grid gap-5 xl:grid-cols-2">
+                                            <YearlyPublicationsChart
+                                                data={
+                                                    analytics.yearlyPublications
+                                                }
+                                                onSelect={openChartDrillDown}
+                                            />
+                                            <CategoryDistributionChart
+                                                data={
+                                                    analytics.categoryDistribution
+                                                }
+                                                onSelect={openChartDrillDown}
+                                            />
+                                        </section>
 
-                                <MostAccessedResearchTable
-                                    records={visibleMostAccessed}
-                                    onSelect={openResearchDrillDown}
-                                />
+                                        <section className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+                                            <SDGContributionChart
+                                                data={
+                                                    analytics.sdgContributions
+                                                }
+                                                onSelect={openChartDrillDown}
+                                            />
+                                            <AccessRequestsStatusChart
+                                                data={
+                                                    analytics.accessRequestBreakdown
+                                                }
+                                                onSelect={openChartDrillDown}
+                                            />
+                                        </section>
+
+                                        <DownloadActivityChart
+                                            data={analytics.downloadTrends}
+                                            onSelect={openChartDrillDown}
+                                        />
+
+                                        <MostAccessedResearchTable
+                                            records={visibleMostAccessed}
+                                            onSelect={openResearchDrillDown}
+                                        />
+                                    </>
+                                )}
                             </>
                         )}
                     </div>
@@ -231,6 +267,69 @@ export function AgencyAnalyticsPage() {
                 }}
             />
         </>
+    );
+}
+
+function AnalyticsViewSwitch({
+    activeView,
+    onViewChange,
+}: {
+    activeView: AnalyticsView;
+    onViewChange: (view: AnalyticsView) => void;
+}) {
+    const tabs: Array<{
+        id: AnalyticsView;
+        label: string;
+        description: string;
+    }> = [
+        {
+            id: 'repository',
+            label: 'Repository Analytics',
+            description: 'Research outputs, downloads, and access activity',
+        },
+        {
+            id: 'project-reports',
+            label: 'Project Report Analytics',
+            description: 'Terminal Reports and Project Accomplishment Reports',
+        },
+    ];
+
+    return (
+        <div
+            role="tablist"
+            aria-label="Agency analytics sections"
+            className="grid gap-2 rounded-[14px] border border-[#e5e7eb] bg-white p-2 shadow-[0px_1px_3px_0px_rgba(0,0,0,0.08)] md:grid-cols-2"
+        >
+            {tabs.map((tab) => {
+                const isActive = activeView === tab.id;
+
+                return (
+                    <button
+                        key={tab.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={isActive}
+                        onClick={() => onViewChange(tab.id)}
+                        className={`rounded-[10px] px-4 py-3 text-left transition ${
+                            isActive
+                                ? 'bg-[#1e3a8a] text-white'
+                                : 'bg-[#f9fafb] text-[#4a5565] hover:bg-[#f3f4f6]'
+                        }`}
+                    >
+                        <span className="block text-sm font-semibold">
+                            {tab.label}
+                        </span>
+                        <span
+                            className={`mt-1 block text-xs leading-4 ${
+                                isActive ? 'text-[#dbeafe]' : 'text-[#6a7282]'
+                            }`}
+                        >
+                            {tab.description}
+                        </span>
+                    </button>
+                );
+            })}
+        </div>
     );
 }
 

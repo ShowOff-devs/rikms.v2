@@ -5,6 +5,12 @@ declare module '@inertiajs/core' {
         sharedPageProps: {
             name: string;
             auth: Auth;
+            uploadLimits: {
+                configuredMb: number;
+                phpUploadMaxFilesizeMb: number;
+                phpPostMaxSizeMb: number;
+                effectiveMb: number;
+            };
             sidebarOpen: boolean;
             [key: string]: unknown;
         };

@@ -9,6 +9,7 @@ use App\Http\Resources\NotificationResource;
 use App\Models\AuditLog;
 use App\Models\Notification;
 use App\Support\ApiResponse;
+use App\Support\CsvExport;
 use App\Support\Statuses;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -109,20 +110,29 @@ class AdminSystemActivityController extends Controller
     public function export(Request $request)
     {
         $filename = 'rikms-activity-log-'.now()->toDateString().'.csv';
-        $logs = AuditLog::query()->with(['user', 'agency'])->latest('created_at')->limit(1000)->get();
+        $logs = AuditLog::query()
+            ->with(['user', 'agency'])
+            ->when($request->query('date_range') === 'last-7-days', fn (Builder $query) => $query->where('created_at', '>=', now()->subDays(7)->startOfDay()))
+            ->when($request->query('date_range') === 'last-30-days', fn (Builder $query) => $query->where('created_at', '>=', now()->subDays(30)->startOfDay()))
+            ->when($request->query('date_range') === 'this-month', fn (Builder $query) => $query->whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()]))
+            ->when($request->query('date_range') === 'custom' && $request->date('start_date'), fn (Builder $query, $date) => $query->where('created_at', '>=', $date->startOfDay()))
+            ->when($request->query('date_range') === 'custom' && $request->date('end_date'), fn (Builder $query, $date) => $query->where('created_at', '<=', $date->endOfDay()))
+            ->latest('created_at')
+            ->limit(1000)
+            ->get();
 
         return response()->streamDownload(function () use ($logs): void {
             $handle = fopen('php://output', 'w');
             fputcsv($handle, ['id', 'event', 'user', 'agency', 'created_at']);
 
             foreach ($logs as $log) {
-                fputcsv($handle, [
+                fputcsv($handle, CsvExport::row([
                     $log->id,
                     $log->event,
                     $log->user?->name,
                     $log->agency?->short_name ?? $log->agency?->name,
                     $log->created_at?->toISOString(),
-                ]);
+                ]));
             }
 
             fclose($handle);

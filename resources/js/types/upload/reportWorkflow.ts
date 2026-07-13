@@ -6,7 +6,12 @@ export type ReportUploadStatus = 'idle' | 'uploading' | 'uploaded' | 'error';
 
 export type ReportExtractionStatus = 'idle' | 'running' | 'success' | 'error';
 
-export type ReportProjectStatus = 'not-started' | 'in-progress' | 'completed';
+export type ReportProjectStatus =
+    | 'not-reported'
+    | 'not-started'
+    | 'in-progress'
+    | 'substantially-complete'
+    | 'completed';
 
 export type BeneficiarySector =
     | 'government'
@@ -46,7 +51,9 @@ export type ReportDetailsData = {
     uploadError?: string | null;
     reportTitle: string;
     reportDescription: string;
-    reportingQuarter: string;
+    projectStartDate: string;
+    projectEndDate: string;
+    reportingPeriod: string;
     reportingYear: string;
     agency: string;
     uploadStatus: ReportUploadStatus;
@@ -78,15 +85,16 @@ export type ReportAIMetadataData = {
 export type ReportPerformanceProject = {
     id: string;
     projectName: string;
-    targetValue: number;
-    actualValue: number;
-    accomplishmentPercentage: number;
+    targetValue: string | null;
+    actualValue: string | null;
+    accomplishmentPercentage: number | null;
     projectStatus: ReportProjectStatus;
     remarks?: string;
 };
 
 export type ReportPerformanceData = {
     performanceProjects: ReportPerformanceProject[];
+    physicalAccomplishmentPercent: number | null;
     performanceRemarks?: string;
 };
 
@@ -99,10 +107,13 @@ export type ReportPAPClassificationData = {
 };
 
 export type ReportFinancialsData = {
-    allocatedBudget: number;
-    usedBudget: number;
-    remainingBalance: number;
-    utilizationRate: number;
+    allocatedBudget: number | null;
+    releasedAmount: number | null;
+    obligatedAmount: number | null;
+    usedBudget: number | null;
+    financialAsOfDate: string;
+    remainingBalance: number | null;
+    utilizationRate: number | null;
     financialValidated: boolean;
 };
 

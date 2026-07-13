@@ -24,8 +24,8 @@ import type {
     AgencyProfileFormValues,
 } from '@/types/agency-profile';
 
-const maxLogoFileSize = 5 * 1024 * 1024;
-const validLogoTypes = ['image/png', 'image/svg+xml', 'image/jpeg'];
+const maxLogoFileSize = 2 * 1024 * 1024;
+const validLogoTypes = ['image/png', 'image/jpeg', 'image/webp'];
 
 const agencyProfileSchema = z.object({
     agencyName: z.string().trim().min(1, 'Agency Name is required.'),
@@ -153,7 +153,7 @@ export function AgencyProfilePage() {
                 logoFile: null,
                 logoPreviewUrl: undefined,
                 logoUploadStatus: 'error',
-                error: 'Please upload a PNG, SVG, JPG, or JPEG logo file.',
+                error: 'Please upload a PNG, JPG, JPEG, or WebP logo file.',
             }));
 
             return;
@@ -165,7 +165,7 @@ export function AgencyProfilePage() {
                 logoFile: null,
                 logoPreviewUrl: undefined,
                 logoUploadStatus: 'error',
-                error: 'Logo file size must be 5 MB or smaller.',
+                error: 'Logo file size must be 2 MB or smaller.',
             }));
 
             return;
@@ -219,7 +219,8 @@ export function AgencyProfilePage() {
         setSaveError('');
 
         try {
-            let nextLogoUrl = logoState.logoUrl;
+            const uploadedLogo = Boolean(logoState.logoFile);
+            let updatedProfile = profile;
 
             if (logoState.logoFile) {
                 setLogoState((current) => ({
@@ -227,17 +228,12 @@ export function AgencyProfilePage() {
                     logoUploadStatus: 'uploading',
                 }));
 
-                const uploadResult = await uploadAgencyLogo(logoState.logoFile);
-                nextLogoUrl = uploadResult.logoUrl;
+                updatedProfile = await uploadAgencyLogo(logoState.logoFile);
             } else if (!logoState.logoUrl && profile.logoUrl) {
-                await removeAgencyLogo();
-                nextLogoUrl = undefined;
+                updatedProfile = await removeAgencyLogo();
             }
 
-            const updatedProfile = await updateAgencyProfile({
-                ...values,
-                logoUrl: nextLogoUrl,
-            });
+            updatedProfile = await updateAgencyProfile(values);
 
             setProfile(updatedProfile);
             reset(profileToFormValues(updatedProfile));
@@ -245,8 +241,9 @@ export function AgencyProfilePage() {
                 logoFile: null,
                 logoUrl: updatedProfile.logoUrl,
                 logoPreviewUrl: undefined,
-                logoUploadStatus: logoState.logoFile ? 'uploaded' : 'idle',
+                logoUploadStatus: uploadedLogo ? 'uploaded' : 'idle',
             });
+            router.reload({ only: ['auth'] });
             setFeedback('Agency profile changes have been saved.');
         } catch (error) {
             setSaveError(

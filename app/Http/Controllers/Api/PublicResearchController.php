@@ -6,11 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\PublicResearchResource;
 use App\Models\Agency;
 use App\Models\Research;
+use App\Models\ResearchFile;
 use App\Support\PublicMetadata;
 use App\Support\ResearchAnalyticsTracker;
 use App\Support\Statuses;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PublicResearchController extends Controller
 {
@@ -70,6 +74,36 @@ class PublicResearchController extends Controller
         ResearchAnalyticsTracker::recordView($request, $research, 'public');
 
         return new PublicResearchResource($research);
+    }
+
+    public function download(Request $request, string $identifier): JsonResponse|StreamedResponse
+    {
+        $research = $this->resolvePublicResearch($identifier);
+
+        if ($this->publicAccessLevel((string) $research->access_level) !== 'public') {
+            return response()->json([
+                'message' => 'This research record is not available for public download.',
+            ], 403);
+        }
+
+        $file = $this->publicDownloadFile($research);
+
+        if (! $file) {
+            return response()->json([
+                'message' => 'No public PDF is available for this research record.',
+            ], 404);
+        }
+
+        if (! Storage::disk($file->disk)->exists($file->path)) {
+            return response()->json([
+                'message' => 'The stored research file could not be found.',
+            ], 404);
+        }
+
+        $research->increment('downloads');
+        ResearchAnalyticsTracker::recordDownload($request, $research, $file, 'public');
+
+        return Storage::disk($file->disk)->download($file->path, $file->original_name);
     }
 
     public function summary()
@@ -249,6 +283,21 @@ class PublicResearchController extends Controller
             'embargoed' => 'embargo',
             default => $accessLevel,
         };
+    }
+
+    private function publicDownloadFile(Research $research): ?ResearchFile
+    {
+        return $research->files()
+            ->whereNull('archived_at')
+            ->where('status', '!=', 'deleted')
+            ->where(function (Builder $query): void {
+                $query
+                    ->where('access_level', 'public')
+                    ->orWhere('visibility', 'public');
+            })
+            ->orderByDesc('uploaded_at')
+            ->orderByDesc('id')
+            ->first();
     }
 
     private function publicFieldIsVisible(Research $record, string $key): bool

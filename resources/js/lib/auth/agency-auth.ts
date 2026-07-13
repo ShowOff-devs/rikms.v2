@@ -21,6 +21,7 @@ type SharedAuthUser = {
         slug?: string | null;
         short_name?: string | null;
         name?: string | null;
+        logo_url?: string | null;
     } | null;
 };
 
@@ -34,6 +35,7 @@ type InertiaPagePayload = {
 
 type LoginResponsePayload = {
     redirect?: string;
+    two_factor?: boolean;
 };
 
 function getSharedAuthUser(): SharedAuthUser | null {
@@ -65,6 +67,7 @@ function makeSessionFromUser(user: SharedAuthUser): AgencyAuthSession | null {
         agencyId: user.agency?.slug ?? String(user.agency_id),
         agencyName:
             user.agency?.short_name ?? user.agency?.name ?? 'Agency Admin',
+        logoUrl: user.agency?.logo_url ?? null,
         email: user.email,
         portal: 'agency-admin',
         remember: false,
@@ -150,6 +153,7 @@ export async function signInToAgencyPortal(payload: AgencyLoginPayload) {
     const session: AgencyAuthSession = {
         agencyId: payload.agencyId,
         agencyName: payload.agencyId,
+        logoUrl: null,
         email: normalizedEmail,
         portal: 'agency-admin',
         remember: payload.remember,
@@ -158,7 +162,9 @@ export async function signInToAgencyPortal(payload: AgencyLoginPayload) {
 
     return {
         ...session,
-        redirect: loginPayload.redirect,
+        redirect: loginPayload.two_factor
+            ? '/two-factor-challenge'
+            : loginPayload.redirect,
     };
 }
 
@@ -185,7 +191,11 @@ export async function requestAgencyPasswordReset(
     });
 
     const body = (await response.json().catch(() => ({}))) as
-        | { message?: string; status?: string; errors?: Record<string, string[]> }
+        | {
+              message?: string;
+              status?: string;
+              errors?: Record<string, string[]>;
+          }
         | undefined;
 
     if (!response.ok) {

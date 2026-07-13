@@ -2,8 +2,11 @@
 
 use App\Models\Agency;
 use App\Models\Research;
+use App\Models\ResearchAnalyticsEvent;
+use App\Models\ResearchFile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 
 uses(RefreshDatabase::class);
 
@@ -49,14 +52,18 @@ function createPublicPortalResearch(?string $slug = 'climate-change-davao-gulf')
 }
 
 test('public agencies are served from the database', function () {
-    createPublicPortalResearch();
+    Storage::fake('public');
+
+    [$agency] = createPublicPortalResearch();
+    $agency->update(['logo_path' => "agency-logos/{$agency->id}/public-logo.png"]);
 
     $response = $this->getJson('/api/public/agencies');
 
     $response
         ->assertOk()
         ->assertJsonCount(1, 'data')
-        ->assertJsonPath('data.0.slug', 'smaarrdec');
+        ->assertJsonPath('data.0.slug', 'smaarrdec')
+        ->assertJsonPath('data.0.logo_url', $agency->fresh()->logo_url);
 });
 
 test('public research search is served from the database', function () {
@@ -156,6 +163,85 @@ test('public research detail supports slug and numeric id fallback', function ()
         ->assertJsonPath('data.id', $numericFallbackResearch->id)
         ->assertJsonPath('data.slug', null)
         ->assertJsonPath('data.public_identifier', (string) $numericFallbackResearch->id);
+});
+
+test('public research download streams the latest public file', function () {
+    Storage::fake('local');
+
+    [, $research] = createPublicPortalResearch('downloadable-public-study');
+    Storage::disk('local')->put("research/{$research->id}/public.pdf", 'PDF contents');
+
+    $file = ResearchFile::create([
+        'research_id' => $research->id,
+        'agency_id' => $research->agency_id,
+        'uploaded_by' => $research->uploaded_by,
+        'original_name' => 'public-study.pdf',
+        'stored_name' => 'public.pdf',
+        'disk' => 'local',
+        'path' => "research/{$research->id}/public.pdf",
+        'mime_type' => 'application/pdf',
+        'extension' => 'pdf',
+        'size_bytes' => 12,
+        'checksum' => hash('sha256', 'PDF contents'),
+        'file_type' => 'research_document',
+        'visibility' => 'public',
+        'access_level' => 'public',
+        'status' => 'active',
+        'uploaded_at' => now(),
+    ]);
+
+    $response = $this->get('/api/public/research/downloadable-public-study/download');
+
+    $response
+        ->assertOk()
+        ->assertDownload('public-study.pdf');
+
+    expect($response->streamedContent())->toBe('PDF contents');
+    expect($research->fresh()->downloads)->toBe(13);
+    expect(ResearchAnalyticsEvent::query()
+        ->where('research_id', $research->id)
+        ->where('research_file_id', $file->id)
+        ->where('event_type', 'download')
+        ->where('source', 'public')
+        ->exists())->toBeTrue();
+});
+
+test('public research download rejects non public records and files', function () {
+    Storage::fake('local');
+
+    [, $research] = createPublicPortalResearch('public-record-private-file');
+    Storage::disk('local')->put("research/{$research->id}/private.pdf", 'Private PDF');
+
+    ResearchFile::create([
+        'research_id' => $research->id,
+        'agency_id' => $research->agency_id,
+        'uploaded_by' => $research->uploaded_by,
+        'original_name' => 'private-study.pdf',
+        'stored_name' => 'private.pdf',
+        'disk' => 'local',
+        'path' => "research/{$research->id}/private.pdf",
+        'mime_type' => 'application/pdf',
+        'extension' => 'pdf',
+        'size_bytes' => 11,
+        'checksum' => hash('sha256', 'Private PDF'),
+        'file_type' => 'research_document',
+        'visibility' => 'private',
+        'access_level' => 'restricted',
+        'status' => 'active',
+        'uploaded_at' => now(),
+    ]);
+
+    $this->getJson('/api/public/research/public-record-private-file/download')
+        ->assertNotFound()
+        ->assertJsonPath('message', 'No public PDF is available for this research record.');
+
+    $research->update(['access_level' => 'restricted']);
+
+    $this->getJson('/api/public/research/public-record-private-file/download')
+        ->assertForbidden()
+        ->assertJsonPath('message', 'This research record is not available for public download.');
+
+    expect($research->fresh()->downloads)->toBe(12);
 });
 
 test('public research only exposes published non archived non private records', function () {
@@ -303,7 +389,10 @@ test('public metadata visibility supports legacy wizard keys and updates selecte
 });
 
 test('public agency profile includes database backed research', function () {
-    createPublicPortalResearch();
+    Storage::fake('public');
+
+    [$agencyRecord] = createPublicPortalResearch();
+    $agencyRecord->update(['logo_path' => "agency-logos/{$agencyRecord->id}/detail-logo.png"]);
 
     $agency = $this->getJson('/api/public/agencies/smaarrdec');
     $research = $this->getJson('/api/public/agencies/smaarrdec/research');
@@ -311,6 +400,7 @@ test('public agency profile includes database backed research', function () {
     $agency
         ->assertOk()
         ->assertJsonPath('data.slug', 'smaarrdec')
+        ->assertJsonPath('data.logo_url', $agencyRecord->fresh()->logo_url)
         ->assertJsonPath('data.publications', 1);
 
     $research

@@ -1,17 +1,6 @@
-import { Download, Loader2 } from 'lucide-react';
-import type { GeneratedSystemReport } from '@/types/admin-dashboard';
+import { Download } from 'lucide-react';
 
-type AdminDashboardHeaderProps = {
-    isGeneratingReport: boolean;
-    generatedReport: GeneratedSystemReport | null;
-    onGenerateReport: () => void;
-};
-
-export function AdminDashboardHeader({
-    isGeneratingReport,
-    generatedReport,
-    onGenerateReport,
-}: AdminDashboardHeaderProps) {
+export function AdminDashboardHeader() {
     return (
         <section className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -27,27 +16,15 @@ export function AdminDashboardHeader({
             <div className="flex flex-col items-start gap-2 sm:items-end">
                 <button
                     type="button"
-                    onClick={onGenerateReport}
-                    disabled={isGeneratingReport}
-                    className="inline-flex h-9 items-center justify-center gap-2 rounded-[8px] bg-[#1e3a8a] px-4 text-xs font-semibold text-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] transition hover:bg-[#1d3478] disabled:cursor-wait disabled:opacity-70"
+                    disabled
+                    className="inline-flex h-9 items-center justify-center gap-2 rounded-[8px] bg-[#1e3a8a] px-4 text-xs font-semibold text-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] transition disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                    {isGeneratingReport ? (
-                        <Loader2
-                            className="size-4 animate-spin"
-                            aria-hidden="true"
-                        />
-                    ) : (
-                        <Download className="size-4" aria-hidden="true" />
-                    )}
-                    {isGeneratingReport
-                        ? 'Generating Report'
-                        : 'Generate System Report'}
+                    <Download className="size-4" aria-hidden="true" />
+                    System Report Unavailable
                 </button>
-                {generatedReport && (
-                    <p className="rounded-[8px] border border-[#bbf7d0] bg-[#f0fdf4] px-3 py-1.5 text-xs leading-4 text-[#166534]">
-                        {generatedReport.fileName} is ready for export.
-                    </p>
-                )}
+                <p className="max-w-[280px] text-xs leading-4 text-[#6a7282] sm:text-right">
+                    System report export is not available during the pilot.
+                </p>
             </div>
         </section>
     );

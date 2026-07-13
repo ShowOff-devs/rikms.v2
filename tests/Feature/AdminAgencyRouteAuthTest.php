@@ -4,6 +4,7 @@ use App\Models\Agency;
 use App\Models\Research;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
+use PragmaRX\Google2FA\Google2FA;
 
 function portalAuditAgency(string $slug): Agency
 {
@@ -140,6 +141,18 @@ test('expected web route aliases render existing portal pages', function () {
         ->get('/admin/moderation')
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page->component('admin/research-moderation'));
+
+    $this->actingAs($superAdmin)
+        ->get('/admin/analytics/project-reports/123')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('admin/analytics/project-reports/show')
+            ->where('researchId', '123')
+        );
+
+    $this->actingAs($agencyAdmin)
+        ->get('/admin/analytics/project-reports/123')
+        ->assertForbidden();
 });
 
 test('api routes return expected auth and role responses', function () {
@@ -237,6 +250,35 @@ test('agency login rejects credentials for a different selected agency', functio
     ])->assertSessionHasErrors('email');
 
     $this->assertGuest();
+});
+
+test('agency json login with two factor enabled sends user to challenge before dashboard', function () {
+    $agency = portalAuditAgency('agency-two-factor-login');
+    $agencyAdmin = portalAuditUser('agency_admin', $agency);
+    $secret = 'JBSWY3DPEHPK3PXP';
+
+    $agencyAdmin->forceFill([
+        'two_factor_secret' => encrypt($secret),
+        'two_factor_recovery_codes' => encrypt(json_encode(['agency-recovery-code'])),
+        'two_factor_confirmed_at' => now(),
+    ])->save();
+
+    $this->postJson('/agency/login', [
+        'agency' => $agency->slug,
+        'email' => $agencyAdmin->email,
+        'password' => 'password',
+    ])
+        ->assertOk()
+        ->assertJsonPath('two_factor', true)
+        ->assertSessionHas('login.id', $agencyAdmin->id);
+
+    $this->assertGuest();
+
+    $this->post('/two-factor-challenge', [
+        'code' => app(Google2FA::class)->getCurrentOtp($secret),
+    ])->assertRedirect('/agency/dashboard');
+
+    $this->assertAuthenticatedAs($agencyAdmin);
 });
 
 test('default login remains an agency login entry point with role based redirect', function () {

@@ -192,7 +192,7 @@ export default function UploadWizard({ config }: UploadWizardProps) {
             }
 
             throw new Error(
-                `Draft saving is not connected for the ${config.type} upload workflow.`,
+                'Draft saving is not available for this upload workflow during the pilot.',
             );
         } catch {
             setDraftStatus('error');
@@ -213,6 +213,7 @@ export default function UploadWizard({ config }: UploadWizardProps) {
                 state={state}
                 stepData={activeStepData}
                 setStepData={setActiveStepData}
+                setWorkflowStepData={setStepDataInStore}
                 goBack={goBack}
                 goNext={goNext}
                 goToStep={selectStep}

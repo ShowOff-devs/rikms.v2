@@ -1,4 +1,5 @@
 import { fetchApi } from '@/lib/api-client';
+import { downloadResponseFile } from '@/lib/download-file';
 import type {
     AdminSession,
     GeneratedSecurityReport,
@@ -217,9 +218,11 @@ export async function getLoginActivity(): Promise<LoginActivity[]> {
                 event.user?.role === 'super_admin'
                     ? 'Super Admin'
                     : 'Agency Admin',
-            ipAddress: event.ip_address ?? String(event.metadata?.ip_address ?? ''),
+            ipAddress:
+                event.ip_address ?? String(event.metadata?.ip_address ?? ''),
             location: event.location ?? 'Unknown',
-            device: event.user_agent ?? String(event.metadata?.user_agent ?? ''),
+            device:
+                event.user_agent ?? String(event.metadata?.user_agent ?? ''),
             loginTime: event.created_at ?? '',
             status: event.event_type.includes('failed') ? 'failed' : 'success',
         }));
@@ -275,30 +278,25 @@ export async function exportSecurityReport(
         params.set('end_date', options.endDate);
     }
 
-    const response = await fetch(`/api/admin/reports/security/export?${params.toString()}`, {
-        credentials: 'same-origin',
-        headers: { Accept: 'text/csv', 'X-Requested-With': 'XMLHttpRequest' },
-    });
+    const response = await fetch(
+        `/api/admin/reports/security/export?${params.toString()}`,
+        {
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'text/csv',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        },
+    );
 
     if (!response.ok) {
         throw new Error('Unable to export security report.');
     }
 
-    const blob = await response.blob();
-    const fileName =
-        response.headers
-            .get('Content-Disposition')
-            ?.match(/filename="?([^"]+)"?/)?.[1] ??
-        `rikms-security-report-${new Date().toISOString().slice(0, 10)}.csv`;
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    const { fileName } = await downloadResponseFile(
+        response,
+        `rikms-security-report-${new Date().toISOString().slice(0, 10)}.csv`,
+    );
 
     return {
         id: `security-report-${Date.now()}`,

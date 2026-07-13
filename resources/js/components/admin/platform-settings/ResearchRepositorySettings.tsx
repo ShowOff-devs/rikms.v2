@@ -45,6 +45,7 @@ export function ResearchRepositorySettings({
                 <Field
                     label="Maximum Upload File Size"
                     error={errors.maxUploadSizeMb}
+                    hint={`Effective limit: ${settings.effectiveMaxUploadSizeMb} MB after server caps.`}
                 >
                     <UnitInput
                         value={settings.maxUploadSizeMb}
@@ -59,6 +60,7 @@ export function ResearchRepositorySettings({
                 <Field
                     label="Allowed File Types"
                     error={errors.allowedFileTypes}
+                    hint="Active and enforced for PDF uploads."
                 >
                     <input
                         value={settings.allowedFileTypes.join(', ')}
@@ -76,6 +78,7 @@ export function ResearchRepositorySettings({
                 <Field
                     label="Default Research Status"
                     error={errors.defaultResearchStatus}
+                    hint="Not yet enforced by research creation."
                 >
                     <select
                         value={settings.defaultResearchStatus}
@@ -101,7 +104,7 @@ export function ResearchRepositorySettings({
                     Metadata Requirements
                 </div>
                 <p className="mt-2 text-xs leading-4 text-[#99a1af]">
-                    Toggle required fields for research record uploads.
+                    Not yet enforced by upload validation.
                 </p>
                 <div className="mt-4 grid gap-3 lg:grid-cols-4">
                     <ToggleRow

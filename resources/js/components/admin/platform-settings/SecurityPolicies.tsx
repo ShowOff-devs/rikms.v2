@@ -27,7 +27,7 @@ export function SecurityPolicies({
             <div className="space-y-4">
                 <ToggleRow
                     title="Require MFA for Super Admin"
-                    description="Enforce multi-factor authentication for Super Admin accounts"
+                    description="Active and enforced; deployment may force this on"
                     icon={ShieldAlert}
                     checked={settings.requireMfaForSuperAdmins}
                     onChange={(requireMfaForSuperAdmins) =>
@@ -36,7 +36,7 @@ export function SecurityPolicies({
                 />
                 <ToggleRow
                     title="Enable Login Alerts"
-                    description="Notify admins on new or suspicious login activity"
+                    description="Not yet enforced as a global platform control"
                     icon={BellRing}
                     checked={settings.loginAlertsEnabled}
                     onChange={(loginAlertsEnabled) =>
@@ -49,6 +49,7 @@ export function SecurityPolicies({
                 <Field
                     label="Failed Login Threshold"
                     error={errors.failedLoginThreshold}
+                    hint="Deployment-managed by Laravel/Fortify throttling."
                 >
                     <UnitInput
                         value={settings.failedLoginThreshold}
@@ -66,6 +67,7 @@ export function SecurityPolicies({
                 <Field
                     label="Lockout Duration"
                     error={errors.lockoutDurationMinutes}
+                    hint="Deployment-managed by Laravel/Fortify throttling."
                 >
                     <UnitInput
                         value={settings.lockoutDurationMinutes}
@@ -83,6 +85,7 @@ export function SecurityPolicies({
                 <Field
                     label="Session Timeout Duration"
                     error={errors.sessionTimeoutMinutes}
+                    hint="Active default unless a user has a saved timeout preference."
                 >
                     <UnitInput
                         value={settings.sessionTimeoutMinutes}

@@ -13,7 +13,11 @@ export class ApiError extends Error {
     status: number;
     errors: ApiErrorPayload['errors'];
 
-    constructor(message: string, status: number, errors: ApiErrorPayload['errors'] = {}) {
+    constructor(
+        message: string,
+        status: number,
+        errors: ApiErrorPayload['errors'] = {},
+    ) {
         super(message);
         this.name = 'ApiError';
         this.status = status;

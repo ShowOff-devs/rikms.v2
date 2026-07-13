@@ -72,6 +72,49 @@ function getAgencyInitials(agencyName: string) {
     return initials || 'AA';
 }
 
+function AgencyLogoAvatar({
+    agencyName,
+    initials,
+    logoUrl,
+    className,
+}: {
+    agencyName: string;
+    initials: string;
+    logoUrl?: string | null;
+    className: string;
+}) {
+    const [hasImageError, setHasImageError] = useState(false);
+
+    if (logoUrl && !hasImageError) {
+        return (
+            <span
+                className={cn(
+                    'flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-[#e5e7eb]',
+                    className,
+                )}
+            >
+                <img
+                    src={logoUrl}
+                    alt={`${agencyName} logo`}
+                    className="size-full object-contain p-1"
+                    onError={() => setHasImageError(true)}
+                />
+            </span>
+        );
+    }
+
+    return (
+        <span
+            className={cn(
+                'flex shrink-0 items-center justify-center rounded-full bg-[#1e3a8a] font-semibold text-white',
+                className,
+            )}
+        >
+            {initials}
+        </span>
+    );
+}
+
 export default function AgencyAdminLayout({
     children,
     session,
@@ -186,9 +229,12 @@ export default function AgencyAdminLayout({
                         className="hidden h-12 items-center gap-2 rounded-[10px] px-3 hover:bg-[#f9fafb] sm:flex"
                         aria-label="Open agency profile"
                     >
-                        <span className="flex size-8 items-center justify-center rounded-full bg-[#1e3a8a] text-xs font-semibold text-white">
-                            AD
-                        </span>
+                        <AgencyLogoAvatar
+                            agencyName={session.agencyName}
+                            initials={agencyInitials}
+                            logoUrl={session.logoUrl}
+                            className="size-8 text-xs"
+                        />
                         <span className="text-left">
                             <span className="block text-sm leading-5 font-medium text-[#1e2939]">
                                 Agency Admin
@@ -269,24 +315,37 @@ export default function AgencyAdminLayout({
                         >
                             {isCollapsed ? (
                                 <span
-                                    className="flex size-10 items-center justify-center rounded-full bg-[#1e3a8a] text-sm font-semibold text-white"
+                                    className="inline-flex"
                                     title={`Logged in as ${session.agencyName}`}
                                     aria-label={`Logged in as ${session.agencyName}`}
                                 >
-                                    {agencyInitials}
+                                    <AgencyLogoAvatar
+                                        agencyName={session.agencyName}
+                                        initials={agencyInitials}
+                                        logoUrl={session.logoUrl}
+                                        className="size-10 text-sm"
+                                    />
                                 </span>
                             ) : (
-                                <>
-                                    <p className="text-xs leading-4 text-[#6a7282]">
-                                        Logged in as
-                                    </p>
-                                    <p className="mt-1 text-xs leading-4 font-semibold text-[#1e3a8a]">
-                                        {session.agencyName}
-                                    </p>
-                                    <p className="mt-1 truncate text-[11px] leading-4 text-[#6a7282]">
-                                        Department of Science and Technology
-                                    </p>
-                                </>
+                                <div className="flex items-center gap-3">
+                                    <AgencyLogoAvatar
+                                        agencyName={session.agencyName}
+                                        initials={agencyInitials}
+                                        logoUrl={session.logoUrl}
+                                        className="size-10 text-sm"
+                                    />
+                                    <div className="min-w-0">
+                                        <p className="text-xs leading-4 text-[#6a7282]">
+                                            Logged in as
+                                        </p>
+                                        <p className="mt-1 truncate text-xs leading-4 font-semibold text-[#1e3a8a]">
+                                            {session.agencyName}
+                                        </p>
+                                        <p className="mt-1 truncate text-[11px] leading-4 text-[#6a7282]">
+                                            Agency Administrator
+                                        </p>
+                                    </div>
+                                </div>
                             )}
                         </div>
                     </div>

@@ -207,9 +207,7 @@ export function ReviewResearchRecordModal({
                         {canApprove ? (
                             <button
                                 type="button"
-                                onClick={() =>
-                                    handleSave('approved-published')
-                                }
+                                onClick={() => handleSave('approved-published')}
                                 disabled={isSaving}
                                 className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-[#1e3a8a] px-4 text-sm font-semibold text-white transition hover:bg-[#172554] disabled:cursor-wait disabled:opacity-70"
                             >

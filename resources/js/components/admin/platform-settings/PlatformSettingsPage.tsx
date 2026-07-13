@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AdminLayout } from '@/components/admin/layout/AdminLayout';
 import { AccessControlPolicies } from '@/components/admin/platform-settings/AccessControlPolicies';
+import { AiProcessingSettings } from '@/components/admin/platform-settings/AiProcessingSettings';
 import { BackupRecoverySettings } from '@/components/admin/platform-settings/BackupRecoverySettings';
 import { GeneralPlatformSettings } from '@/components/admin/platform-settings/GeneralPlatformSettings';
 import { MaintenanceModeModal } from '@/components/admin/platform-settings/MaintenanceModeModal';
@@ -30,6 +31,7 @@ function cloneSettings(settings: PlatformSettings): PlatformSettings {
         security: { ...settings.security },
         notifications: { ...settings.notifications },
         maintenance: { ...settings.maintenance },
+        ai: { ...settings.ai },
         backup: { ...settings.backup },
     };
 }
@@ -394,6 +396,10 @@ export function PlatformSettingsPage() {
                                 onMaintenanceModeChange={
                                     handleMaintenanceModeChange
                                 }
+                            />
+                            <AiProcessingSettings
+                                settings={settings.ai}
+                                onChange={(value) => updateSection('ai', value)}
                             />
                             <BackupRecoverySettings
                                 settings={settings.backup}

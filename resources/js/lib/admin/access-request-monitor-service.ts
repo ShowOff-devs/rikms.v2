@@ -1,4 +1,5 @@
 import { fetchApi } from '@/lib/api-client';
+import { downloadResponseFile } from '@/lib/download-file';
 import type {
     AccessReportExportOptions,
     AccessRequestAuditPayload,
@@ -55,7 +56,8 @@ function toRecord(request: ApiAccessRequest): AccessRequestMonitorRecord {
         requesterName: request.requester_name ?? 'Public requester',
         requesterEmail: request.requester_email ?? '',
         organization: request.requester_affiliation ?? 'Not provided',
-        researchTitle: request.research?.title ?? `Research #${request.research_id}`,
+        researchTitle:
+            request.research?.title ?? `Research #${request.research_id}`,
         researchId: String(request.research_id),
         agencyId: String(agency?.id ?? request.agency_id ?? ''),
         agencyShortName: agency?.short_name ?? agency?.name ?? 'Unassigned',
@@ -74,7 +76,9 @@ function toRecord(request: ApiAccessRequest): AccessRequestMonitorRecord {
     };
 }
 
-function dateRangeParams(dateRange: AccessRequestMonitorFilters['dateRange']) {
+function dateRangeParams(
+    dateRange: AccessRequestMonitorFilters['dateRange'] | 'custom',
+) {
     const now = new Date();
     const params = new URLSearchParams();
 
@@ -111,7 +115,10 @@ function filterParams(filters?: Partial<AccessRequestMonitorFilters>) {
     }
 
     if (filters?.agency && filters.agency !== 'all') {
-        params.set('search', [params.get('search'), filters.agency].filter(Boolean).join(' '));
+        params.set(
+            'search',
+            [params.get('search'), filters.agency].filter(Boolean).join(' '),
+        );
     }
 
     params.set('per_page', '100');
@@ -141,13 +148,20 @@ export function filterAccessRequestMonitorRecords(
                 .toLowerCase()
                 .includes(query);
         const matchesAgency =
-            filters.agency === 'all' || record.agencyShortName === filters.agency;
+            filters.agency === 'all' ||
+            record.agencyShortName === filters.agency;
         const matchesStatus =
             filters.status === 'all' || record.status === filters.status;
         const matchesOrganization =
-            filters.organization === 'all' || record.organization === filters.organization;
+            filters.organization === 'all' ||
+            record.organization === filters.organization;
 
-        return matchesSearch && matchesAgency && matchesStatus && matchesOrganization;
+        return (
+            matchesSearch &&
+            matchesAgency &&
+            matchesStatus &&
+            matchesOrganization
+        );
     });
 }
 
@@ -157,7 +171,8 @@ export function buildAccessRequestMonitorSummary(
     return {
         total: records.length,
         pending: records.filter((record) => record.status === 'pending').length,
-        approved: records.filter((record) => record.status === 'approved').length,
+        approved: records.filter((record) => record.status === 'approved')
+            .length,
         denied: records.filter((record) => record.status === 'denied').length,
     };
 }
@@ -181,11 +196,16 @@ export async function getAccessRequestMonitorSummary(
         `/api/admin/access-monitoring?${params.toString()}`,
     );
 
-    return response.meta.summary ?? buildAccessRequestMonitorSummary(response.data.map(toRecord));
+    return (
+        response.meta.summary ??
+        buildAccessRequestMonitorSummary(response.data.map(toRecord))
+    );
 }
 
 export async function getAccessRequestById(id: string) {
-    const response = await fetchApi<ApiAccessRequest>(`/api/admin/access-requests/${id}`);
+    const response = await fetchApi<ApiAccessRequest>(
+        `/api/admin/access-requests/${id}`,
+    );
 
     return toRecord(response.data);
 }
@@ -222,18 +242,60 @@ export async function overrideAccessRequestDecision(
 
 export async function exportAccessRequestReport(
     options: AccessReportExportOptions,
+    filters?: Partial<AccessRequestMonitorFilters>,
 ): Promise<AccessRequestExportResult> {
-    const response = await fetch('/api/admin/access-monitoring/export', {
-        credentials: 'same-origin',
-        headers: { Accept: 'text/csv', 'X-Requested-With': 'XMLHttpRequest' },
-    });
+    const params = dateRangeParams(options.dateRange);
+
+    params.set('format', options.format);
+
+    if (options.startDate) {
+        params.set('date_from', options.startDate);
+    }
+
+    if (options.endDate) {
+        params.set('date_to', options.endDate);
+    }
+
+    const selectedStatuses = [
+        options.includeApproved ? 'approved' : null,
+        options.includePending ? 'pending' : null,
+        options.includeDenied ? 'denied' : null,
+    ].filter(Boolean);
+
+    if (selectedStatuses.length) {
+        params.set('statuses', selectedStatuses.join(','));
+    }
+
+    if (options.includeCurrentFilters && filters) {
+        filterParams(filters).forEach((value, key) => {
+            if (key !== 'per_page' && !params.has(key)) {
+                params.set(key, value);
+            }
+        });
+    }
+
+    const response = await fetch(
+        `/api/admin/access-monitoring/export?${params}`,
+        {
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'text/csv',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        },
+    );
 
     if (!response.ok) {
         throw new Error('Unable to export access request report.');
     }
 
+    const { fileName } = await downloadResponseFile(
+        response,
+        `access-monitoring-${new Date().toISOString().slice(0, 10)}.csv`,
+    );
+
     return {
-        fileName: `access-monitoring-${new Date().toISOString().slice(0, 10)}.csv`,
+        fileName,
         queuedAt: new Date().toISOString(),
         options,
     };

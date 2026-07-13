@@ -126,7 +126,8 @@ function mapModerationRecordFromApi(
         year: record.publication_year ?? new Date().getFullYear(),
         status,
         dateFlagged:
-            record.created_at?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+            record.created_at?.slice(0, 10) ??
+            new Date().toISOString().slice(0, 10),
         abstract: record.abstract ?? undefined,
         authors: record.authors ?? [],
         issueDescription: `Current official status: ${record.status}. Review this relational research record and apply the appropriate moderation action.`,
@@ -134,9 +135,7 @@ function mapModerationRecordFromApi(
     };
 }
 
-function mapModerationStatus(
-    status: string,
-): FlaggedResearchRecord['status'] {
+function mapModerationStatus(status: string): FlaggedResearchRecord['status'] {
     if (status === 'approved' || status === 'published') {
         return 'resolved';
     }

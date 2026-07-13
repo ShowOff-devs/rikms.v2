@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Services\AI\OpenAiResearchMetadataExtractor;
 use App\Services\AiPipelineResultWriter;
+use App\Services\PlatformSettingsService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -22,6 +23,12 @@ class ExtractResearchMetadataJob implements ShouldQueue
 
     public function handle(AiPipelineResultWriter $writer, ?OpenAiResearchMetadataExtractor $extractor = null): void
     {
+        if (! app(PlatformSettingsService::class)->aiProcessingEnabled()) {
+            $writer->markAiProcessingSkipped($this->fileId);
+
+            return;
+        }
+
         $extractor ??= app(OpenAiResearchMetadataExtractor::class);
         $text = null;
 

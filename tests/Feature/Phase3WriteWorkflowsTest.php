@@ -7,10 +7,12 @@ use App\Models\AccessRequest;
 use App\Models\Agency;
 use App\Models\AuditLog;
 use App\Models\Notification;
+use App\Models\PlatformSetting;
 use App\Models\Research;
 use App\Models\ResearchApproval;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\PlatformSettingsService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Storage;
@@ -412,13 +414,28 @@ test('publishing a revision supersedes the previous published version', function
 test('agency admin can upload valid pdf and jobs are queued', function () {
     Storage::fake('local');
     Bus::fake();
+    $service = app(PlatformSettingsService::class);
+    $definition = $service->definition(PlatformSettingsService::AI_PROCESSING_ENABLED);
+
+    PlatformSetting::updateOrCreate(
+        ['key' => PlatformSettingsService::AI_PROCESSING_ENABLED],
+        [
+            'value' => 'true',
+            'type' => 'boolean',
+            'group' => $definition['group'] ?? 'ai',
+            'label' => $definition['label'] ?? 'AI Processing Enabled',
+            'is_public' => false,
+            'is_encrypted' => false,
+        ],
+    );
+    $service->forgetCache();
 
     $agency = createPhase3Agency('upload-agency');
     $user = createPhase3User('agency_admin', $agency);
     $research = createPhase3Research($agency, $user);
 
     $response = $this->actingAs($user)->postJson("/api/agency/research/{$research->id}/files", [
-        'file' => UploadedFile::fake()->create('study.pdf', 128, 'application/pdf'),
+        'file' => testPdfUpload('study.pdf', 128),
     ]);
 
     $response
@@ -458,12 +475,12 @@ test('invalid upload file type is rejected and cross agency upload is forbidden'
     ])->assertUnprocessable();
 
     $this->actingAs($user)->postJson("/api/agency/research/{$ownResearch->id}/files", [
-        'file' => UploadedFile::fake()->create('oversized.pdf', 11264, 'application/pdf'),
+        'file' => testPdfUpload('oversized.pdf', 11264),
     ])->assertUnprocessable()
         ->assertJsonValidationErrors(['file']);
 
     $this->actingAs($user)->postJson("/api/agency/research/{$otherResearch->id}/files", [
-        'file' => UploadedFile::fake()->create('study.pdf', 12, 'application/pdf'),
+        'file' => testPdfUpload('study.pdf', 12),
     ])->assertForbidden();
 });
 

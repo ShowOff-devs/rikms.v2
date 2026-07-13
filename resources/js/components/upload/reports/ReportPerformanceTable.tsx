@@ -12,22 +12,59 @@ import type {
 
 type ReportPerformanceTableProps = {
     data: ReportPerformanceData;
-    defaultProjectName: string;
     onChange: (data: ReportPerformanceData) => void;
 };
 
 const statusLabels: Record<ReportPerformanceProject['projectStatus'], string> =
     {
+        'not-reported': 'Not Reported',
         'not-started': 'Not Started',
         'in-progress': 'In Progress',
-        completed: 'Completed',
+        'substantially-complete': 'Substantially Complete',
+        completed: 'Complete',
     };
+
+const tableGridClass =
+    'grid min-w-[960px] grid-cols-[2.2fr_1.4fr_1.4fr_0.9fr_1.1fr_44px]';
+
+const inputClass =
+    'h-11 w-full rounded-[10px] border border-[#d1d5dc] px-3 text-sm leading-5 outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10';
+
+function accomplishmentLabel(value: number | null) {
+    if (value === null) {
+        return 'Not available';
+    }
+
+    return `${Number.isInteger(value) ? value : value.toFixed(2)}%`;
+}
+
+function statusBadgeClass(status: ReportPerformanceProject['projectStatus']) {
+    if (status === 'completed') {
+        return 'bg-[#f0fdf4] text-[#008236]';
+    }
+
+    if (status === 'substantially-complete') {
+        return 'bg-[#ecfdf5] text-[#047857]';
+    }
+
+    if (status === 'in-progress') {
+        return 'bg-[#eff6ff] text-[#1e3a8a]';
+    }
+
+    if (status === 'not-started') {
+        return 'bg-[#fff7ed] text-[#c2410c]';
+    }
+
+    return 'bg-[#f3f4f6] text-[#4a5565]';
+}
 
 export default function ReportPerformanceTable({
     data,
-    defaultProjectName,
     onChange,
 }: ReportPerformanceTableProps) {
+    const stringOrNull = (value: string) =>
+        value.trim() === '' ? null : value;
+
     const updateProject = (
         id: string,
         updates: Partial<ReportPerformanceProject>,
@@ -50,7 +87,7 @@ export default function ReportPerformanceTable({
             ...data,
             performanceProjects: [
                 ...data.performanceProjects,
-                createPerformanceProject(defaultProjectName),
+                createPerformanceProject(),
             ],
         });
     };
@@ -66,17 +103,31 @@ export default function ReportPerformanceTable({
 
     return (
         <div className="space-y-4">
-            <div className="overflow-hidden rounded-[14px] border border-[#e5e7eb]">
-                <div className="grid grid-cols-[1.4fr_0.7fr_0.7fr_0.8fr_0.8fr_44px] bg-[#f9fafb] text-xs font-bold text-[#6a7282]">
+            <div
+                role="table"
+                aria-label="Project performance rows"
+                className="overflow-x-auto rounded-[14px] border border-[#e5e7eb]"
+            >
+                <div
+                    role="row"
+                    className={cn(
+                        tableGridClass,
+                        'bg-[#f9fafb] text-xs font-bold text-[#6a7282]',
+                    )}
+                >
                     {[
-                        'Project Name',
+                        'Activity / Output / Indicator',
                         'Target',
-                        'Actual %',
+                        'Actual',
                         'Accomplishment %',
                         'Status',
                         '',
                     ].map((heading) => (
-                        <div key={heading} className="px-3 py-3">
+                        <div
+                            key={heading || 'actions'}
+                            role="columnheader"
+                            className="px-3 py-3"
+                        >
                             {heading}
                         </div>
                     ))}
@@ -84,68 +135,93 @@ export default function ReportPerformanceTable({
                 {data.performanceProjects.map((project) => (
                     <div
                         key={project.id}
-                        className="grid grid-cols-[1.4fr_0.7fr_0.7fr_0.8fr_0.8fr_44px] items-center border-t border-[#e5e7eb]"
+                        role="row"
+                        className={cn(
+                            tableGridClass,
+                            'min-h-[68px] items-center border-t border-[#e5e7eb]',
+                        )}
                     >
-                        <input
-                            value={project.projectName}
-                            onChange={(event) =>
-                                updateProject(project.id, {
-                                    projectName: event.target.value,
-                                })
-                            }
-                            className="m-2 h-10 rounded-[10px] border border-[#d1d5dc] px-3 text-sm outline-none focus:border-[#1e3a8a]"
-                        />
-                        <input
-                            type="number"
-                            value={project.targetValue || ''}
-                            min={0}
-                            onChange={(event) =>
-                                updateProject(project.id, {
-                                    targetValue: Number(event.target.value),
-                                })
-                            }
-                            className="m-2 h-10 rounded-[10px] border border-[#d1d5dc] px-3 text-sm outline-none focus:border-[#1e3a8a]"
-                        />
-                        <input
-                            type="number"
-                            value={project.actualValue || ''}
-                            min={0}
-                            onChange={(event) =>
-                                updateProject(project.id, {
-                                    actualValue: Number(event.target.value),
-                                })
-                            }
-                            className="m-2 h-10 rounded-[10px] border border-[#d1d5dc] px-3 text-sm outline-none focus:border-[#1e3a8a]"
-                        />
-                        <div className="px-3 text-sm font-bold text-[#1e3a8a]">
-                            {project.accomplishmentPercentage}%
+                        <div role="cell" className="p-2">
+                            <input
+                                value={project.projectName}
+                                onChange={(event) =>
+                                    updateProject(project.id, {
+                                        projectName: event.target.value,
+                                    })
+                                }
+                                placeholder="e.g. Conduct stakeholder training"
+                                aria-label="Activity, output, or indicator"
+                                className={inputClass}
+                            />
                         </div>
-                        <div className="px-3">
+                        <div role="cell" className="p-2">
+                            <input
+                                value={project.targetValue ?? ''}
+                                onChange={(event) =>
+                                    updateProject(project.id, {
+                                        targetValue: stringOrNull(
+                                            event.target.value,
+                                        ),
+                                    })
+                                }
+                                placeholder="Target: e.g. 10 trainings"
+                                aria-label="Target value"
+                                className={inputClass}
+                            />
+                        </div>
+                        <div role="cell" className="p-2">
+                            <input
+                                value={project.actualValue ?? ''}
+                                onChange={(event) =>
+                                    updateProject(project.id, {
+                                        actualValue: stringOrNull(
+                                            event.target.value,
+                                        ),
+                                    })
+                                }
+                                placeholder="Actual: e.g. 8 trainings"
+                                aria-label="Actual value"
+                                className={inputClass}
+                            />
+                        </div>
+                        <div
+                            role="cell"
+                            className="flex h-full items-center px-3 text-sm font-bold text-[#1e3a8a]"
+                        >
+                            {accomplishmentLabel(
+                                project.accomplishmentPercentage,
+                            )}
+                        </div>
+                        <div
+                            role="cell"
+                            className="flex h-full items-center px-3"
+                        >
                             <span
                                 className={cn(
-                                    'rounded-full px-2 py-1 text-[10px] font-bold',
-                                    project.projectStatus === 'completed'
-                                        ? 'bg-[#f0fdf4] text-[#00a63e]'
-                                        : project.projectStatus ===
-                                            'in-progress'
-                                          ? 'bg-[#eff6ff] text-[#1e3a8a]'
-                                          : 'bg-[#f3f4f6] text-[#6a7282]',
+                                    'inline-flex min-h-7 items-center justify-center rounded-full px-2.5 py-1 text-center text-[10px] leading-3 font-bold whitespace-normal',
+                                    statusBadgeClass(project.projectStatus),
                                 )}
                             >
                                 {statusLabels[project.projectStatus]}
                             </span>
                         </div>
-                        <button
-                            type="button"
-                            className="mx-2 flex size-8 items-center justify-center rounded-[10px] text-[#fb2c36] hover:bg-[#fff1f2]"
-                            onClick={() => removeProject(project.id)}
+                        <div
+                            role="cell"
+                            className="flex h-full items-center justify-center"
                         >
-                            <Trash2 className="size-4" />
-                        </button>
+                            <button
+                                type="button"
+                                className="flex size-8 items-center justify-center rounded-[10px] text-[#fb2c36] outline-none hover:bg-[#fff1f2] focus-visible:ring-2 focus-visible:ring-[#fb2c36]/20"
+                                onClick={() => removeProject(project.id)}
+                                aria-label="Delete performance row"
+                            >
+                                <Trash2 className="size-4" />
+                            </button>
+                        </div>
                     </div>
                 ))}
                 {data.performanceProjects.length === 0 ? (
-                    <div className="border-t border-[#e5e7eb] px-4 py-8 text-center text-sm text-[#99a1af]">
+                    <div className="min-w-[960px] border-t border-[#e5e7eb] px-4 py-8 text-center text-sm text-[#99a1af]">
                         Add at least one project row to continue.
                     </div>
                 ) : null}

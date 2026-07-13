@@ -14,6 +14,7 @@ export type PlatformSettings = {
     };
     repository: {
         maxUploadSizeMb: number;
+        effectiveMaxUploadSizeMb: number;
         allowedFileTypes: string[];
         defaultResearchStatus: ResearchStatus;
         requireAuthors: boolean;
@@ -45,6 +46,9 @@ export type PlatformSettings = {
     maintenance: {
         maintenanceModeEnabled: boolean;
         maintenanceMessage: string;
+    };
+    ai: {
+        processingEnabled: boolean;
     };
     backup: {
         lastBackupAt: string;

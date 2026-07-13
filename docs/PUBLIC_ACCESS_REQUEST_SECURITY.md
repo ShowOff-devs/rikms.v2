@@ -1,0 +1,88 @@
+# Public Access Request Security
+
+## Threats Addressed
+
+The public access-request endpoint is unauthenticated by design, so it is protected with layered controls against spam, automated form fills, duplicate pending submissions, notification flooding, and simultaneous duplicate inserts.
+
+## Rate Limits
+
+The POST route `/api/public/research/{research}/access-requests` uses the named Laravel limiter `public-access-requests`.
+
+Default limits:
+
+- Per IP burst: 5 requests per minute
+- Per IP sustained: 20 requests per hour
+- Per normalized requester email: 3 requests per hour
+
+Rate-limit keys hash IP addresses and normalized email addresses before storing them in the cache.
+
+## Duplicate Definition
+
+A duplicate public request is the same normalized requester email for the same research record while the previous request is in an active duplicate status.
+
+The current active duplicate status is:
+
+- `pending`
+
+Denied, cancelled, expired, and approved requests do not block a later public submission under the current business policy.
+
+## Database Safeguard
+
+`access_requests.active_duplicate_key` stores a SHA-256 key for active duplicate records and is protected by a unique index. Inactive records store `NULL`, which is compatible with both SQLite pilot environments and MySQL production environments because unique indexes allow multiple `NULL` values.
+
+The application still performs an application-level duplicate check for friendly responses, but the database key is the concurrency guard. Duplicate-key violations are converted to a safe `409 Conflict`.
+
+## Honeypot
+
+The public form includes a visually hidden `website` field. Human users should leave it empty. Populated honeypot submissions are rejected during validation and do not create access-request records, agency notifications, or legitimate audit entries.
+
+## CAPTCHA
+
+CAPTCHA is optional and disabled by default. Cloudflare Turnstile can be enabled with:
+
+```env
+PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED=true
+CAPTCHA_PROVIDER=turnstile
+CAPTCHA_SITE_KEY=
+CAPTCHA_SECRET_KEY=
+```
+
+Server-side verification uses a short HTTP timeout and does not log CAPTCHA secrets or complete tokens. Local development works without CAPTCHA.
+
+## Data Retained
+
+Access-request audit logs retain the resolved Laravel client IP and a sanitized, length-limited user agent. Security metadata stores hashed requester email and hashed IP values. Public API responses do not include IP address, user agent, CAPTCHA data, or duplicate keys.
+
+## Notifications
+
+Agency-admin notifications are queued with `DB::afterCommit`, so validation failures, CAPTCHA failures, duplicate conflicts, and rolled-back inserts do not create notifications. Notification creation checks the access-request id to avoid repeat notifications for the same record.
+
+## Deferred Timing Token
+
+Minimum form-completion timing is not implemented in this change because the existing public page does not have a server-issued form initialization endpoint. If abuse continues, add a short-lived encrypted or signed form token endpoint and reject submissions completed too quickly.
+
+## Testing
+
+Focused verification:
+
+```powershell
+php artisan test --filter=Phase7PublicAccessRequestTest
+```
+
+Broader verification:
+
+```powershell
+php artisan test
+npm run types:check
+npm run lint:check
+npm run build
+php artisan route:list --except-vendor
+```
+
+## Production Recommendations
+
+- Configure trusted proxies so Laravel resolves client IPs correctly.
+- Enable CAPTCHA if public abuse is observed or expected.
+- Keep rate limits aligned with observed agency review capacity.
+- Monitor logs for `duplicate_pending`, `honeypot_triggered`, `captcha_failed`, and `created` reason codes.
+- Consider a WAF or edge-level bot control for sustained attacks.
