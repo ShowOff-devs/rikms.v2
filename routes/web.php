@@ -67,7 +67,7 @@ Route::post('/agency/login', [AuthenticatedSessionController::class, 'store'])->
 Route::get('/agency/forgot-password', fn () => Inertia::render('agency/forgot-password', [
     'agencies' => $agencyLoginOptions(),
 ]))->name('agency.forgot-password');
-Route::middleware(['auth', 'role:agency_admin'])->group(function () {
+Route::middleware(['auth', 'verified', 'role:agency_admin', 'agency.scope'])->group(function () {
     Route::inertia('/agency/dashboard', 'agency/dashboard')->name('agency.dashboard');
     Route::inertia('/agency/research', 'agency/research-repository')->name('agency.research');
     Route::inertia('/agency/research/create', 'agency/upload/research')->name('agency.research.create');
@@ -110,7 +110,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
     })->name('login');
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])->name('login.store');
 
-    Route::middleware(['auth', 'role:super_admin', 'super_admin.2fa'])->group(function () {
+    Route::middleware(['auth', 'verified', 'role:super_admin', 'super_admin.2fa'])->group(function () {
         Route::inertia('/dashboard', 'admin/dashboard')->name('dashboard');
         Route::inertia('/agencies', 'admin/agencies')->name('agencies');
         Route::inertia('/users', 'admin/agency-admin-users')->name('users');

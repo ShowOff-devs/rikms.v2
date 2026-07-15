@@ -2,12 +2,18 @@
 
 namespace App\Providers;
 
+use App\Models\User;
+use App\Support\SecurityEventLogger;
 use Carbon\CarbonImmutable;
+use Illuminate\Auth\Events\Failed;
+use Illuminate\Auth\Events\Login;
+use Illuminate\Auth\Events\Logout;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
@@ -28,6 +34,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        $this->configureAuthenticationEventLogging();
     }
 
     /**
@@ -84,6 +91,36 @@ class AppServiceProvider extends ServiceProvider
             }
 
             return $configuredLimits;
+        });
+    }
+
+    protected function configureAuthenticationEventLogging(): void
+    {
+        Event::listen(Login::class, function (Login $event): void {
+            $user = $event->user instanceof User ? $event->user : null;
+
+            SecurityEventLogger::record(request(), 'login.success', $user, 'low', [
+                'remember' => $event->remember,
+                'guard' => $event->guard,
+            ]);
+        });
+
+        Event::listen(Failed::class, function (Failed $event): void {
+            $email = mb_strtolower(trim((string) ($event->credentials['email'] ?? '')));
+            $user = $event->user instanceof User ? $event->user : null;
+
+            SecurityEventLogger::record(request(), 'login.failed', $user, 'medium', [
+                'email' => $email,
+                'guard' => $event->guard,
+            ]);
+        });
+
+        Event::listen(Logout::class, function (Logout $event): void {
+            $user = $event->user instanceof User ? $event->user : null;
+
+            SecurityEventLogger::record(request(), 'logout', $user, 'low', [
+                'guard' => $event->guard,
+            ]);
         });
     }
 }

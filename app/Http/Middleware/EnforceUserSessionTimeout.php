@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Services\PlatformSettingsService;
 use App\Support\ApiResponse;
+use App\Support\SecurityEventLogger;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -27,6 +28,10 @@ class EnforceUserSessionTimeout
         $lastActivityAt = $request->session()->get(self::LAST_ACTIVITY_KEY);
 
         if ($timeoutMinutes && is_numeric($lastActivityAt) && now()->timestamp - (int) $lastActivityAt > $timeoutMinutes * 60) {
+            SecurityEventLogger::record($request, 'session.timeout', $user, 'medium', [
+                'timeout_minutes' => $timeoutMinutes,
+            ]);
+
             Auth::guard('web')->logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();

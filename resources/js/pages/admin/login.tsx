@@ -1,11 +1,5 @@
 import { Head, router } from '@inertiajs/react';
-import {
-    AlertTriangle,
-    Eye,
-    EyeOff,
-    KeyRound,
-    LockKeyhole,
-} from 'lucide-react';
+import { AlertTriangle, Eye, EyeOff, LockKeyhole } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { useState } from 'react';
 
@@ -67,45 +61,7 @@ export default function AdminLoginPage() {
             }
 
             if (body.two_factor) {
-                const authenticationCode = String(
-                    form.get('authentication_code') ?? '',
-                ).trim();
-
-                if (!authenticationCode) {
-                    throw new Error('Enter your Google Authenticator code.');
-                }
-
-                const twoFactorResponse = await fetch('/two-factor-challenge', {
-                    method: 'POST',
-                    credentials: 'same-origin',
-                    headers: {
-                        Accept: 'application/json',
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        ...(token ? { 'X-CSRF-TOKEN': token } : {}),
-                    },
-                    body: JSON.stringify({
-                        code: authenticationCode,
-                    }),
-                });
-
-                const twoFactorBody = (await twoFactorResponse
-                    .json()
-                    .catch(() => ({}))) as {
-                    message?: string;
-                    redirect?: string;
-                    errors?: Record<string, string[]>;
-                };
-
-                if (!twoFactorResponse.ok) {
-                    throw new Error(
-                        twoFactorBody.message ??
-                            twoFactorBody.errors?.code?.[0] ??
-                            'Invalid authentication code.',
-                    );
-                }
-
-                router.visit(twoFactorBody.redirect ?? '/admin/dashboard');
+                router.visit('/two-factor-challenge');
 
                 return;
             }
@@ -218,30 +174,6 @@ export default function AdminLoginPage() {
                         </div>
                     </div>
 
-                    <div className="space-y-1.5">
-                        <Label
-                            htmlFor="authentication-code"
-                            className="flex items-center gap-1.5 text-sm leading-5 font-medium text-[#364153]"
-                        >
-                            <KeyRound
-                                className="size-3.5 text-[#99a1af]"
-                                aria-hidden="true"
-                            />
-                            Authentication Code
-                        </Label>
-                        <Input
-                            id="authentication-code"
-                            name="authentication_code"
-                            inputMode="numeric"
-                            autoComplete="one-time-code"
-                            placeholder="Enter code from your authentication app"
-                            className="h-[42px] rounded-[10px] border-[#e5e7eb] bg-[#f9fafb] px-4 text-sm tracking-[1.4px] text-[#364153] shadow-none placeholder:text-[#99a1af]"
-                        />
-                        <p className="text-[11px] leading-[16.5px] text-[#99a1af]">
-                            6-digit code from your authenticator app.
-                        </p>
-                    </div>
-
                     <div className="flex items-center justify-between gap-4">
                         <Label
                             htmlFor="remember-device"
@@ -255,7 +187,7 @@ export default function AdminLoginPage() {
                             Remember this device
                         </Label>
                         <a
-                            href="#"
+                            href="/forgot-password"
                             className="text-sm leading-5 font-medium whitespace-nowrap text-[#1e3a8a] hover:underline"
                         >
                             Forgot Password?
