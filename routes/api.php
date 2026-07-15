@@ -64,7 +64,7 @@ Route::prefix('auth')->name('auth.')->group(function () {
 
 Route::prefix('agency')
     ->name('api.agency.')
-    ->middleware(['auth:sanctum', 'role:agency_admin', 'agency.scope'])
+    ->middleware(['auth:sanctum', 'verified', 'role:agency_admin', 'agency.scope'])
     ->group(function () {
         Route::get('/dashboard', [AgencyReadController::class, 'dashboard'])->name('dashboard');
         Route::get('/analytics', [AgencyAnalyticsController::class, 'show'])->name('analytics.show');
@@ -119,7 +119,7 @@ Route::prefix('agency')
 
 Route::prefix('admin')
     ->name('api.admin.')
-    ->middleware(['auth:sanctum', 'role:super_admin', 'super_admin.2fa'])
+    ->middleware(['auth:sanctum', 'verified', 'role:super_admin', 'super_admin.2fa'])
     ->group(function () {
         Route::get('/dashboard', AdminDashboardController::class)->name('dashboard');
         Route::get('/agency-admin-users', [AdminAgencyAdminUserController::class, 'index'])->name('agency-admin-users.index');

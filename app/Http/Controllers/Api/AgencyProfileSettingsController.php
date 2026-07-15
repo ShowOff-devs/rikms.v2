@@ -7,6 +7,7 @@ use App\Models\Agency;
 use App\Models\Research;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
+use App\Support\SecurityEventLogger;
 use App\Support\Statuses;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -223,6 +224,11 @@ class AgencyProfileSettingsController extends Controller
 
         AuditLogger::record($request, 'agency_session.revoked', null, null, [
             'session_id' => $sessionId,
+        ]);
+
+        SecurityEventLogger::record($request, 'session.revoked', $request->user(), 'medium', [
+            'session_id' => $sessionId,
+            'revocation_scope' => 'agency_settings',
         ]);
 
         return ApiResponse::success('Agency session revoked.', [

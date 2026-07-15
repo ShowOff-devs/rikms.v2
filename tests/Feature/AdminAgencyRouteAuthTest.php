@@ -2,7 +2,9 @@
 
 use App\Models\Agency;
 use App\Models\Research;
+use App\Models\SecurityEvent;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
 use PragmaRX\Google2FA\Google2FA;
 
@@ -68,6 +70,57 @@ test('agency web routes use agency login and role protection', function () {
 
     $this->actingAs($superAdmin)
         ->get('/agency/dashboard')
+        ->assertForbidden();
+});
+
+test('existing agency admin sessions lose access after agency deactivation', function () {
+    $agency = portalAuditAgency('deactivated-session-agency');
+    $agencyAdmin = portalAuditUser('agency_admin', $agency);
+
+    $this->actingAs($agencyAdmin)
+        ->get('/agency/dashboard')
+        ->assertOk();
+
+    $agency->forceFill(['status' => 'inactive'])->save();
+
+    $this->get('/agency/dashboard')
+        ->assertRedirect('/agency/login')
+        ->assertSessionHasErrors('email');
+
+    $this->assertGuest();
+
+    $this->actingAs($agencyAdmin)
+        ->getJson('/api/agency/dashboard')
+        ->assertForbidden()
+        ->assertJsonPath('message', 'Your agency account is inactive. Contact a system administrator.');
+});
+
+test('unverified portal users cannot access protected web or api routes', function () {
+    $agency = portalAuditAgency('unverified-agency');
+    $agencyAdmin = User::factory()->unverified()->create([
+        'agency_id' => $agency->id,
+        'role' => 'agency_admin',
+        'status' => 'active',
+    ]);
+    $superAdmin = User::factory()->unverified()->create([
+        'role' => 'super_admin',
+        'status' => 'active',
+    ]);
+
+    $this->actingAs($agencyAdmin)
+        ->get('/agency/dashboard')
+        ->assertRedirect(route('verification.notice', absolute: false));
+
+    $this->actingAs($agencyAdmin)
+        ->getJson('/api/agency/dashboard')
+        ->assertForbidden();
+
+    $this->actingAs($superAdmin)
+        ->get('/admin/dashboard')
+        ->assertRedirect(route('verification.notice', absolute: false));
+
+    $this->actingAs($superAdmin)
+        ->getJson('/api/admin/dashboard')
         ->assertForbidden();
 });
 
@@ -221,6 +274,99 @@ test('portal login endpoints redirect by role and reject wrong portal users', fu
     ])->assertSessionHasErrors('email');
 
     $this->assertGuest();
+});
+
+test('login failures successes and logout are recorded as security events once', function () {
+    SecurityEvent::query()->delete();
+
+    $agency = portalAuditAgency('security-event-login');
+    $agencyAdmin = portalAuditUser('agency_admin', $agency);
+
+    $this->post('/agency/login', [
+        'agency' => $agency->slug,
+        'email' => $agencyAdmin->email,
+        'password' => 'wrong-password',
+    ])->assertSessionHasErrors('email');
+
+    expect(SecurityEvent::query()->where('event_type', 'login.failed')->count())->toBe(1);
+
+    $this->post('/agency/login', [
+        'agency' => $agency->slug,
+        'email' => $agencyAdmin->email,
+        'password' => 'password',
+    ])->assertRedirect('/agency/dashboard');
+
+    expect(SecurityEvent::query()->where('event_type', 'login.success')->count())->toBe(1);
+
+    $loginEvent = SecurityEvent::query()->where('event_type', 'login.success')->firstOrFail();
+    expect($loginEvent->metadata)
+        ->toHaveKey('email', $agencyAdmin->email)
+        ->not->toHaveKey('password')
+        ->not->toHaveKey('code');
+
+    $this->post('/logout')->assertRedirect('/');
+
+    expect(SecurityEvent::query()->where('event_type', 'logout')->count())->toBe(1);
+});
+
+test('super admin session revocation is scoped to admin sessions and safe storage', function () {
+    config(['session.driver' => 'database']);
+    SecurityEvent::query()->delete();
+
+    $agency = portalAuditAgency('admin-session-revoke-agency');
+    $superAdmin = portalAuditUser('super_admin');
+    $agencyAdmin = portalAuditUser('agency_admin', $agency);
+    $publicUser = User::factory()->create([
+        'role' => 'public_user',
+        'status' => 'active',
+    ]);
+
+    DB::table('sessions')->insert([
+        [
+            'id' => 'target-admin-session',
+            'user_id' => $agencyAdmin->id,
+            'ip_address' => '127.0.0.1',
+            'user_agent' => 'Mozilla/5.0 Chrome Windows',
+            'payload' => '',
+            'last_activity' => now()->timestamp,
+        ],
+        [
+            'id' => 'public-session',
+            'user_id' => $publicUser->id,
+            'ip_address' => '127.0.0.1',
+            'user_agent' => 'Mozilla/5.0 Firefox Windows',
+            'payload' => '',
+            'last_activity' => now()->timestamp,
+        ],
+    ]);
+
+    $this->actingAs($superAdmin)
+        ->deleteJson('/api/admin/security/sessions/public-session')
+        ->assertNotFound();
+
+    expect(DB::table('sessions')->where('id', 'public-session')->exists())->toBeTrue();
+
+    $this->actingAs($superAdmin)
+        ->deleteJson('/api/admin/security/sessions/missing-session')
+        ->assertNotFound();
+
+    $this->actingAs($superAdmin)
+        ->deleteJson('/api/admin/security/sessions/target-admin-session')
+        ->assertOk()
+        ->assertJsonPath('data.id', 'target-admin-session');
+
+    expect(DB::table('sessions')->where('id', 'target-admin-session')->exists())->toBeFalse()
+        ->and(SecurityEvent::query()->where('event_type', 'session.revoked')->count())->toBe(1);
+});
+
+test('super admin session revocation rejects non database session drivers', function () {
+    config(['session.driver' => 'array']);
+
+    $superAdmin = portalAuditUser('super_admin');
+
+    $this->actingAs($superAdmin)
+        ->deleteJson('/api/admin/security/sessions/any-session')
+        ->assertStatus(409);
 });
 
 test('agency login renders active agencies from the database', function () {

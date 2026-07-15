@@ -9,6 +9,7 @@ use App\Models\SecurityEvent;
 use App\Models\User;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
+use App\Support\SecurityEventLogger;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -135,8 +136,40 @@ class AdminSecurityController extends Controller
 
     public function revokeSession(Request $request, string $sessionId): JsonResponse
     {
+        if (config('session.driver') !== 'database') {
+            return ApiResponse::error('Session revocation requires the database session driver.', [], 409);
+        }
+
+        if (! Schema::hasTable(config('session.table', 'sessions'))) {
+            return ApiResponse::error('Session storage is not available.', [], 409);
+        }
+
+        if ($request->hasSession() && $sessionId === $request->session()->getId()) {
+            return ApiResponse::error('The current session cannot be revoked from this panel.', [
+                'session' => ['Sign out to end your current session.'],
+            ], 422);
+        }
+
+        $session = DB::table(config('session.table', 'sessions'))
+            ->where('id', $sessionId)
+            ->first();
+
+        if (! $session || ! $session->user_id) {
+            return ApiResponse::error('Admin session was not found.', [], 404);
+        }
+
+        $targetUser = User::query()
+            ->with('roles')
+            ->whereKey($session->user_id)
+            ->first();
+
+        if (! $targetUser || (! $targetUser->isSuperAdmin() && ! $targetUser->isAgencyAdmin())) {
+            return ApiResponse::error('Admin session was not found.', [], 404);
+        }
+
         $deleted = DB::table(config('session.table', 'sessions'))
             ->where('id', $sessionId)
+            ->where('user_id', $targetUser->id)
             ->delete();
 
         if (! $deleted) {
@@ -145,6 +178,12 @@ class AdminSecurityController extends Controller
 
         AuditLogger::record($request, 'admin_session.revoked', null, null, [
             'session_id' => $sessionId,
+        ]);
+
+        SecurityEventLogger::record($request, 'session.revoked', $targetUser, 'medium', [
+            'session_id' => $sessionId,
+            'revoked_by' => $request->user()?->id,
+            'revocation_scope' => 'admin_security_center',
         ]);
 
         return ApiResponse::success('Admin session revoked.', [

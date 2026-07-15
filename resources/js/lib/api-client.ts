@@ -92,14 +92,32 @@ function redirectForUnauthorized(url: string) {
         return;
     }
 
+    const loginPath = url.startsWith('/api/admin')
+        ? '/admin/login'
+        : url.startsWith('/api/agency')
+          ? '/agency/login'
+          : null;
+
+    if (!loginPath || window.location.pathname === loginPath) {
+        return;
+    }
+
+    const redirectKey = `rikms.auth.redirected.${loginPath}`;
+
+    if (window.sessionStorage.getItem(redirectKey) === 'true') {
+        return;
+    }
+
+    window.sessionStorage.setItem(redirectKey, 'true');
+
     if (url.startsWith('/api/admin')) {
-        window.location.assign('/admin/login');
+        window.location.assign(loginPath);
 
         return;
     }
 
     if (url.startsWith('/api/agency')) {
-        window.location.assign('/agency/login');
+        window.location.assign(loginPath);
     }
 }
 
@@ -126,6 +144,11 @@ export async function fetchApi<TData, TMeta = Record<string, unknown>>(
         ...init,
         headers,
     });
+
+    if (response.ok && typeof window !== 'undefined') {
+        window.sessionStorage.removeItem('rikms.auth.redirected./admin/login');
+        window.sessionStorage.removeItem('rikms.auth.redirected./agency/login');
+    }
 
     const payload = (await parsePayload(response)) as Partial<
         ApiEnvelope<TData> & ApiErrorPayload

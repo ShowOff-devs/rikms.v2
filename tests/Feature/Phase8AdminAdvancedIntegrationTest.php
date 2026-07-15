@@ -460,6 +460,8 @@ test('agency management create update status and archive write relational agenci
 });
 
 test('system activity and security session APIs read relational data', function () {
+    config(['session.driver' => 'database']);
+
     $superAdmin = createPhase8User('super_admin');
     $agency = createPhase8Agency('activity-agency');
     $agencyAdmin = createPhase8User('agency_admin', $agency);
