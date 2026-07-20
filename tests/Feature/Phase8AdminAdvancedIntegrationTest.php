@@ -84,6 +84,66 @@ function createPhase8Research(Agency $agency, User $uploader): Research
     ]);
 }
 
+test('queue health is super admin only and exposes safe backlog summaries', function () {
+    config(['queue.default' => 'database']);
+
+    $agency = createPhase8Agency('queue-health-agency');
+    $agencyAdmin = createPhase8User('agency_admin', $agency);
+    $superAdmin = createPhase8User('super_admin');
+    $secretPayload = 'requester@example.test RAW_PRIVATE_JOB_PAYLOAD';
+
+    DB::table('jobs')->insert([
+        'queue' => 'default',
+        'payload' => $secretPayload,
+        'attempts' => 0,
+        'reserved_at' => null,
+        'available_at' => now()->subMinutes(120)->timestamp,
+        'created_at' => now()->subMinutes(120)->timestamp,
+    ]);
+    DB::table('failed_jobs')->insert([
+        'uuid' => (string) str()->uuid(),
+        'connection' => 'database',
+        'queue' => 'default',
+        'payload' => $secretPayload,
+        'exception' => 'SMTP password and private exception trace',
+        'failed_at' => now(),
+    ]);
+
+    $this->getJson('/api/admin/security/queue-health')->assertUnauthorized();
+
+    $this->actingAs($agencyAdmin)
+        ->getJson('/api/admin/security/queue-health')
+        ->assertForbidden();
+
+    $response = $this->actingAs($superAdmin)
+        ->getJson('/api/admin/security/queue-health')
+        ->assertOk()
+        ->assertJsonPath('data.queue_connection', 'database')
+        ->assertJsonPath('data.pending_jobs', 1)
+        ->assertJsonPath('data.failed_jobs', 1)
+        ->assertJsonPath('data.status', 'critical')
+        ->assertJsonStructure([
+            'data' => [
+                'queue_connection',
+                'pending_jobs',
+                'failed_jobs',
+                'oldest_pending_job_age_minutes',
+                'status',
+            ],
+        ]);
+
+    expect($response->json('data.oldest_pending_job_age_minutes'))->toBeGreaterThanOrEqual(119)
+        ->and($response->getContent())->not->toContain($secretPayload)
+        ->and($response->getContent())->not->toContain('SMTP password')
+        ->and(array_keys($response->json('data')))->toBe([
+            'queue_connection',
+            'pending_jobs',
+            'failed_jobs',
+            'oldest_pending_job_age_minutes',
+            'status',
+        ]);
+});
+
 test('admin access monitoring APIs are protected and filtered from relational access requests', function () {
     $agency = createPhase8Agency();
     $agencyAdmin = createPhase8User('agency_admin', $agency);

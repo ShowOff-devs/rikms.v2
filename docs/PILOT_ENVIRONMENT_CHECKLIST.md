@@ -31,6 +31,40 @@
 - Failed jobs monitored.
 - Retry/backoff policy reviewed for AI/PDF jobs.
 
+Local development worker:
+
+```powershell
+php artisan queue:work --tries=3
+```
+
+Ubuntu pilot systemd service (`/etc/systemd/system/rikms-queue.service`):
+
+```ini
+[Unit]
+Description=RIKMS Laravel Queue Worker
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+Restart=always
+RestartSec=5
+WorkingDirectory=/var/www/rikms
+ExecStart=/usr/bin/php artisan queue:work database --queue=default --tries=3 --timeout=120
+
+[Install]
+WantedBy=multi-user.target
+```
+
+After adjusting the path and service user for the pilot host:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now rikms-queue
+sudo systemctl status rikms-queue
+sudo systemctl restart rikms-queue
+```
+
 ## Storage
 
 - Private upload disk configured and writable.

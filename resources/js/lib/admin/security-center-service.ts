@@ -4,6 +4,7 @@ import type {
     AdminSession,
     GeneratedSecurityReport,
     LoginActivity,
+    QueueHealth,
     SecurityAlert,
     SecurityEvent,
     SecurityReportExportOptions,
@@ -41,6 +42,14 @@ type ApiSecuritySummary = {
     locked_accounts: number;
     active_admin_sessions: number;
     security_alerts: number;
+};
+
+type ApiQueueHealth = {
+    queue_connection: string;
+    pending_jobs: number;
+    failed_jobs: number;
+    oldest_pending_job_age_minutes: number | null;
+    status: QueueHealth['status'];
 };
 
 let cachedEvents: ApiSecurityEvent[] = [];
@@ -161,6 +170,21 @@ export async function getSecuritySummary(): Promise<SecuritySummary> {
         lockedAccounts: summary.locked_accounts,
         activeAdminSessions: summary.active_admin_sessions,
         securityAlerts: summary.security_alerts,
+    };
+}
+
+export async function getQueueHealth(): Promise<QueueHealth> {
+    const response = await fetchApi<ApiQueueHealth>(
+        '/api/admin/security/queue-health',
+    );
+
+    return {
+        queueConnection: response.data.queue_connection,
+        pendingJobs: response.data.pending_jobs,
+        failedJobs: response.data.failed_jobs,
+        oldestPendingJobAgeMinutes:
+            response.data.oldest_pending_job_age_minutes,
+        status: response.data.status,
     };
 }
 

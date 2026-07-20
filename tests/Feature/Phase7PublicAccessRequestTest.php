@@ -102,6 +102,17 @@ test('/browse redirects to the implemented research browse page', function () {
     $this->get('/browse')->assertRedirect('/browse-research');
 });
 
+test('access request decision UI copy describes queueing rather than delivery', function () {
+    $source = file_get_contents(resource_path('js/lib/access-requests/access-request-service.ts'));
+
+    expect($source)
+        ->toContain('Access request approved. The requester’s email notification has been queued for delivery.')
+        ->toContain('Access request denied. The requester’s email notification has been queued for delivery.')
+        ->toContain('Access request saved, but no email was queued because the requester does not have a valid email address.')
+        ->toContain('Access request saved, but the email notification could not be queued. Please check the mail and queue configuration.')
+        ->not->toContain('The requester will be notified by email.');
+});
+
 test('guest can submit a public access request for restricted research', function () {
     $agency = createPhase7Agency('phase-7-public-agency');
     $agencyAdmin = createPhase7User('agency_admin', $agency);

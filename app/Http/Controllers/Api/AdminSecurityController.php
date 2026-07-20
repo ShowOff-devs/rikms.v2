@@ -42,6 +42,30 @@ class AdminSecurityController extends Controller
         ]);
     }
 
+    public function queueHealth(Request $request): JsonResponse
+    {
+        $pendingJobs = Schema::hasTable('jobs') ? DB::table('jobs')->count() : 0;
+        $failedJobs = Schema::hasTable('failed_jobs') ? DB::table('failed_jobs')->count() : 0;
+        $oldestCreatedAt = $pendingJobs > 0 ? DB::table('jobs')->min('created_at') : null;
+        $oldestPendingAgeMinutes = is_numeric($oldestCreatedAt)
+            ? max(0, (int) floor((now()->timestamp - (int) $oldestCreatedAt) / 60))
+            : null;
+
+        $status = match (true) {
+            $failedJobs > 0 || ($oldestPendingAgeMinutes !== null && $oldestPendingAgeMinutes >= 60) => 'critical',
+            $oldestPendingAgeMinutes !== null && $oldestPendingAgeMinutes >= 5 => 'warning',
+            default => 'healthy',
+        };
+
+        return ApiResponse::success('Queue health retrieved.', [
+            'queue_connection' => config('queue.default'),
+            'pending_jobs' => $pendingJobs,
+            'failed_jobs' => $failedJobs,
+            'oldest_pending_job_age_minutes' => $oldestPendingAgeMinutes,
+            'status' => $status,
+        ]);
+    }
+
     public function events(Request $request): JsonResponse
     {
         $query = SecurityEvent::query()
