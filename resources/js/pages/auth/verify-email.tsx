@@ -10,13 +10,16 @@ import { send } from '@/routes/verification';
 export default function VerifyEmail({ status }: { status?: string }) {
     return (
         <AuthLayout
-            title="Verify email"
-            description="Please verify your email address by clicking on the link we just emailed to you."
+            title="Verify your email address"
+            description="A verification link has been sent to your email address. Please verify your email before continuing."
         >
             <Head title="Email verification" />
 
             {status === 'verification-link-sent' && (
-                <div className="mb-4 text-center text-sm font-medium text-green-600">
+                <div
+                    role="status"
+                    className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm font-medium text-emerald-800"
+                >
                     A new verification link has been sent to the email address
                     you provided during registration.
                 </div>
@@ -25,9 +28,9 @@ export default function VerifyEmail({ status }: { status?: string }) {
             <Form {...send.form()} className="space-y-6 text-center">
                 {({ processing }) => (
                     <>
-                        <Button disabled={processing} variant="secondary">
+                        <Button disabled={processing} className="w-full">
                             {processing && <Spinner />}
-                            Resend verification email
+                            Resend Verification Email
                         </Button>
 
                         <TextLink

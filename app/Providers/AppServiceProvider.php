@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use RuntimeException;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -34,6 +35,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        $this->enforceProductionSecurityConfiguration();
         $this->configureAuthenticationEventLogging();
     }
 
@@ -59,6 +61,43 @@ class AppServiceProvider extends ServiceProvider
                 ->uncompromised()
             : null,
         );
+    }
+
+    protected function enforceProductionSecurityConfiguration(): void
+    {
+        if (! app()->isProduction()) {
+            return;
+        }
+
+        $violations = [];
+
+        if (config('app.debug')) {
+            $violations[] = 'APP_DEBUG must be false';
+        }
+
+        if (! config('session.encrypt')) {
+            $violations[] = 'SESSION_ENCRYPT must be true';
+        }
+
+        if (config('session.secure') !== true) {
+            $violations[] = 'SESSION_SECURE_COOKIE must be true';
+        }
+
+        if (config('rikms.public_access_requests.enabled') && ! config('rikms.public_access_requests.captcha.enabled')) {
+            $violations[] = 'PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED must be true while public access requests are enabled';
+        }
+
+        if (config('rikms.public_access_requests.enabled') && config('rikms.public_access_requests.captcha.enabled') && ! config('rikms.public_access_requests.captcha.secret_key')) {
+            $violations[] = 'CAPTCHA_SECRET_KEY must be set while public access request CAPTCHA is enabled';
+        }
+
+        if (config('rikms.dev_seed_accounts.allow_outside_safe_environments')) {
+            $violations[] = 'RIKMS_ALLOW_DEV_SEED_ACCOUNTS must be false';
+        }
+
+        if ($violations !== []) {
+            throw new RuntimeException('Unsafe production configuration: '.implode('; ', $violations).'.');
+        }
     }
 
     protected function configureRateLimiters(): void

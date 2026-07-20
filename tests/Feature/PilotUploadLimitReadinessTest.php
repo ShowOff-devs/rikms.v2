@@ -210,6 +210,29 @@ test('invalid PDFs are rejected without records or AI jobs', function (UploadedF
     'corrupt PDF' => fn () => UploadedFile::fake()->createWithContent('corrupt.pdf', "%PDF-1.4\nnot a complete pdf"),
 ]);
 
+test('PDF with a known malware test signature is rejected and quarantine is cleared', function () {
+    Bus::fake();
+    Storage::fake('local');
+    pilotUploadSet(PlatformSettingsService::AI_PROCESSING_ENABLED, true);
+    [$agency, $user, $research] = pilotUploadContext('pilot-upload-malware');
+    $content = "%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n"
+        .'X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'
+        .str_repeat("\n", 2048)
+        ."\ntrailer\n<<>>\n%%EOF\n";
+
+    $this->actingAs($user)
+        ->postJson("/api/agency/research/{$research->id}/files", [
+            'file' => UploadedFile::fake()->createWithContent('infected.pdf', $content),
+        ])
+        ->assertUnprocessable()
+        ->assertJsonPath('message', 'The uploaded PDF did not pass security screening.')
+        ->assertJsonValidationErrors(['file']);
+
+    expect(ResearchFile::query()->where('agency_id', $agency->id)->count())->toBe(0)
+        ->and(Storage::disk('local')->allFiles('research/quarantine'))->toBe([]);
+    pilotUploadAssertNoAiJobs();
+});
+
 test('filename with spaces and unicode is stored exactly', function () {
     Bus::fake();
     Storage::fake('local');

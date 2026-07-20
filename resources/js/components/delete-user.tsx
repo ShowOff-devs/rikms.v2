@@ -1,9 +1,10 @@
 import { Form } from '@inertiajs/react';
+import { TriangleAlert } from 'lucide-react';
 import { useRef } from 'react';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
-import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
+import SettingsSection from '@/components/settings/settings-section';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -20,13 +21,13 @@ export default function DeleteUser() {
     const passwordInput = useRef<HTMLInputElement>(null);
 
     return (
-        <div className="space-y-6">
-            <Heading
-                variant="small"
-                title="Delete account"
-                description="Your access will be disabled and your account will be archived. Historical system records may be retained for security, audit, and records-management purposes."
-            />
-            <div className="space-y-4 rounded-lg border border-red-100 bg-red-50 p-4 dark:border-red-200/10 dark:bg-red-700/10">
+        <SettingsSection
+            icon={<TriangleAlert className="size-5" />}
+            title="Danger Zone"
+            description="Delete account"
+            className="border-red-200 dark:border-red-900"
+        >
+            <div className="space-y-4 rounded-xl border border-red-100 bg-red-50/70 p-4 dark:border-red-900 dark:bg-red-950/30">
                 <div className="relative space-y-0.5 text-red-600 dark:text-red-100">
                     <p className="font-medium">Warning</p>
                     <p className="text-sm">
@@ -41,18 +42,16 @@ export default function DeleteUser() {
                             variant="destructive"
                             data-test="delete-user-button"
                         >
-                            Delete account
+                            Delete Account
                         </Button>
                     </DialogTrigger>
                     <DialogContent>
-                        <DialogTitle>
-                            Are you sure you want to delete your account?
-                        </DialogTitle>
+                        <DialogTitle>Confirm Account Deletion</DialogTitle>
                         <DialogDescription>
-                            Your access will be disabled and your account will
-                            be archived. Historical system records may be
-                            retained for security, audit, and records-management
-                            purposes. Please enter your password to confirm.
+                            This action will disable your account access.
+                            Historical records may be retained for audit and
+                            records-management purposes. Please enter your
+                            password to confirm.
                         </DialogDescription>
 
                         <Form
@@ -106,7 +105,7 @@ export default function DeleteUser() {
                                                 type="submit"
                                                 data-test="confirm-delete-user-button"
                                             >
-                                                Delete account
+                                                Delete Account
                                             </button>
                                         </Button>
                                     </DialogFooter>
@@ -116,6 +115,6 @@ export default function DeleteUser() {
                     </DialogContent>
                 </Dialog>
             </div>
-        </div>
+        </SettingsSection>
     );
 }

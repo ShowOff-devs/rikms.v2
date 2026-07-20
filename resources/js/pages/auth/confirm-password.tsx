@@ -11,7 +11,7 @@ export default function ConfirmPassword() {
     return (
         <AuthLayout
             title="Confirm your password"
-            description="This is a secure area of the application. Please confirm your password before continuing."
+            description="For your security, please confirm your password before continuing."
         >
             <Head title="Confirm password" />
 
@@ -38,7 +38,7 @@ export default function ConfirmPassword() {
                                 data-test="confirm-password-button"
                             >
                                 {processing && <Spinner />}
-                                Confirm password
+                                Confirm Password
                             </Button>
                         </div>
                     </div>

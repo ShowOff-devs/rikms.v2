@@ -1,9 +1,10 @@
 import { Transition } from '@headlessui/react';
 import { Form, Head, Link, usePage } from '@inertiajs/react';
+import { CheckCircle2, UserRound } from 'lucide-react';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import DeleteUser from '@/components/delete-user';
-import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
+import SettingsSection from '@/components/settings/settings-section';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -36,13 +37,11 @@ export default function Profile({
             <h1 className="sr-only">Profile settings</h1>
 
             <SettingsLayout>
-                <div className="space-y-6">
-                    <Heading
-                        variant="small"
-                        title="Profile information"
-                        description="Update your name and email address"
-                    />
-
+                <SettingsSection
+                    icon={<UserRound className="size-5" />}
+                    title="Profile information"
+                    description="Update the name and email address associated with your RIKMS account."
+                >
                     <Form
                         {...ProfileController.update.form()}
                         options={{
@@ -133,15 +132,19 @@ export default function Profile({
                                         leave="transition ease-in-out"
                                         leaveTo="opacity-0"
                                     >
-                                        <p className="text-sm text-neutral-600">
-                                            Saved
+                                        <p
+                                            role="status"
+                                            className="flex items-center gap-1.5 text-sm font-medium text-emerald-700"
+                                        >
+                                            <CheckCircle2 className="size-4" />{' '}
+                                            Saved successfully
                                         </p>
                                     </Transition>
                                 </div>
                             </>
                         )}
                     </Form>
-                </div>
+                </SettingsSection>
 
                 <DeleteUser />
             </SettingsLayout>

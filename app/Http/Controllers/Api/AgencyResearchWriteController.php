@@ -18,6 +18,7 @@ use App\Models\Research;
 use App\Models\ResearchFile;
 use App\Services\AiPipelineResultWriter;
 use App\Services\PlatformSettingsService;
+use App\Services\UploadSecurityScanner;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use App\Support\PublicMetadata;
@@ -34,7 +35,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AgencyResearchWriteController extends Controller
 {
-    public function __construct(private readonly PlatformSettingsService $settings) {}
+    public function __construct(
+        private readonly PlatformSettingsService $settings,
+        private readonly UploadSecurityScanner $uploadSecurityScanner,
+    ) {}
 
     public function store(StoreAgencyResearchRequest $request): JsonResponse
     {
@@ -247,12 +251,50 @@ class AgencyResearchWriteController extends Controller
         }
 
         $storedName = (string) Str::uuid().'.'.$uploadedFile->getClientOriginalExtension();
-        // TODO Phase 9: Move production uploads through quarantine/scanning storage before final private storage.
-        $path = $uploadedFile->storeAs('research/'.$research->id, $storedName, 'local');
+        $quarantinePath = $uploadedFile->storeAs('research/quarantine', $storedName, 'local');
+        $scan = $this->uploadSecurityScanner->scanStoredFile('local', $quarantinePath);
+
+        if (! $scan['clean']) {
+            Storage::disk('local')->delete($quarantinePath);
+
+            AuditLogger::record($request, 'research_file.security_rejected', null, null, null, [
+                'research_id' => $research->id,
+                'agency_id' => $research->agency_id,
+                'original_name' => $uploadedFile->getClientOriginalName(),
+                'size_bytes' => $uploadedFile->getSize(),
+                'checksum' => $checksum,
+                'security_scan' => $scan,
+            ]);
+
+            return ApiResponse::error(
+                'The uploaded PDF did not pass security screening.',
+                ['file' => ['The uploaded PDF did not pass security screening.']],
+                422,
+            );
+        }
+
+        $path = 'research/'.$research->id.'/'.$storedName;
+
+        if (! Storage::disk('local')->move($quarantinePath, $path)) {
+            Storage::disk('local')->delete($quarantinePath);
+
+            AuditLogger::record($request, 'research_file.storage_failed', null, null, null, [
+                'research_id' => $research->id,
+                'agency_id' => $research->agency_id,
+                'original_name' => $uploadedFile->getClientOriginalName(),
+                'checksum' => $checksum,
+            ]);
+
+            return ApiResponse::error(
+                'The uploaded PDF could not be stored safely. Please try again.',
+                ['file' => ['The uploaded PDF could not be stored safely. Please try again.']],
+                500,
+            );
+        }
 
         $aiEnabled = $this->settings->aiProcessingEnabled();
 
-        $researchFile = DB::transaction(function () use ($request, $research, $uploadedFile, $checksum, $storedName, $path, $aiEnabled): ResearchFile {
+        $researchFile = DB::transaction(function () use ($request, $research, $uploadedFile, $checksum, $storedName, $path, $scan, $aiEnabled): ResearchFile {
             $researchFile = ResearchFile::create([
                 'research_id' => $research->id,
                 'agency_id' => $research->agency_id,
@@ -270,6 +312,12 @@ class AgencyResearchWriteController extends Controller
                 'access_level' => $request->validated('access_level', 'restricted'),
                 'status' => 'active',
                 'metadata' => [
+                    'security_scan' => [
+                        'status' => 'passed',
+                        'engine' => $scan['engine'],
+                        'signatures' => $scan['signatures'],
+                        'scanned_at' => $scan['scanned_at'],
+                    ],
                     'ai_processing' => $aiEnabled
                         ? [
                             'pdf_parsing' => ['status' => 'queued'],
