@@ -6,6 +6,7 @@ use App\Models\Agency;
 use App\Models\AuditLog;
 use App\Models\Notification;
 use App\Models\Research;
+use App\Models\ResearchFile;
 use App\Models\Role;
 use App\Models\User;
 use App\Notifications\AccessRequestApprovedNotification;
@@ -19,6 +20,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification as NotificationFacade;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Storage;
 
 function createPhase7Role(string $slug): Role
 {
@@ -509,15 +511,152 @@ test('agency access approval queues requester email notification after status up
 
     NotificationFacade::assertSentOnDemand(
         AccessRequestApprovedNotification::class,
-        function (AccessRequestApprovedNotification $notification, array $channels, object $notifiable) use ($research): bool {
+        function (AccessRequestApprovedNotification $notification, array $channels, object $notifiable) use ($research, $accessRequest): bool {
+            $mail = $notification->toMail($notifiable);
+            $approvedUrl = (string) ($notification->data['access_url'] ?? '');
+
             return $channels === ['mail']
                 && $notifiable->routeNotificationFor('mail') === 'approval@example.test'
                 && $notification instanceof ShouldQueue
                 && $notification->data['research_title'] === $research->title
                 && $notification->data['status'] === 'Approved'
-                && $notification->data['request_reference'] !== null;
+                && $notification->data['request_reference'] !== null
+                && str_contains($approvedUrl, '/approved-access/')
+                && ! str_contains($approvedUrl, '/browse-research/'.$research->slug)
+                && $accessRequest->fresh()->access_token_hash === hash('sha256', basename(parse_url($approvedUrl, PHP_URL_PATH)))
+                && $mail->attachments === []
+                && $mail->rawAttachments === [];
         },
     );
+});
+
+test('approved access token opens landing page and downloads only its restricted research pdf', function () {
+    Storage::fake('local');
+
+    $agency = createPhase7Agency('phase-7-token-download-agency');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+    Storage::disk('local')->put("research/{$research->id}/approved.pdf", 'Approved PDF contents');
+    $file = ResearchFile::create([
+        'research_id' => $research->id,
+        'agency_id' => $agency->id,
+        'uploaded_by' => $agencyAdmin->id,
+        'original_name' => 'approved-research.pdf',
+        'stored_name' => 'approved.pdf',
+        'disk' => 'local',
+        'path' => "research/{$research->id}/approved.pdf",
+        'mime_type' => 'application/pdf',
+        'extension' => 'pdf',
+        'size_bytes' => 21,
+        'file_type' => 'research_document',
+        'visibility' => 'private',
+        'access_level' => 'restricted',
+        'status' => 'active',
+        'uploaded_at' => now(),
+    ]);
+    $token = str()->random(64);
+    $accessRequest = AccessRequest::create([
+        'research_id' => $research->id,
+        'agency_id' => $agency->id,
+        'requester_name' => 'Approved Token Researcher',
+        'requester_email' => 'approved-token@example.test',
+        'purpose' => 'Approved token download test',
+        'status' => 'approved',
+        'requested_at' => now(),
+        'access_token_hash' => hash('sha256', $token),
+        'access_token_generated_at' => now(),
+        'access_expires_at' => now()->addDay(),
+    ]);
+
+    $this->get("/approved-access/{$token}")
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('approved-access')
+            ->where('state', 'valid')
+            ->where('researchTitle', $research->title)
+            ->where('downloadUrl', route('approved-access.download', ['token' => $token])));
+
+    $this->get("/api/public/research/{$research->slug}/download")->assertForbidden();
+
+    $this->get("/approved-access/{$token}/download")
+        ->assertOk()
+        ->assertDownload('approved-research.pdf');
+
+    expect($accessRequest->fresh()->access_token_last_used_at)->not->toBeNull();
+    $audit = AuditLog::query()->where('event', 'access_request.approved_file_downloaded')->firstOrFail();
+    expect($audit->metadata['file_id'])->toBe($file->id)
+        ->and($audit->metadata['research_id'])->toBe($research->id)
+        ->and(json_encode($audit->toArray()))->not->toContain($token);
+});
+
+test('approved access tokens fail closed for invalid request states', function (string $state, callable $mutate) {
+    Storage::fake('local');
+
+    $agency = createPhase7Agency('phase-7-token-state-'.str()->random(6));
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+    Storage::disk('local')->put("research/{$research->id}/protected.pdf", 'Protected PDF');
+    $file = ResearchFile::create([
+        'research_id' => $research->id,
+        'agency_id' => $agency->id,
+        'uploaded_by' => $agencyAdmin->id,
+        'original_name' => 'protected.pdf',
+        'stored_name' => 'protected.pdf',
+        'disk' => 'local',
+        'path' => "research/{$research->id}/protected.pdf",
+        'mime_type' => 'application/pdf',
+        'extension' => 'pdf',
+        'size_bytes' => 13,
+        'file_type' => 'research_document',
+        'visibility' => 'private',
+        'access_level' => 'restricted',
+        'status' => 'active',
+        'uploaded_at' => now(),
+    ]);
+    $token = str()->random(64);
+    $accessRequest = AccessRequest::create([
+        'research_id' => $research->id,
+        'agency_id' => $agency->id,
+        'requester_name' => 'Invalid State Researcher',
+        'requester_email' => 'invalid-state@example.test',
+        'purpose' => 'Invalid token state test',
+        'status' => 'approved',
+        'requested_at' => now(),
+        'access_token_hash' => hash('sha256', $token),
+        'access_token_generated_at' => now(),
+        'access_expires_at' => now()->addDay(),
+    ]);
+
+    $mutate($accessRequest, $research, $file);
+
+    $this->get("/approved-access/{$token}")->assertForbidden();
+    $this->get("/approved-access/{$token}/download")->assertForbidden();
+
+    $audit = AuditLog::query()->where('event', 'access_request.approved_access_denied')->latest('created_at')->firstOrFail();
+    expect($audit->metadata['result'])->toBe($state)
+        ->and(json_encode($audit->toArray()))->not->toContain($token);
+})->with([
+    'pending request' => ['invalid', fn (AccessRequest $request) => $request->update(['status' => 'pending'])],
+    'denied request' => ['invalid', fn (AccessRequest $request) => $request->update(['status' => 'denied'])],
+    'expired approval' => ['expired', fn (AccessRequest $request) => $request->update(['access_expires_at' => now()->subMinute()])],
+    'revoked approval' => ['revoked', fn (AccessRequest $request) => $request->update(['access_revoked_at' => now()])],
+    'archived access request' => ['revoked', fn (AccessRequest $request) => $request->update(['archived_at' => now()])],
+    'invalid requester email' => ['invalid', fn (AccessRequest $request) => $request->update(['requester_email' => 'invalid'])],
+    'archived file' => ['invalid', fn (AccessRequest $request, Research $research, ResearchFile $file) => $file->update(['status' => 'archived', 'archived_at' => now()])],
+    'archived research' => ['invalid', fn (AccessRequest $request, Research $research) => $research->update(['status' => 'archived', 'archived_at' => now()])],
+    'superseded research' => ['invalid', function (AccessRequest $request, Research $research): void {
+        $replacement = $research->replicate(['slug']);
+        $replacement->slug = $research->slug.'-replacement';
+        $replacement->save();
+        $research->update(['status' => 'superseded', 'superseded_by_id' => $replacement->id]);
+    }],
+]);
+
+test('malformed approved access token returns a safe error without exposing records', function () {
+    $this->get('/approved-access/not-a-valid-token')->assertForbidden();
+    $this->get('/approved-access/not-a-valid-token/download')
+        ->assertForbidden()
+        ->assertDontSee('research');
 });
 
 test('agency access denial queues requester email notification with public reason only', function () {
@@ -623,10 +762,14 @@ test('duplicate finalized access decision does not send a duplicate requester em
         ->postJson("/api/agency/access-requests/{$accessRequest->id}/approve")
         ->assertOk();
 
+    $tokenHash = $accessRequest->fresh()->access_token_hash;
+
     $this->actingAs($agencyAdmin)
         ->postJson("/api/agency/access-requests/{$accessRequest->id}/approve")
         ->assertStatus(409);
 
+    expect($tokenHash)->not->toBeNull()
+        ->and($accessRequest->fresh()->access_token_hash)->toBe($tokenHash);
     NotificationFacade::assertSentOnDemandTimes(AccessRequestApprovedNotification::class, 1);
 });
 
@@ -769,7 +912,7 @@ test('decision rollback does not dispatch requester email notification', functio
         AccessRequestEmailNotificationService::class,
         fn () => new class extends AccessRequestEmailNotificationService
         {
-            public function queueDecisionNotificationAfterCommit(AccessRequest $accessRequest, string $status): AccessRequestEmailNotificationResult
+            public function queueDecisionNotificationAfterCommit(AccessRequest $accessRequest, string $status, ?string $accessToken = null): AccessRequestEmailNotificationResult
             {
                 throw new RuntimeException('Forced rollback after decision update');
             }

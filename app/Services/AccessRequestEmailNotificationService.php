@@ -18,6 +18,7 @@ class AccessRequestEmailNotificationService
     public function queueDecisionNotificationAfterCommit(
         AccessRequest $accessRequest,
         string $status,
+        ?string $accessToken = null,
     ): AccessRequestEmailNotificationResult {
         $accessRequest->loadMissing(['research.agency', 'requester', 'agency']);
 
@@ -34,7 +35,7 @@ class AccessRequestEmailNotificationService
         }
 
         $result = new AccessRequestEmailNotificationResult('queued');
-        $payload = $this->payload($accessRequest, $status, $email);
+        $payload = $this->payload($accessRequest, $status, $email, $accessToken);
 
         DB::afterCommit(function () use ($email, $payload, $result, $status): void {
             try {
@@ -71,7 +72,7 @@ class AccessRequestEmailNotificationService
     /**
      * @return array<string, mixed>
      */
-    private function payload(AccessRequest $accessRequest, string $status, string $email): array
+    private function payload(AccessRequest $accessRequest, string $status, string $email, ?string $accessToken): array
     {
         $research = $accessRequest->research;
         $agency = $research?->agency ?? $accessRequest->agency;
@@ -91,7 +92,9 @@ class AccessRequestEmailNotificationService
             'processed_at' => $processedAt->timezone(config('app.timezone'))->format('F j, Y g:i A T'),
             'expires_at' => $accessExpiresAt?->timezone(config('app.timezone'))->format('F j, Y g:i A T'),
             'denial_reason' => $status === Statuses::ACCESS_REQUEST_DENIED ? $accessRequest->public_denial_reason : null,
-            'access_url' => route('research.show', $researchIdentifier),
+            'access_url' => $status === Statuses::ACCESS_REQUEST_APPROVED && $accessToken
+                ? route('approved-access.show', ['token' => $accessToken])
+                : null,
             'support_email' => config('mail.from.address'),
             'support_url' => route('contact'),
             'notification_type' => 'access_request.'.$status.'.email',

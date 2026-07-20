@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ApprovedAccessController;
 use App\Models\Agency;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -33,6 +34,12 @@ Route::get('/agencies/{slug}', fn (string $slug) => Inertia::render('agencies/sh
     'agencySlug' => $slug,
 ]))->name('agencies.show');
 Route::inertia('/contact', 'contact')->name('contact');
+Route::get('/approved-access/{token}', [ApprovedAccessController::class, 'show'])
+    ->middleware('throttle:30,1')
+    ->name('approved-access.show');
+Route::get('/approved-access/{token}/download', [ApprovedAccessController::class, 'download'])
+    ->middleware('throttle:10,1')
+    ->name('approved-access.download');
 Route::get('/privacy-policy', fn () => Inertia::render('public-policy', [
     'pageKey' => 'privacy-policy',
 ]))->name('privacy-policy');
