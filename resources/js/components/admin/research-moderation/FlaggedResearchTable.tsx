@@ -25,6 +25,7 @@ type FlaggedResearchTableProps = {
     onResolve: (record: FlaggedResearchRecord) => void;
     onPublish: (record: FlaggedResearchRecord) => void;
     onFlag: (record: FlaggedResearchRecord) => void;
+    onReturnToDraft: (record: FlaggedResearchRecord) => void;
     onArchive: (record: FlaggedResearchRecord) => void;
 };
 
@@ -147,6 +148,7 @@ export function FlaggedResearchTable({
     onResolve,
     onPublish,
     onFlag,
+    onReturnToDraft,
     onArchive,
 }: FlaggedResearchTableProps) {
     return (
@@ -267,6 +269,9 @@ export function FlaggedResearchTable({
                                                 onResolve={onResolve}
                                                 onPublish={onPublish}
                                                 onFlag={onFlag}
+                                                onReturnToDraft={
+                                                    onReturnToDraft
+                                                }
                                                 onArchive={onArchive}
                                             />
                                         </div>

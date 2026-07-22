@@ -1,6 +1,7 @@
 import { moderationIssueTypeLabels } from '@/data/research-moderation-options';
 import {
     approveAdminResearch,
+    approveAndPublishAdminResearch,
     archiveAdminResearch,
     getAdminModerationResearchRecords,
     publishAdminResearch,
@@ -181,15 +182,25 @@ export async function publishResearchRecord(
     return publishAdminResearch(id, payload);
 }
 
+export async function approveAndPublishResearchRecord(
+    id: string,
+    payload: ModerationActionPayload = {},
+): Promise<FlaggedResearchRecord> {
+    return approveAndPublishAdminResearch(id, payload);
+}
+
 export async function flagResearchForReview(
     id: string,
     payload: ModerationActionPayload = {},
 ): Promise<FlaggedResearchRecord> {
-    try {
-        return await rejectAdminResearch(id, payload);
-    } catch {
-        return returnAdminResearch(id, payload);
-    }
+    return rejectAdminResearch(id, payload);
+}
+
+export async function returnResearchToDraft(
+    id: string,
+    payload: ModerationActionPayload = {},
+): Promise<FlaggedResearchRecord> {
+    return returnAdminResearch(id, payload);
 }
 
 export async function archiveFlaggedResearch(

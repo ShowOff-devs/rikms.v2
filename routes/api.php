@@ -147,6 +147,7 @@ Route::prefix('admin')
         Route::get('/research/{research}/ai-results', [AiResultController::class, 'adminAiResults'])->name('research.ai-results');
         Route::post('/research/{research}/ai-results/{result}/review', [AiResultController::class, 'adminReview'])->name('research.ai-results.review');
         Route::post('/research/{research}/approve', [AdminResearchModerationController::class, 'approve'])->name('research.approve');
+        Route::post('/research/{research}/approve-and-publish', [AdminResearchModerationController::class, 'approveAndPublish'])->name('research.approve-and-publish');
         Route::post('/research/{research}/reject', [AdminResearchModerationController::class, 'reject'])->name('research.reject');
         Route::post('/research/{research}/publish', [AdminResearchModerationController::class, 'publish'])->name('research.publish');
         Route::post('/research/{research}/return', [AdminResearchModerationController::class, 'return'])->name('research.return');

@@ -5,6 +5,7 @@ import {
     Flag,
     MoreVertical,
     Send,
+    Undo2,
     SearchCheck,
 } from 'lucide-react';
 import {
@@ -14,6 +15,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { getAllowedResearchModerationActions } from '@/lib/admin/research-moderation-actions';
 import type { FlaggedResearchRecord } from '@/types/research-moderation';
 
 type ModerationActionsMenuProps = {
@@ -23,6 +25,7 @@ type ModerationActionsMenuProps = {
     onResolve: (record: FlaggedResearchRecord) => void;
     onPublish: (record: FlaggedResearchRecord) => void;
     onFlag: (record: FlaggedResearchRecord) => void;
+    onReturnToDraft: (record: FlaggedResearchRecord) => void;
     onArchive: (record: FlaggedResearchRecord) => void;
 };
 
@@ -33,12 +36,10 @@ export function ModerationActionsMenu({
     onResolve,
     onPublish,
     onFlag,
+    onReturnToDraft,
     onArchive,
 }: ModerationActionsMenuProps) {
-    const canApprove = ['submitted', 'under_review'].includes(
-        record.officialStatus ?? '',
-    );
-    const canPublish = record.officialStatus === 'approved';
+    const allowedActions = getAllowedResearchModerationActions(record);
 
     return (
         <DropdownMenu>
@@ -61,30 +62,42 @@ export function ModerationActionsMenu({
                     Review Record
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                {canApprove ? (
+                {allowedActions.has('approve') ? (
                     <DropdownMenuItem onSelect={() => onResolve(record)}>
                         <CheckCircle2 className="size-4" aria-hidden="true" />
                         Approve Research
                     </DropdownMenuItem>
                 ) : null}
-                {canPublish ? (
+                {allowedActions.has('publish') ? (
                     <DropdownMenuItem onSelect={() => onPublish(record)}>
                         <Send className="size-4" aria-hidden="true" />
                         Publish Research
                     </DropdownMenuItem>
                 ) : null}
-                <DropdownMenuItem onSelect={() => onFlag(record)}>
-                    <Flag className="size-4" aria-hidden="true" />
-                    Flag for Review
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                    variant="destructive"
-                    onSelect={() => onArchive(record)}
-                >
-                    <Archive className="size-4" aria-hidden="true" />
-                    Archive Research
-                </DropdownMenuItem>
+                {allowedActions.has('flag_for_review') ? (
+                    <DropdownMenuItem onSelect={() => onFlag(record)}>
+                        <Flag className="size-4" aria-hidden="true" />
+                        Flag for Review
+                    </DropdownMenuItem>
+                ) : null}
+                {allowedActions.has('return_to_draft') ? (
+                    <DropdownMenuItem onSelect={() => onReturnToDraft(record)}>
+                        <Undo2 className="size-4" aria-hidden="true" />
+                        Return to Draft
+                    </DropdownMenuItem>
+                ) : null}
+                {allowedActions.has('archive') ? (
+                    <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                            variant="destructive"
+                            onSelect={() => onArchive(record)}
+                        >
+                            <Archive className="size-4" aria-hidden="true" />
+                            Archive Research
+                        </DropdownMenuItem>
+                    </>
+                ) : null}
             </DropdownMenuContent>
         </DropdownMenu>
     );

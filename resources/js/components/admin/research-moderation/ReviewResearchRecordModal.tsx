@@ -5,6 +5,7 @@ import {
     Loader2,
     Send,
     SearchCheck,
+    Undo2,
 } from 'lucide-react';
 import { useState } from 'react';
 import {
@@ -19,6 +20,7 @@ import {
     moderationIssueTypeLabels,
     moderationStatusLabels,
 } from '@/data/research-moderation-options';
+import { getAllowedResearchModerationActions } from '@/lib/admin/research-moderation-actions';
 import type { FlaggedResearchRecord } from '@/types/research-moderation';
 
 type ReviewAction =
@@ -26,6 +28,7 @@ type ReviewAction =
     | 'published'
     | 'approved-published'
     | 'flagged'
+    | 'returned'
     | 'archived';
 
 type ReviewResearchRecordModalProps = {
@@ -62,8 +65,8 @@ export function ReviewResearchRecordModal({
     const handleSave = async (action: ReviewAction) => {
         const trimmedNote = note.trim();
 
-        if (action === 'archived' && !trimmedNote) {
-            setError('Moderation note is required for this action.');
+        if (action === 'archived' && trimmedNote.length < 10) {
+            setError('Archive rationale must be at least 10 characters.');
 
             return;
         }
@@ -73,10 +76,7 @@ export function ReviewResearchRecordModal({
         await onSave(action, trimmedNote);
     };
 
-    const canApprove = ['submitted', 'under_review'].includes(
-        record.officialStatus ?? '',
-    );
-    const canPublish = record.officialStatus === 'approved';
+    const allowedActions = getAllowedResearchModerationActions(record);
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -189,7 +189,7 @@ export function ReviewResearchRecordModal({
                         Cancel
                     </button>
                     <div className="flex flex-wrap justify-end gap-2">
-                        {canApprove ? (
+                        {allowedActions.has('approve') ? (
                             <button
                                 type="button"
                                 onClick={() => handleSave('approved')}
@@ -204,7 +204,7 @@ export function ReviewResearchRecordModal({
                                 Approve Research
                             </button>
                         ) : null}
-                        {canApprove ? (
+                        {allowedActions.has('approve_and_publish') ? (
                             <button
                                 type="button"
                                 onClick={() => handleSave('approved-published')}
@@ -222,7 +222,7 @@ export function ReviewResearchRecordModal({
                                 Approve & Publish
                             </button>
                         ) : null}
-                        {canPublish ? (
+                        {allowedActions.has('publish') ? (
                             <button
                                 type="button"
                                 onClick={() => handleSave('published')}
@@ -240,24 +240,47 @@ export function ReviewResearchRecordModal({
                                 Publish Research
                             </button>
                         ) : null}
-                        <button
-                            type="button"
-                            onClick={() => handleSave('flagged')}
-                            disabled={isSaving}
-                            className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border border-[#ffd6a8] bg-[#fff7ed] px-4 text-sm font-semibold text-[#ca3500] transition hover:bg-[#ffedd4] disabled:cursor-wait disabled:opacity-70"
-                        >
-                            <Flag className="size-4" aria-hidden="true" />
-                            Keep Flagged
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => handleSave('archived')}
-                            disabled={isSaving}
-                            className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-[#dc2626] px-4 text-sm font-semibold text-white transition hover:bg-[#b91c1c] disabled:cursor-wait disabled:opacity-70"
-                        >
-                            <Archive className="size-4" aria-hidden="true" />
-                            Archive Research
-                        </button>
+                        {allowedActions.has('flag_for_review') ? (
+                            <button
+                                type="button"
+                                onClick={() => handleSave('flagged')}
+                                disabled={isSaving}
+                                className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border border-[#ffd6a8] bg-[#fff7ed] px-4 text-sm font-semibold text-[#ca3500] transition hover:bg-[#ffedd4] disabled:cursor-wait disabled:opacity-70"
+                            >
+                                <Flag className="size-4" aria-hidden="true" />
+                                Flag for Review
+                            </button>
+                        ) : null}
+                        {allowedActions.has('keep_flagged') ? (
+                            <p className="self-center text-sm font-medium text-[#ca3500]">
+                                Record remains flagged for review.
+                            </p>
+                        ) : null}
+                        {allowedActions.has('return_to_draft') ? (
+                            <button
+                                type="button"
+                                onClick={() => handleSave('returned')}
+                                disabled={isSaving}
+                                className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border border-[#dbeafe] bg-[#eff6ff] px-4 text-sm font-semibold text-[#1e3a8a] transition hover:bg-[#dbeafe] disabled:cursor-wait disabled:opacity-70"
+                            >
+                                <Undo2 className="size-4" aria-hidden="true" />
+                                Return to Draft
+                            </button>
+                        ) : null}
+                        {allowedActions.has('archive') ? (
+                            <button
+                                type="button"
+                                onClick={() => handleSave('archived')}
+                                disabled={isSaving}
+                                className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-[#dc2626] px-4 text-sm font-semibold text-white transition hover:bg-[#b91c1c] disabled:cursor-wait disabled:opacity-70"
+                            >
+                                <Archive
+                                    className="size-4"
+                                    aria-hidden="true"
+                                />
+                                Archive Research
+                            </button>
+                        ) : null}
                     </div>
                 </DialogFooter>
             </DialogContent>

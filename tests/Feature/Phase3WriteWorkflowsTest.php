@@ -567,6 +567,118 @@ test('super admin can moderate research and invalid transitions fail', function 
     $this->assertDatabaseHas('notifications', ['type' => 'research.approved']);
 });
 
+test('admin moderation endpoints enforce the official status transition matrix', function () {
+    $agency = createPhase3Agency('moderation-matrix-agency');
+    $agencyAdmin = createPhase3User('agency_admin', $agency);
+    $superAdmin = createPhase3User('super_admin');
+
+    foreach (['submitted', 'under_review'] as $status) {
+        $research = createPhase3Research($agency, $agencyAdmin, $status);
+
+        $this->actingAs($superAdmin)
+            ->postJson("/api/admin/research/{$research->id}/reject", ['notes' => 'Requires additional governance review.'])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'rejected');
+    }
+
+    foreach (['approved', 'rejected', 'published'] as $status) {
+        $research = createPhase3Research($agency, $agencyAdmin, $status);
+
+        $this->actingAs($superAdmin)
+            ->postJson("/api/admin/research/{$research->id}/archive", ['reason' => 'Archived after documented moderation review.'])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'archived');
+    }
+
+    foreach (['submitted', 'under_review'] as $status) {
+        $research = createPhase3Research($agency, $agencyAdmin, $status);
+
+        $this->actingAs($superAdmin)
+            ->postJson("/api/admin/research/{$research->id}/archive", ['reason' => 'Archive should not be permitted here.'])
+            ->assertUnprocessable();
+
+        expect($research->fresh()->status)->toBe($status);
+    }
+
+    foreach (['approved', 'rejected', 'published'] as $status) {
+        $research = createPhase3Research($agency, $agencyAdmin, $status);
+
+        $this->actingAs($superAdmin)
+            ->postJson("/api/admin/research/{$research->id}/reject", ['notes' => 'Invalid transition attempt.'])
+            ->assertUnprocessable();
+
+        expect($research->fresh()->status)->toBe($status);
+    }
+
+    foreach (['rejected', 'under_review'] as $status) {
+        $research = createPhase3Research($agency, $agencyAdmin, $status);
+
+        $this->actingAs($superAdmin)
+            ->postJson("/api/admin/research/{$research->id}/return", ['notes' => 'Return for documented agency revisions.'])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'draft');
+    }
+
+    foreach (['approved', 'published', 'submitted'] as $status) {
+        $research = createPhase3Research($agency, $agencyAdmin, $status);
+
+        $this->actingAs($superAdmin)
+            ->postJson("/api/admin/research/{$research->id}/return", ['notes' => 'Invalid transition attempt.'])
+            ->assertUnprocessable();
+
+        expect($research->fresh()->status)->toBe($status);
+    }
+});
+
+test('approve and publish is one protected atomic moderation action', function () {
+    $agency = createPhase3Agency('atomic-moderation-agency');
+    $agencyAdmin = createPhase3User('agency_admin', $agency);
+    $superAdmin = createPhase3User('super_admin');
+    $research = createPhase3Research($agency, $agencyAdmin, 'submitted');
+
+    $this->actingAs($superAdmin)
+        ->postJson("/api/admin/research/{$research->id}/approve-and-publish", [
+            'notes' => 'Approved for immediate public release.',
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.status', 'published');
+
+    expect($research->fresh()->status)->toBe('published')
+        ->and($research->fresh()->approved_at)->not->toBeNull()
+        ->and($research->fresh()->published_at)->not->toBeNull()
+        ->and(ResearchApproval::where('research_id', $research->id)->count())->toBe(1);
+
+    $this->assertDatabaseHas('audit_logs', [
+        'event' => 'research.approved_published',
+        'auditable_id' => $research->id,
+    ]);
+
+    $this->actingAs($superAdmin)
+        ->postJson("/api/admin/research/{$research->id}/approve-and-publish")
+        ->assertUnprocessable();
+
+    expect(ResearchApproval::where('research_id', $research->id)->count())->toBe(1);
+});
+
+test('admin archive moderation requires a meaningful rationale', function () {
+    $agency = createPhase3Agency('archive-rationale-agency');
+    $agencyAdmin = createPhase3User('agency_admin', $agency);
+    $superAdmin = createPhase3User('super_admin');
+    $research = createPhase3Research($agency, $agencyAdmin, 'approved');
+
+    $this->actingAs($superAdmin)
+        ->postJson("/api/admin/research/{$research->id}/archive")
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('reason');
+
+    $this->actingAs($superAdmin)
+        ->postJson("/api/admin/research/{$research->id}/archive", ['reason' => 'Too short'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('reason');
+
+    expect($research->fresh()->status)->toBe('approved');
+});
+
 test('publishing research backfills a missing slug from title', function () {
     $agency = createPhase3Agency('missing-slug-publish-agency');
     $agencyAdmin = createPhase3User('agency_admin', $agency);

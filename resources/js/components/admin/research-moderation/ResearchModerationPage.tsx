@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AdminLayout } from '@/components/admin/layout/AdminLayout';
 import { moderationIssueTypeLabels } from '@/data/research-moderation-options';
+import { getAllowedResearchModerationActions } from '@/lib/admin/research-moderation-actions';
+import type { ResearchModerationAction } from '@/lib/admin/research-moderation-actions';
 import {
     archiveFlaggedResearch,
+    approveAndPublishResearchRecord,
     dismissDuplicateResearchMatch,
     exportModerationReport,
     flagResearchForReview,
@@ -11,6 +14,7 @@ import {
     getModerationActivityLog,
     markResearchIssueResolved,
     publishResearchRecord,
+    returnResearchToDraft,
 } from '@/lib/admin/research-moderation-service';
 import type {
     DuplicateResearchMatch,
@@ -34,6 +38,11 @@ import { ResearchModerationDetailsModal } from './ResearchModerationDetailsModal
 import { ReviewResearchRecordModal } from './ReviewResearchRecordModal';
 
 const rowsPerPage = 8;
+
+type ModerationFeedback =
+    | { type: 'success'; message: string }
+    | { type: 'error'; message: string }
+    | null;
 
 const initialFilters: ModerationFilters = {
     search: '',
@@ -141,7 +150,7 @@ export function ResearchModerationPage() {
     const [activities, setActivities] = useState<ModerationActivity[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [feedback, setFeedback] = useState<string | null>(null);
+    const [feedback, setFeedback] = useState<ModerationFeedback>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [selectedDetailsRecord, setSelectedDetailsRecord] =
         useState<FlaggedResearchRecord | null>(null);
@@ -202,7 +211,7 @@ export function ResearchModerationPage() {
             return undefined;
         }
 
-        const timeout = window.setTimeout(() => setFeedback(null), 3800);
+        const timeout = window.setTimeout(() => setFeedback(null), 5000);
 
         return () => window.clearTimeout(timeout);
     }, [feedback]);
@@ -269,6 +278,29 @@ export function ResearchModerationPage() {
         action: ModerationConfirmationAction,
         duplicate?: DuplicateResearchMatch,
     ) => {
+        const actionMap: Record<
+            ModerationConfirmationAction,
+            ResearchModerationAction
+        > = {
+            resolve: 'approve',
+            publish: 'publish',
+            flag: 'flag_for_review',
+            return_to_draft: 'return_to_draft',
+            archive: 'archive',
+        };
+
+        if (
+            !getAllowedResearchModerationActions(record).has(actionMap[action])
+        ) {
+            setFeedback({
+                type: 'error',
+                message:
+                    'This action is not allowed for the current research status.',
+            });
+
+            return;
+        }
+
         setConfirmationRecord(record);
         setConfirmationAction(action);
         setConfirmationDuplicate(duplicate ?? null);
@@ -295,15 +327,20 @@ export function ResearchModerationPage() {
                 createActivity('approved', 'Approved research:', record.title),
                 ...current,
             ]);
-            setFeedback(`${record.title} was approved.`);
+            setFeedback({
+                type: 'success',
+                message: `${record.title} was approved.`,
+            });
             setSelectedReviewRecord(null);
             closeConfirmation(true);
         } catch (caught) {
-            setFeedback(
-                caught instanceof Error
-                    ? caught.message
-                    : 'Unable to complete moderation action.',
-            );
+            setFeedback({
+                type: 'error',
+                message:
+                    caught instanceof Error
+                        ? caught.message
+                        : 'Unable to complete moderation action.',
+            });
         } finally {
             setIsActionLoading(false);
         }
@@ -316,8 +353,7 @@ export function ResearchModerationPage() {
         setIsActionLoading(true);
 
         try {
-            await markResearchIssueResolved(record.id, { note });
-            await publishResearchRecord(record.id, { note });
+            await approveAndPublishResearchRecord(record.id, { note });
             setRecords((current) =>
                 current.filter((item) => item.id !== record.id),
             );
@@ -329,15 +365,20 @@ export function ResearchModerationPage() {
                 ),
                 ...current,
             ]);
-            setFeedback(`${record.title} was approved and published.`);
+            setFeedback({
+                type: 'success',
+                message: `${record.title} was approved and published.`,
+            });
             setSelectedReviewRecord(null);
             closeConfirmation(true);
         } catch (caught) {
-            setFeedback(
-                caught instanceof Error
-                    ? caught.message
-                    : 'Unable to approve and publish research.',
-            );
+            setFeedback({
+                type: 'error',
+                message:
+                    caught instanceof Error
+                        ? caught.message
+                        : 'Unable to approve and publish research.',
+            });
         } finally {
             setIsActionLoading(false);
         }
@@ -362,15 +403,20 @@ export function ResearchModerationPage() {
                 ),
                 ...current,
             ]);
-            setFeedback(`${record.title} was published.`);
+            setFeedback({
+                type: 'success',
+                message: `${record.title} was published.`,
+            });
             setSelectedReviewRecord(null);
             closeConfirmation(true);
         } catch (caught) {
-            setFeedback(
-                caught instanceof Error
-                    ? caught.message
-                    : 'Unable to publish research.',
-            );
+            setFeedback({
+                type: 'error',
+                message:
+                    caught instanceof Error
+                        ? caught.message
+                        : 'Unable to publish research.',
+            });
         } finally {
             setIsActionLoading(false);
         }
@@ -416,15 +462,20 @@ export function ResearchModerationPage() {
                 ),
                 ...current,
             ]);
-            setFeedback(`${record.title} was flagged for review.`);
+            setFeedback({
+                type: 'success',
+                message: `${record.title} was flagged for review.`,
+            });
             setSelectedReviewRecord(null);
             closeConfirmation(true);
         } catch (caught) {
-            setFeedback(
-                caught instanceof Error
-                    ? caught.message
-                    : 'Unable to complete moderation action.',
-            );
+            setFeedback({
+                type: 'error',
+                message:
+                    caught instanceof Error
+                        ? caught.message
+                        : 'Unable to complete moderation action.',
+            });
         } finally {
             setIsActionLoading(false);
         }
@@ -445,15 +496,58 @@ export function ResearchModerationPage() {
                 createActivity('archived', 'Archived research:', record.title),
                 ...current,
             ]);
-            setFeedback(`${record.title} was archived.`);
+            setFeedback({
+                type: 'success',
+                message: `${record.title} was archived.`,
+            });
             setSelectedReviewRecord(null);
             closeConfirmation(true);
         } catch (caught) {
-            setFeedback(
-                caught instanceof Error
-                    ? caught.message
-                    : 'Unable to archive research.',
+            setFeedback({
+                type: 'error',
+                message:
+                    caught instanceof Error
+                        ? caught.message
+                        : 'Unable to archive research.',
+            });
+        } finally {
+            setIsActionLoading(false);
+        }
+    };
+
+    const returnRecordToDraft = async (
+        record: FlaggedResearchRecord,
+        note?: string,
+    ) => {
+        setIsActionLoading(true);
+
+        try {
+            await returnResearchToDraft(record.id, { note });
+            setRecords((current) =>
+                current.filter((item) => item.id !== record.id),
             );
+            setActivities((current) => [
+                createActivity(
+                    'revision-requested',
+                    'Returned research to draft:',
+                    record.title,
+                ),
+                ...current,
+            ]);
+            setFeedback({
+                type: 'success',
+                message: `${record.title} was returned to draft.`,
+            });
+            setSelectedReviewRecord(null);
+            closeConfirmation(true);
+        } catch (caught) {
+            setFeedback({
+                type: 'error',
+                message:
+                    caught instanceof Error
+                        ? caught.message
+                        : 'Unable to return research to draft.',
+            });
         } finally {
             setIsActionLoading(false);
         }
@@ -465,6 +559,7 @@ export function ResearchModerationPage() {
             | 'published'
             | 'approved-published'
             | 'flagged'
+            | 'returned'
             | 'archived',
         note: string,
     ) => {
@@ -488,12 +583,16 @@ export function ResearchModerationPage() {
             await flagRecord(selectedReviewRecord, null, note);
         }
 
+        if (action === 'returned') {
+            await returnRecordToDraft(selectedReviewRecord, note);
+        }
+
         if (action === 'archived') {
             await archiveRecord(selectedReviewRecord, note);
         }
     };
 
-    const handleConfirmAction = async () => {
+    const handleConfirmAction = async (note?: string) => {
         if (!confirmationRecord || !confirmationAction) {
             return;
         }
@@ -507,11 +606,15 @@ export function ResearchModerationPage() {
         }
 
         if (confirmationAction === 'flag') {
-            await flagRecord(confirmationRecord, confirmationDuplicate);
+            await flagRecord(confirmationRecord, confirmationDuplicate, note);
+        }
+
+        if (confirmationAction === 'return_to_draft') {
+            await returnRecordToDraft(confirmationRecord, note);
         }
 
         if (confirmationAction === 'archive') {
-            await archiveRecord(confirmationRecord);
+            await archiveRecord(confirmationRecord, note);
         }
     };
 
@@ -537,15 +640,18 @@ export function ResearchModerationPage() {
             ]);
 
             setComparisonMatch(null);
-            setFeedback(
-                `${match.matchingTitle} was removed from duplicate alerts.`,
-            );
+            setFeedback({
+                type: 'success',
+                message: `${match.matchingTitle} was removed from duplicate alerts.`,
+            });
         } catch (caught) {
-            setFeedback(
-                caught instanceof Error
-                    ? caught.message
-                    : 'Unable to dismiss duplicate match.',
-            );
+            setFeedback({
+                type: 'error',
+                message:
+                    caught instanceof Error
+                        ? caught.message
+                        : 'Unable to dismiss duplicate match.',
+            });
         } finally {
             setIsActionLoading(false);
         }
@@ -556,8 +662,19 @@ export function ResearchModerationPage() {
 
         try {
             const result = await exportModerationReport(options, filters);
-            setFeedback(`${result.fileName} was downloaded.`);
+            setFeedback({
+                type: 'success',
+                message: `${result.fileName} was downloaded.`,
+            });
             setIsExportOpen(false);
+        } catch (caught) {
+            setFeedback({
+                type: 'error',
+                message:
+                    caught instanceof Error
+                        ? caught.message
+                        : 'Unable to export moderation report.',
+            });
         } finally {
             setIsExporting(false);
         }
@@ -578,9 +695,13 @@ export function ResearchModerationPage() {
                     {feedback ? (
                         <div
                             role="status"
-                            className="rounded-[10px] border border-[#bbf7d0] bg-[#f0fdf4] px-4 py-3 text-sm font-medium text-[#166534]"
+                            className={
+                                feedback.type === 'success'
+                                    ? 'rounded-[10px] border border-[#bbf7d0] bg-[#f0fdf4] px-4 py-3 text-sm font-medium text-[#166534]'
+                                    : 'rounded-[10px] border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-sm font-medium text-[#b91c1c]'
+                            }
                         >
-                            {feedback}
+                            {feedback.message}
                         </div>
                     ) : null}
 
@@ -623,6 +744,9 @@ export function ResearchModerationPage() {
                             }
                             onFlag={(record) =>
                                 openConfirmation(record, 'flag')
+                            }
+                            onReturnToDraft={(record) =>
+                                openConfirmation(record, 'return_to_draft')
                             }
                             onArchive={(record) =>
                                 openConfirmation(record, 'archive')

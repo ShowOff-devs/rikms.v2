@@ -75,6 +75,21 @@ export async function publishAdminResearch(
     return mapModerationRecordFromApi(data);
 }
 
+export async function approveAndPublishAdminResearch(
+    id: string,
+    payload: ModerationActionPayload = {},
+) {
+    const { data } = await fetchApi<AdminResearchApiRecord>(
+        `/api/admin/research/${id}/approve-and-publish`,
+        {
+            method: 'POST',
+            body: JSON.stringify({ notes: payload.note }),
+        },
+    );
+
+    return mapModerationRecordFromApi(data);
+}
+
 export async function returnAdminResearch(
     id: string,
     payload: ModerationActionPayload = {},
@@ -98,9 +113,7 @@ export async function archiveAdminResearch(
         `/api/admin/research/${id}/archive`,
         {
             method: 'POST',
-            body: JSON.stringify({
-                reason: payload.note ?? 'Archived through moderation UI.',
-            }),
+            body: JSON.stringify({ reason: payload.note }),
         },
     );
 
