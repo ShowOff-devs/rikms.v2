@@ -179,7 +179,7 @@ export function ExportAnalyticsReportModal({
                     </DialogTitle>
                     <DialogDescription className="text-[#6a7282]">
                         Choose the date range and analytics sections to include.
-                        Pilot exports are generated as CSV files.
+                        Generate a printable PDF report or a CSV data file.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -208,6 +208,7 @@ export function ExportAnalyticsReportModal({
                                     <SelectValue placeholder="Select format" />
                                 </SelectTrigger>
                                 <SelectContent>
+                                    <SelectItem value="pdf">PDF</SelectItem>
                                     <SelectItem value="csv">CSV</SelectItem>
                                 </SelectContent>
                             </Select>
@@ -328,8 +329,8 @@ export function ExportAnalyticsReportModal({
                         </p>
                         <p className="mt-1 text-xs leading-5 text-[#6a7282]">
                             Section customization is not available during the
-                            pilot. The CSV uses the fixed implemented analytics
-                            export columns.
+                            pilot. The report uses the fixed implemented
+                            analytics export sections.
                         </p>
                         <div className="mt-3 grid gap-3 sm:grid-cols-2">
                             {sectionOptions.map((option) => (

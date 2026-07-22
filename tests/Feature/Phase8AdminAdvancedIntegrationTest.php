@@ -176,6 +176,14 @@ test('admin access monitoring APIs are protected and filtered from relational ac
 test('rbac writes assign remove permissions and protect the last super admin', function () {
     $superRole = createPhase8Role('super_admin');
     $agencyRole = createPhase8Role('agency_admin');
+    $publicRole = createPhase8Role('public_user');
+    $editableRole = Role::query()->create([
+        'name' => 'Phase 8 Reviewer',
+        'slug' => 'phase_8_reviewer',
+        'display_name' => 'Phase 8 Reviewer',
+        'is_system' => false,
+        'is_active' => true,
+    ]);
     $superAdmin = createPhase8User('super_admin');
     $secondSuperAdmin = createPhase8User('super_admin');
     $agencyAdmin = createPhase8User('agency_admin', createPhase8Agency('phase8-dost'));
@@ -195,7 +203,7 @@ test('rbac writes assign remove permissions and protect the last super admin', f
         ->assertOk();
 
     $this->actingAs($superAdmin)
-        ->patchJson("/api/admin/rbac/roles/{$agencyRole->id}/permissions", [
+        ->patchJson("/api/admin/rbac/roles/{$editableRole->id}/permissions", [
             'permission_ids' => [$permission->id],
         ])
         ->assertOk();
@@ -203,13 +211,11 @@ test('rbac writes assign remove permissions and protect the last super admin', f
     expect(AuditLog::query()->where('event', 'rbac.permissions.updated')->exists())->toBeTrue();
 
     $this->actingAs($superAdmin)
-        ->deleteJson("/api/admin/rbac/users/{$secondSuperAdmin->id}/roles/{$superRole->id}")
+        ->putJson("/api/admin/rbac/users/{$secondSuperAdmin->id}/role", ['role_id' => $publicRole->id])
         ->assertOk();
 
     $this->actingAs($superAdmin)
-        ->deleteJson("/api/admin/rbac/users/{$superAdmin->id}/roles/{$superRole->id}", [
-            'confirm_self_removal' => true,
-        ])
+        ->putJson("/api/admin/rbac/users/{$superAdmin->id}/role", ['role_id' => $publicRole->id])
         ->assertUnprocessable();
 });
 
@@ -869,6 +875,13 @@ test('admin analytics use relational counts and protected exports write audit lo
         ->get('/api/admin/reports/research/export')
         ->assertOk()
         ->assertHeader('content-type', 'text/csv; charset=UTF-8');
+
+    $pdf = $this->actingAs($superAdmin)
+        ->get('/api/admin/reports/research/export?format=pdf');
+
+    $pdf->assertOk()
+        ->assertHeader('content-type', 'application/pdf');
+    expect($pdf->getContent())->toStartWith('%PDF-');
 
     expect(AuditLog::query()->where('event', 'report.exported')->exists())->toBeTrue();
 });

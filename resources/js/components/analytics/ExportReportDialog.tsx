@@ -1,4 +1,5 @@
 import { FileDown } from 'lucide-react';
+import { useState } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -20,8 +21,9 @@ export function ExportReportDialog({
     filters: AnalyticsFilters;
     isExporting: boolean;
     onOpenChange: (open: boolean) => void;
-    onConfirm: () => void;
+    onConfirm: (format: 'pdf' | 'csv') => void;
 }) {
+    const [format, setFormat] = useState<'pdf' | 'csv'>('pdf');
     const activeFilters = Object.entries(filters).filter(
         ([, value]) => value && value !== 'all',
     );
@@ -35,12 +37,31 @@ export function ExportReportDialog({
                         Export Analytics Report
                     </DialogTitle>
                     <DialogDescription>
-                        Generate a CSV export using the active agency analytics
-                        filters.
+                        Generate a printable PDF report or CSV data file using
+                        the active agency analytics filters.
                     </DialogDescription>
                 </DialogHeader>
 
                 <div className="grid gap-4 rounded-[12px] border border-[#e5e7eb] bg-[#f9fafb] p-4">
+                    <div>
+                        <label
+                            htmlFor="agency-export-format"
+                            className="text-sm font-semibold text-[#1e2939]"
+                        >
+                            Export format
+                        </label>
+                        <select
+                            id="agency-export-format"
+                            value={format}
+                            onChange={(event) =>
+                                setFormat(event.target.value as 'pdf' | 'csv')
+                            }
+                            className="mt-2 h-10 w-full rounded-[10px] border border-[#d1d5dc] bg-white px-3 text-sm text-[#1e2939]"
+                        >
+                            <option value="pdf">PDF</option>
+                            <option value="csv">CSV</option>
+                        </select>
+                    </div>
                     <div>
                         <p className="text-sm font-semibold text-[#1e2939]">
                             Included sections
@@ -104,7 +125,7 @@ export function ExportReportDialog({
                     </button>
                     <button
                         type="button"
-                        onClick={onConfirm}
+                        onClick={() => onConfirm(format)}
                         disabled={isExporting}
                         className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-[#1e3a8a] px-4 text-sm font-medium text-white disabled:opacity-70"
                     >

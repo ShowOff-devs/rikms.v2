@@ -1,4 +1,5 @@
 import { fetchApi } from '@/lib/api-client';
+import { downloadResponseFile } from '@/lib/download-file';
 import type {
     ProjectReportAgencyComparison,
     ProjectReportAnalyticsFilters,
@@ -199,6 +200,33 @@ export async function getAdminProjectReportRecords(
         data,
         pagination: meta.pagination,
     };
+}
+
+export async function exportAdminProjectReportAnalytics(
+    filters: ProjectReportAnalyticsFilters,
+    format: 'pdf' | 'csv',
+) {
+    const params = paramsFromFilters(filters);
+    params.set('format', format);
+    const response = await fetch(
+        `/api/admin/analytics/project-reports/export?${params.toString()}`,
+        {
+            credentials: 'same-origin',
+            headers: {
+                Accept: format === 'pdf' ? 'application/pdf' : 'text/csv',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        },
+    );
+
+    if (!response.ok) {
+        throw new Error('Unable to export project report analytics.');
+    }
+
+    return downloadResponseFile(
+        response,
+        `project-report-analytics-${new Date().toISOString().slice(0, 10)}.${format}`,
+    );
 }
 
 export async function getProjectReportAnalytics(

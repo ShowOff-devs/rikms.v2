@@ -99,6 +99,14 @@ test('agency analytics export is agency scoped and escapes formula-like cells', 
 
     expect($csv)->toContain('\'=HYPERLINK')
         ->and($csv)->not->toContain('Other Agency Research');
+
+    $pdf = $this->actingAs($agencyAdmin)
+        ->get('/api/agency/analytics/export?format=pdf');
+
+    $pdf->assertOk()
+        ->assertHeader('content-type', 'application/pdf')
+        ->assertDownload('agency-research-analytics-all-years.pdf');
+    expect($pdf->getContent())->toStartWith('%PDF-');
 });
 
 test('admin access monitoring export is protected filtered and escapes formula-like cells', function () {

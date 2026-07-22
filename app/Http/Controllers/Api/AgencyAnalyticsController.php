@@ -7,10 +7,12 @@ use App\Models\AccessRequest;
 use App\Models\Research;
 use App\Support\ApiResponse;
 use App\Support\CsvExport;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 class AgencyAnalyticsController extends Controller
 {
@@ -36,10 +38,18 @@ class AgencyAnalyticsController extends Controller
         ]);
     }
 
-    public function export(Request $request): StreamedResponse
+    public function export(Request $request): Response
     {
+        $format = $request->string('format', 'csv')->lower()->toString();
+        abort_unless(in_array($format, ['csv', 'pdf'], true), 422, 'Unsupported report format.');
+
         $filters = $this->filters($request);
         $records = $this->filteredResearch($request, $filters)->get();
+
+        if ($format === 'pdf') {
+            return $this->pdfExport($request, $records, $filters);
+        }
+
         $fileName = 'agency-research-analytics-'.($filters['year'] !== 'all' ? $filters['year'] : 'all-years').'.csv';
 
         return response()->streamDownload(function () use ($records): void {
@@ -59,6 +69,30 @@ class AgencyAnalyticsController extends Controller
 
             fclose($handle);
         }, $fileName, ['Content-Type' => 'text/csv']);
+    }
+
+    private function pdfExport(Request $request, Collection $records, array $filters): Response
+    {
+        $options = new Options;
+        $options->set('defaultFont', 'DejaVu Sans');
+        $options->set('isRemoteEnabled', false);
+
+        $pdf = new Dompdf($options);
+        $pdf->loadHtml(view('reports.agency.analytics', [
+            'agency' => $request->user()->agency,
+            'records' => $records,
+            'filters' => $filters,
+            'generatedAt' => now(),
+        ])->render());
+        $pdf->setPaper('a4', 'landscape');
+        $pdf->render();
+
+        $year = $filters['year'] !== 'all' ? $filters['year'] : 'all-years';
+
+        return response($pdf->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="agency-research-analytics-'.$year.'.pdf"',
+        ]);
     }
 
     private function baseResearch(Request $request)
