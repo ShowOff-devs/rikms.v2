@@ -117,7 +117,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
     })->name('login');
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])->name('login.store');
 
-    Route::middleware(['auth', 'verified', 'role:super_admin', 'super_admin.2fa'])->group(function () {
+    Route::middleware(['auth', 'verified', 'admin.portal', 'super_admin.2fa', 'admin.authorize'])->group(function () {
         Route::inertia('/dashboard', 'admin/dashboard')->name('dashboard');
         Route::inertia('/agencies', 'admin/agencies')->name('agencies');
         Route::inertia('/users', 'admin/agency-admin-users')->name('users');

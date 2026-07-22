@@ -1,9 +1,11 @@
 <?php
 
+use App\Http\Middleware\AuthorizeAdminRoute;
 use App\Http\Middleware\EnforcePlatformMaintenanceMode;
 use App\Http\Middleware\EnforceUserSessionTimeout;
 use App\Http\Middleware\EnsureAgencyScope;
 use App\Http\Middleware\EnsureSuperAdminHasTwoFactor;
+use App\Http\Middleware\EnsureUserCanAccessAdminPortal;
 use App\Http\Middleware\EnsureUserHasPermission;
 use App\Http\Middleware\EnsureUserHasRole;
 use App\Http\Middleware\HandleAppearance;
@@ -29,6 +31,8 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'agency.scope' => EnsureAgencyScope::class,
+            'admin.portal' => EnsureUserCanAccessAdminPortal::class,
+            'admin.authorize' => AuthorizeAdminRoute::class,
             'permission' => EnsureUserHasPermission::class,
             'role' => EnsureUserHasRole::class,
             'super_admin.2fa' => EnsureSuperAdminHasTwoFactor::class,

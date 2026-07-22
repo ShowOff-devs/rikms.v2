@@ -177,17 +177,18 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         $normalizedRole = str($role)->lower()->replace(' ', '_')->toString();
 
-        if ($this->role === $normalizedRole) {
-            return true;
+        if (! $this->relationLoaded('roles')) {
+            $this->setRelation(
+                'roles',
+                $this->roles()->get(['roles.id', 'roles.slug', 'roles.name', 'roles.is_active']),
+            );
         }
 
-        $roles = $this->relationLoaded('roles')
-            ? $this->roles
-            : $this->roles()->get(['roles.id', 'roles.slug', 'roles.name']);
+        $roles = $this->roles;
 
         return $roles->contains(function (Role $assignedRole) use ($normalizedRole): bool {
-            return $assignedRole->slug === $normalizedRole
-                || str($assignedRole->name)->lower()->replace(' ', '_')->toString() === $normalizedRole;
+            return $assignedRole->is_active && ($assignedRole->slug === $normalizedRole
+                || str($assignedRole->name)->lower()->replace(' ', '_')->toString() === $normalizedRole);
         });
     }
 
@@ -207,9 +208,12 @@ class User extends Authenticatable implements MustVerifyEmail
 
         $normalizedPermission = str($permission)->lower()->replace(' ', '_')->toString();
 
-        $directPermissions = $this->relationLoaded('directPermissions')
-            ? $this->directPermissions
-            : $this->directPermissions()->get(['permissions.id', 'permissions.slug', 'permissions.name']);
+        $directPermissions = $this->directPermissions()
+            ->where(function ($query): void {
+                $query->whereNull('permission_user.expires_at')
+                    ->orWhere('permission_user.expires_at', '>', now());
+            })
+            ->get(['permissions.id', 'permissions.slug', 'permissions.name']);
 
         if ($directPermissions->contains(fn (Permission $directPermission): bool => $this->permissionMatches($directPermission, $normalizedPermission))) {
             return true;
@@ -217,9 +221,13 @@ class User extends Authenticatable implements MustVerifyEmail
 
         $roles = $this->relationLoaded('roles')
             ? $this->roles
-            : $this->roles()->with('permissions:id,slug,name')->get(['roles.id', 'roles.slug', 'roles.name']);
+            : $this->roles()->with('permissions:id,slug,name')->get(['roles.id', 'roles.slug', 'roles.name', 'roles.is_active']);
 
         return $roles->contains(function (Role $role) use ($normalizedPermission): bool {
+            if (! $role->is_active) {
+                return false;
+            }
+
             $permissions = $role->relationLoaded('permissions')
                 ? $role->permissions
                 : $role->permissions()->get(['permissions.id', 'permissions.slug', 'permissions.name']);
@@ -234,6 +242,19 @@ class User extends Authenticatable implements MustVerifyEmail
     public function hasAnyPermission(array $permissions): bool
     {
         return collect($permissions)->contains(fn (string $permission): bool => $this->hasPermission($permission));
+    }
+
+    public function canAccessAdminPortal(): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        return $this->roles()
+            ->where('roles.is_active', true)
+            ->whereNotIn('roles.slug', ['agency_admin', 'public_user'])
+            ->whereHas('permissions')
+            ->exists();
     }
 
     private function permissionMatches(Permission $permission, string $normalizedPermission): bool

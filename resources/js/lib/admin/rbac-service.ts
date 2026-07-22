@@ -110,24 +110,10 @@ export async function updateUserRole(
     userId: string,
     roleId: string,
 ): Promise<UserRoleAssignment> {
-    const existingAssignment = cachedAssignments.find(
-        (assignment) => assignment.id === userId,
-    );
-
-    if (existingAssignment?.roleId && existingAssignment.roleId !== roleId) {
-        await fetchApi<UserRoleAssignment>(
-            `/api/admin/rbac/users/${userId}/roles/${existingAssignment.roleId}`,
-            {
-                method: 'DELETE',
-                body: JSON.stringify({ confirm_self_removal: false }),
-            },
-        );
-    }
-
     const response = await fetchApi<UserRoleAssignment>(
-        `/api/admin/rbac/users/${userId}/roles`,
+        `/api/admin/rbac/users/${userId}/role`,
         {
-            method: 'POST',
+            method: 'PUT',
             body: JSON.stringify({ role_id: Number(roleId) }),
         },
     );

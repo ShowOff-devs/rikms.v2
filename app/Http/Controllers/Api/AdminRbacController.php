@@ -114,56 +114,68 @@ class AdminRbacController extends Controller
 
     public function assignUserRole(Request $request, User $user): JsonResponse
     {
+        return $this->replaceUserRole($request, $user);
+    }
+
+    public function replaceUserRole(Request $request, User $user): JsonResponse
+    {
         $validated = $request->validate([
-            'role_id' => ['required', 'integer', Rule::exists('roles', 'id')->whereNull('deleted_at')],
+            'role_id' => ['required', 'integer', Rule::exists('roles', 'id')->where(fn ($query) => $query
+                ->whereNull('deleted_at')
+                ->where('is_active', true))],
         ]);
 
-        $role = Role::query()->findOrFail($validated['role_id']);
+        $updatedUser = DB::transaction(function () use ($request, $user, $validated): User {
+            $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
+            $role = Role::query()->where('is_active', true)->lockForUpdate()->findOrFail($validated['role_id']);
+            $currentRole = $lockedUser->roles()->lockForUpdate()->first();
 
-        DB::transaction(function () use ($request, $user, $role): void {
-            $user->roles()->syncWithoutDetaching([
+            if ($currentRole?->slug === 'super_admin' && $role->slug !== 'super_admin') {
+                $activeSuperAdminCount = User::query()
+                    ->where('status', 'active')
+                    ->whereNull('archived_at')
+                    ->whereHas('roles', fn ($query) => $query
+                        ->where('roles.slug', 'super_admin')
+                        ->where('roles.is_active', true))
+                    ->lockForUpdate()
+                    ->count();
+
+                if ($activeSuperAdminCount <= 1) {
+                    throw ValidationException::withMessages([
+                        'role' => ['Cannot replace the last active super admin role.'],
+                    ]);
+                }
+            }
+
+            $oldRole = $currentRole ? ['role_id' => $currentRole->id, 'role_slug' => $currentRole->slug] : null;
+
+            $lockedUser->roles()->sync([
                 $role->id => [
                     'assigned_by' => $request->user()->id,
                     'assigned_at' => now(),
                 ],
             ]);
+            $lockedUser->forceFill(['role' => $role->slug])->save();
 
-            $user->forceFill(['role' => $role->slug])->save();
+            AuditLogger::record(
+                $request,
+                'rbac.role.assigned',
+                $lockedUser,
+                $oldRole,
+                ['role_id' => $role->id, 'role_slug' => $role->slug],
+            );
+
+            return $lockedUser;
         });
 
-        AuditLogger::record(
-            $request,
-            'rbac.role.assigned',
-            $user,
-            null,
-            ['role_id' => $role->id, 'role_slug' => $role->slug],
-        );
-
-        return ApiResponse::success('Role assigned to user.', $this->userAssignmentPayload($user->fresh(['agency', 'roles'])));
+        return ApiResponse::success('User role replaced.', $this->userAssignmentPayload($updatedUser->fresh(['agency', 'roles'])));
     }
 
     public function removeUserRole(Request $request, User $user, Role $role): JsonResponse
     {
-        $this->abortIfRemovingLastSuperAdmin($request, $user, $role);
-
-        DB::transaction(function () use ($user, $role): void {
-            $user->roles()->detach($role->id);
-
-            if ($user->role === $role->slug) {
-                $replacementRole = $user->roles()->orderBy('roles.name')->first();
-                $user->forceFill(['role' => $replacementRole?->slug ?? ''])->save();
-            }
-        });
-
-        AuditLogger::record(
-            $request,
-            'rbac.role.removed',
-            $user,
-            ['role_id' => $role->id, 'role_slug' => $role->slug],
-            null,
-        );
-
-        return ApiResponse::success('Role removed from user.', $this->userAssignmentPayload($user->fresh(['agency', 'roles'])));
+        throw ValidationException::withMessages([
+            'role' => ['A user must retain one primary role. Use the role replacement endpoint.'],
+        ]);
     }
 
     public function deleteRole(Request $request, Role $role): JsonResponse
@@ -211,8 +223,14 @@ class AdminRbacController extends Controller
 
     public function updateRolePermissions(Request $request, Role $role): JsonResponse
     {
+        if ($role->is_system) {
+            throw ValidationException::withMessages([
+                'role' => ['System role permissions are protected and cannot be modified during pilot.'],
+            ]);
+        }
+
         $validated = $request->validate([
-            'permission_ids' => ['required', 'array'],
+            'permission_ids' => ['required', 'array', 'min:1'],
             'permission_ids.*' => ['integer', Rule::exists('permissions', 'id')],
         ]);
 
@@ -308,32 +326,6 @@ class AdminRbacController extends Controller
         return ApiResponse::success('Role updated.', $this->rolePayload($role->fresh(['permissions', 'users'])));
     }
 
-    private function abortIfRemovingLastSuperAdmin(Request $request, User $user, Role $role): void
-    {
-        if ($role->slug !== 'super_admin') {
-            return;
-        }
-
-        $superAdminRoleId = $role->id;
-        $otherSuperAdmins = User::query()
-            ->whereKeyNot($user->id)
-            ->where('status', 'active')
-            ->whereHas('roles', fn ($query) => $query->where('roles.id', $superAdminRoleId))
-            ->count();
-
-        if ($otherSuperAdmins === 0) {
-            throw ValidationException::withMessages([
-                'role' => ['Cannot remove the last active super admin role.'],
-            ]);
-        }
-
-        if ($request->user()->is($user) && ! $request->boolean('confirm_self_removal')) {
-            throw ValidationException::withMessages([
-                'role' => ['Confirm before removing your own super admin access.'],
-            ]);
-        }
-    }
-
     private function rolePayload(Role $role): array
     {
         return [
@@ -342,6 +334,7 @@ class AdminRbacController extends Controller
             'slug' => $role->slug,
             'description' => $role->description ?? '',
             'isSystemRole' => (bool) $role->is_system,
+            'isActive' => (bool) $role->is_active,
             'userCount' => (int) ($role->users_count ?? $role->users()->count()),
             'permissionIds' => $role->relationLoaded('permissions')
                 ? $role->permissions->pluck('id')->map(fn ($id): string => (string) $id)->values()->all()
@@ -442,6 +435,16 @@ class AdminRbacController extends Controller
             'email' => $user->email,
             'agency' => $user->agency?->short_name ?: $user->agency?->name,
             'roleId' => $role ? (string) $role->id : '',
+            'role' => $role ? [
+                'id' => (string) $role->id,
+                'name' => $role->slug,
+                'display_name' => $role->display_name ?: $role->name,
+            ] : null,
+            'roles' => $user->roles->map(fn (Role $assignedRole): array => [
+                'id' => (string) $assignedRole->id,
+                'name' => $assignedRole->slug,
+                'display_name' => $assignedRole->display_name ?: $assignedRole->name,
+            ])->values()->all(),
             'status' => $user->status === 'active' ? 'active' : 'inactive',
         ];
     }

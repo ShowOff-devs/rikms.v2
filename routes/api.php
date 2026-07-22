@@ -115,21 +115,21 @@ Route::prefix('agency')
 
 Route::prefix('admin')
     ->name('api.admin.')
-    ->middleware(['auth:sanctum', 'verified', 'role:super_admin', 'super_admin.2fa'])
+    ->middleware(['auth:sanctum', 'verified', 'admin.portal', 'super_admin.2fa', 'admin.authorize'])
     ->group(function () {
         Route::get('/dashboard', AdminDashboardController::class)->name('dashboard');
-        Route::get('/agency-admin-users', [AdminAgencyAdminUserController::class, 'index'])->name('agency-admin-users.index');
-        Route::post('/agency-admin-users', [AdminAgencyAdminUserController::class, 'store'])->name('agency-admin-users.store');
-        Route::get('/agency-admin-users/{user}', [AdminAgencyAdminUserController::class, 'show'])->name('agency-admin-users.show');
-        Route::patch('/agency-admin-users/{user}', [AdminAgencyAdminUserController::class, 'update'])->name('agency-admin-users.update');
+        Route::get('/agency-admin-users', [AdminAgencyAdminUserController::class, 'index'])->middleware('permission:users.view')->name('agency-admin-users.index');
+        Route::post('/agency-admin-users', [AdminAgencyAdminUserController::class, 'store'])->middleware('permission:users.manage')->name('agency-admin-users.store');
+        Route::get('/agency-admin-users/{user}', [AdminAgencyAdminUserController::class, 'show'])->middleware('permission:users.view')->name('agency-admin-users.show');
+        Route::patch('/agency-admin-users/{user}', [AdminAgencyAdminUserController::class, 'update'])->middleware('permission:users.manage')->name('agency-admin-users.update');
         Route::post('/agency-admin-users/{user}/activate', [AdminAgencyAdminUserController::class, 'activate'])->name('agency-admin-users.activate');
         Route::post('/agency-admin-users/{user}/deactivate', [AdminAgencyAdminUserController::class, 'deactivate'])->name('agency-admin-users.deactivate');
         Route::post('/agency-admin-users/{user}/password-reset', [AdminAgencyAdminUserController::class, 'sendPasswordReset'])->name('agency-admin-users.password-reset');
         Route::delete('/agency-admin-users/{user}', [AdminAgencyAdminUserController::class, 'destroy'])->name('agency-admin-users.destroy');
-        Route::get('/agencies', [AdminReadController::class, 'agencies'])->name('agencies.index');
-        Route::post('/agencies', [AdminAgencyManagementController::class, 'store'])->name('agencies.store');
-        Route::get('/agencies/{agency}', [AdminReadController::class, 'agencyShow'])->name('agencies.show');
-        Route::patch('/agencies/{agency}', [AdminAgencyManagementController::class, 'update'])->name('agencies.update');
+        Route::get('/agencies', [AdminReadController::class, 'agencies'])->middleware('permission:agencies.view')->name('agencies.index');
+        Route::post('/agencies', [AdminAgencyManagementController::class, 'store'])->middleware('permission:agencies.manage')->name('agencies.store');
+        Route::get('/agencies/{agency}', [AdminReadController::class, 'agencyShow'])->middleware('permission:agencies.view')->name('agencies.show');
+        Route::patch('/agencies/{agency}', [AdminAgencyManagementController::class, 'update'])->middleware('permission:agencies.manage')->name('agencies.update');
         Route::post('/agencies/{agency}/activate', [AdminAgencyManagementController::class, 'activate'])->name('agencies.activate');
         Route::post('/agencies/{agency}/deactivate', [AdminAgencyManagementController::class, 'deactivate'])->name('agencies.deactivate');
         Route::post('/agencies/{agency}/assign-admin', [AdminAgencyManagementController::class, 'assignAdmin'])->name('agencies.assign-admin');
@@ -166,9 +166,9 @@ Route::prefix('admin')
         Route::delete('/agencies/{agency}/archive', [AdminArchiveController::class, 'destroyAgency'])->name('agencies.archive.destroy')->withTrashed();
         Route::post('/users/{user}/restore', [AdminArchiveController::class, 'restoreUser'])->name('users.restore')->withTrashed();
         Route::delete('/users/{user}/archive', [AdminArchiveController::class, 'destroyUser'])->name('users.archive.destroy')->withTrashed();
-        Route::get('/access-monitoring', [AdminAccessMonitoringController::class, 'index'])->name('access-monitoring.index');
-        Route::get('/access-monitoring/events', [AdminAccessMonitoringController::class, 'events'])->name('access-monitoring.events');
-        Route::get('/access-monitoring/export', [AdminAccessMonitoringController::class, 'export'])->name('access-monitoring.export');
+        Route::get('/access-monitoring', [AdminAccessMonitoringController::class, 'index'])->middleware('permission:access_monitoring.view')->name('access-monitoring.index');
+        Route::get('/access-monitoring/events', [AdminAccessMonitoringController::class, 'events'])->middleware('permission:access_monitoring.view')->name('access-monitoring.events');
+        Route::get('/access-monitoring/export', [AdminAccessMonitoringController::class, 'export'])->middleware('permission:access_monitoring.manage')->name('access-monitoring.export');
         Route::get('/access-requests', [AdminReadController::class, 'accessRequests'])->name('access-requests.index');
         Route::get('/access-requests/{accessRequest}', [AdminAccessMonitoringController::class, 'show'])->name('access-requests.show');
         Route::post('/access-requests/{accessRequest}/audit-reviewed', [AdminAccessMonitoringController::class, 'markReviewed'])->name('access-requests.audit-reviewed');
@@ -183,6 +183,7 @@ Route::prefix('admin')
         Route::get('/analytics/project-reports/budget', [AdminProjectReportAnalyticsController::class, 'budget'])->name('analytics.project-reports.budget');
         Route::get('/analytics/project-reports/agencies', [AdminProjectReportAnalyticsController::class, 'agencies'])->name('analytics.project-reports.agencies');
         Route::get('/analytics/project-reports/records', [AdminProjectReportAnalyticsController::class, 'records'])->name('analytics.project-reports.records');
+        Route::get('/analytics/project-reports/export', [AdminProjectReportAnalyticsController::class, 'export'])->name('analytics.project-reports.export');
         Route::get('/analytics/project-reports/{research}', [AdminProjectReportAnalyticsController::class, 'show'])->name('analytics.project-reports.show');
         Route::get('/reports/{report}/export', [AdminAnalyticsController::class, 'export'])->name('reports.export');
         Route::get('/audit-logs', [AdminReadController::class, 'auditLogs'])->name('audit-logs.index');
@@ -193,7 +194,7 @@ Route::prefix('admin')
         Route::post('/security/events/{securityEvent}/resolve', [AdminSecurityController::class, 'resolve'])->name('security.events.resolve');
         Route::post('/security/events/{securityEvent}/reopen', [AdminSecurityController::class, 'reopen'])->name('security.events.reopen');
         Route::get('/security/summary', [AdminSecurityController::class, 'summary'])->name('security.summary');
-        Route::get('/security/queue-health', [AdminSecurityController::class, 'queueHealth'])->name('security.queue-health');
+        Route::get('/security/queue-health', [AdminSecurityController::class, 'queueHealth'])->middleware('permission:security.view')->name('security.queue-health');
         Route::get('/security/sessions', [AdminSecurityController::class, 'sessions'])->name('security.sessions');
         Route::delete('/security/sessions/{sessionId}', [AdminSecurityController::class, 'revokeSession'])->name('security.sessions.revoke');
         Route::get('/system-activity/notifications', [AdminSystemActivityController::class, 'notifications'])->name('system-activity.notifications');
@@ -201,21 +202,22 @@ Route::prefix('admin')
         Route::get('/system-activity/logs', [AdminSystemActivityController::class, 'activityLogs'])->name('system-activity.logs');
         Route::get('/system-activity/timeline', [AdminSystemActivityController::class, 'timeline'])->name('system-activity.timeline');
         Route::get('/system-activity/export', [AdminSystemActivityController::class, 'export'])->name('system-activity.export');
-        Route::get('/platform-settings', [AdminReadController::class, 'platformSettings'])->name('platform-settings.index');
-        Route::patch('/platform-settings/{setting}', [AdminPlatformSettingController::class, 'update'])->name('platform-settings.update');
-        Route::post('/platform-settings/bulk-update', [AdminPlatformSettingController::class, 'bulkUpdate'])->name('platform-settings.bulk-update');
-        Route::post('/platform-settings/logo', [AdminPlatformSettingController::class, 'uploadLogo'])->name('platform-settings.logo.upload');
-        Route::get('/rbac/roles', [AdminRbacController::class, 'roles'])->name('rbac.roles.index');
-        Route::post('/rbac/roles', [AdminRbacController::class, 'createRole'])->name('rbac.roles.store');
-        Route::patch('/rbac/roles/{role}', [AdminRbacController::class, 'updateRole'])->name('rbac.roles.update');
-        Route::delete('/rbac/roles/{role}', [AdminRbacController::class, 'deleteRole'])->name('rbac.roles.destroy');
-        Route::match(['put', 'patch'], '/rbac/roles/{role}/permissions', [AdminRbacController::class, 'updateRolePermissions'])->name('rbac.roles.permissions.update');
-        Route::get('/rbac/permissions', [AdminRbacController::class, 'permissions'])->name('rbac.permissions.index');
-        Route::get('/rbac/history', [AdminRbacController::class, 'history'])->name('rbac.history.index');
-        Route::get('/rbac/users', [AdminRbacController::class, 'users'])->name('rbac.users.index');
+        Route::get('/platform-settings', [AdminReadController::class, 'platformSettings'])->middleware('permission:platform_settings.view')->name('platform-settings.index');
+        Route::patch('/platform-settings/{setting}', [AdminPlatformSettingController::class, 'update'])->middleware('permission:platform_settings.manage')->name('platform-settings.update');
+        Route::post('/platform-settings/bulk-update', [AdminPlatformSettingController::class, 'bulkUpdate'])->middleware('permission:platform_settings.manage')->name('platform-settings.bulk-update');
+        Route::post('/platform-settings/logo', [AdminPlatformSettingController::class, 'uploadLogo'])->middleware('permission:platform_settings.manage')->name('platform-settings.logo.upload');
+        Route::get('/rbac/roles', [AdminRbacController::class, 'roles'])->middleware('permission:rbac.view')->name('rbac.roles.index');
+        Route::post('/rbac/roles', [AdminRbacController::class, 'createRole'])->middleware('permission:roles.manage')->name('rbac.roles.store');
+        Route::patch('/rbac/roles/{role}', [AdminRbacController::class, 'updateRole'])->middleware('permission:roles.manage')->name('rbac.roles.update');
+        Route::delete('/rbac/roles/{role}', [AdminRbacController::class, 'deleteRole'])->middleware('permission:roles.manage')->name('rbac.roles.destroy');
+        Route::match(['put', 'patch'], '/rbac/roles/{role}/permissions', [AdminRbacController::class, 'updateRolePermissions'])->middleware('permission:permissions.manage')->name('rbac.roles.permissions.update');
+        Route::get('/rbac/permissions', [AdminRbacController::class, 'permissions'])->middleware('permission:rbac.view')->name('rbac.permissions.index');
+        Route::get('/rbac/history', [AdminRbacController::class, 'history'])->middleware('permission:rbac.view')->name('rbac.history.index');
+        Route::get('/rbac/users', [AdminRbacController::class, 'users'])->middleware('permission:rbac.view')->name('rbac.users.index');
+        Route::put('/rbac/users/{user}/role', [AdminRbacController::class, 'replaceUserRole'])->middleware('permission:rbac.manage')->name('rbac.users.role.update');
         Route::get('/rbac/users/{user}/roles', [AdminRbacController::class, 'userRoles'])->name('rbac.users.roles.index');
-        Route::post('/rbac/users/{user}/roles', [AdminRbacController::class, 'assignUserRole'])->name('rbac.users.roles.store');
-        Route::delete('/rbac/users/{user}/roles/{role}', [AdminRbacController::class, 'removeUserRole'])->name('rbac.users.roles.destroy');
+        Route::post('/rbac/users/{user}/roles', [AdminRbacController::class, 'assignUserRole'])->middleware('permission:rbac.manage')->name('rbac.users.roles.store');
+        Route::delete('/rbac/users/{user}/roles/{role}', [AdminRbacController::class, 'removeUserRole'])->middleware('permission:rbac.manage')->name('rbac.users.roles.destroy');
         Route::post('/notifications/{notification}/read', [NotificationController::class, 'adminRead'])->name('notifications.read');
         Route::post('/notifications/read-all', [NotificationController::class, 'adminReadAll'])->name('notifications.read-all');
     });
