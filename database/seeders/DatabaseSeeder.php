@@ -17,10 +17,8 @@ class DatabaseSeeder extends Seeder
             PlatformSettingSeeder::class,
         ]);
 
-        if (
-            app()->environment(['local', 'testing', 'pilot'])
-            || (bool) config('rikms.dev_seed_accounts.allow_outside_safe_environments', false)
-        ) {
+        if (app()->environment(['local', 'testing'])
+            && (bool) config('rikms.dev_seed_accounts.enabled', false)) {
             $this->call(DevelopmentAccountSeeder::class);
         }
     }

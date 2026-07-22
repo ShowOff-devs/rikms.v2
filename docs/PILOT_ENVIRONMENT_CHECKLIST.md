@@ -4,9 +4,11 @@
 
 - `APP_ENV=staging` or pilot-specific value.
 - `APP_DEBUG=false`.
-- `APP_URL` points to the Herd/pilot domain, normally `http://rikmsv2.test` locally.
+- `APP_URL` uses the HTTPS deployment URL. `http://rikmsv2.test` is local development only.
 - `APP_KEY` is set and never committed.
 - Trusted proxy/host settings are configured if behind a proxy.
+- `TRUSTED_HOSTS` lists the exact pilot hostnames and `TRUSTED_PROXIES` lists only known proxy IPs/CIDRs.
+- `LOG_LEVEL=warning`, `error`, or `critical`.
 - Do not run `php artisan serve` for this Herd project.
 
 ## Database
@@ -88,6 +90,11 @@ sudo systemctl restart rikms-queue
 - Upload workflow continues when AI/MongoDB is unavailable.
 
 ## Authentication
+
+- Rotate all existing pilot seeded account passwords before deployment.
+- Do not deploy public default credentials.
+- Set `RIKMS_ALLOW_DEV_SEED_ACCOUNTS=false` in pilot, staging, and production.
+- Require Super Admin MFA with `RIKMS_FORCE_SUPER_ADMIN_MFA=true`.
 
 - Agency Admin login verified.
 - Super Admin login verified.

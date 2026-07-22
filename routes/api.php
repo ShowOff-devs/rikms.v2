@@ -31,7 +31,7 @@ use App\Support\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-Route::prefix('public')->group(function () {
+Route::prefix('public')->middleware('throttle:public-api')->group(function () {
     Route::get('/platform-settings', function (PlatformSettingsService $settings) {
         return ApiResponse::success('Public platform settings retrieved.', [
             'access_requests_enabled' => $settings->accessRequestsEnabled(),
@@ -41,7 +41,8 @@ Route::prefix('public')->group(function () {
     Route::get('/research', [PublicResearchController::class, 'index']);
     Route::post('/research/{research}/access-requests', [PublicAccessRequestController::class, 'store'])
         ->middleware('throttle:public-access-requests');
-    Route::get('/research/{identifier}/download', [PublicResearchController::class, 'download']);
+    Route::get('/research/{identifier}/download', [PublicResearchController::class, 'download'])
+        ->middleware('throttle:public-downloads');
     Route::get('/research/{identifier}', [PublicResearchController::class, 'show']);
     Route::get('/agencies', [PublicAgencyController::class, 'index']);
     Route::get('/agencies/types', [PublicAgencyController::class, 'types']);

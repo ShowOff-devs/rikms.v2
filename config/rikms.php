@@ -1,10 +1,11 @@
 <?php
 
-$safeDevelopmentEnvironment = in_array(env('APP_ENV'), ['local', 'testing', 'pilot'], true);
+$safeDevelopmentEnvironment = in_array(env('APP_ENV'), ['local', 'testing'], true);
 
 return [
     'dev_seed_accounts' => [
-        'allow_outside_safe_environments' => (bool) env('RIKMS_ALLOW_DEV_SEED_ACCOUNTS', false),
+        'enabled' => $safeDevelopmentEnvironment
+            && filter_var(env('RIKMS_ALLOW_DEV_SEED_ACCOUNTS', false), FILTER_VALIDATE_BOOL),
         'super_admin_auth_code' => $safeDevelopmentEnvironment
             ? env('RIKMS_DEV_SUPER_ADMIN_AUTH_CODE')
             : null,
@@ -30,6 +31,11 @@ return [
     ],
 
     'security' => [
+        'log_level' => env('LOG_LEVEL', 'debug'),
+        'dev_seed_accounts_requested' => filter_var(env('RIKMS_ALLOW_DEV_SEED_ACCOUNTS', false), FILTER_VALIDATE_BOOL),
         'force_super_admin_mfa' => (bool) env('RIKMS_FORCE_SUPER_ADMIN_MFA', true),
+        'public_api_per_minute' => (int) env('PUBLIC_API_LIMIT_PER_MINUTE', 60),
+        'public_downloads_per_minute' => (int) env('PUBLIC_DOWNLOAD_LIMIT_PER_MINUTE', 20),
+        'approved_access_per_minute' => (int) env('APPROVED_ACCESS_LIMIT_PER_MINUTE', 10),
     ],
 ];

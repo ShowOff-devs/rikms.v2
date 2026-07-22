@@ -65,7 +65,7 @@ class AppServiceProvider extends ServiceProvider
 
     protected function enforceProductionSecurityConfiguration(): void
     {
-        if (! app()->isProduction()) {
+        if (! app()->environment(['pilot', 'staging', 'production'])) {
             return;
         }
 
@@ -81,6 +81,30 @@ class AppServiceProvider extends ServiceProvider
 
         if (config('session.secure') !== true) {
             $violations[] = 'SESSION_SECURE_COOKIE must be true';
+        }
+
+        if (! str_starts_with((string) config('app.url'), 'https://')) {
+            $violations[] = 'APP_URL must use HTTPS';
+        }
+
+        if (! in_array((string) config('rikms.security.log_level'), ['warning', 'error', 'critical'], true)) {
+            $violations[] = 'LOG_LEVEL must be warning, error, or critical';
+        }
+
+        if (! config('rikms.security.force_super_admin_mfa')) {
+            $violations[] = 'RIKMS_FORCE_SUPER_ADMIN_MFA must be true';
+        }
+
+        if (config('rikms.dev_seed_accounts.enabled') || config('rikms.security.dev_seed_accounts_requested')) {
+            $violations[] = 'RIKMS_ALLOW_DEV_SEED_ACCOUNTS must be false';
+        }
+
+        if (config('trustedproxy.hosts', []) === []) {
+            $violations[] = 'TRUSTED_HOSTS must be configured';
+        }
+
+        if (config('queue.default') === 'sync') {
+            $violations[] = 'QUEUE_CONNECTION must not be sync';
         }
 
         if (config('rikms.public_access_requests.enabled') && ! config('rikms.public_access_requests.captcha.enabled')) {
@@ -102,6 +126,25 @@ class AppServiceProvider extends ServiceProvider
 
     protected function configureRateLimiters(): void
     {
+        RateLimiter::for('public-api', fn (Request $request): Limit => Limit::perMinute(
+            max(1, (int) config('rikms.security.public_api_per_minute', 60)),
+        )->by('public-api:'.hash('sha256', (string) $request->ip())));
+
+        RateLimiter::for('public-downloads', fn (Request $request): Limit => Limit::perMinute(
+            max(1, (int) config('rikms.security.public_downloads_per_minute', 20)),
+        )->by('public-downloads:'.hash('sha256', (string) $request->ip())));
+
+        RateLimiter::for('approved-access', function (Request $request): array {
+            $limit = max(1, (int) config('rikms.security.approved_access_per_minute', 10));
+            $ip = hash('sha256', (string) $request->ip());
+            $token = hash('sha256', (string) $request->route('token'));
+
+            return [
+                Limit::perMinute($limit)->by('approved-access:ip:'.$ip),
+                Limit::perMinute($limit)->by('approved-access:token:'.$ip.':'.$token),
+            ];
+        });
+
         RateLimiter::for('public-access-requests', function (Request $request): array {
             $ipKey = hash('sha256', (string) $request->ip());
             $limits = config('rikms.public_access_requests.limits');

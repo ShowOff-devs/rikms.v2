@@ -1,6 +1,9 @@
 <?php
 
+use App\Http\Middleware\AddSecurityHeaders;
 use App\Http\Middleware\AuthorizeAdminRoute;
+use App\Http\Middleware\ConfigureTrustedHosts;
+use App\Http\Middleware\ConfigureTrustedProxies;
 use App\Http\Middleware\EnforcePlatformMaintenanceMode;
 use App\Http\Middleware\EnforceUserSessionTimeout;
 use App\Http\Middleware\EnsureAgencyScope;
@@ -25,6 +28,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->prepend([
+            ConfigureTrustedHosts::class,
+            ConfigureTrustedProxies::class,
+        ]);
+
         $middleware->statefulApi();
 
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
@@ -39,6 +47,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->web(append: [
+            AddSecurityHeaders::class,
             EnforcePlatformMaintenanceMode::class,
             EnforceUserSessionTimeout::class,
             HandleAppearance::class,

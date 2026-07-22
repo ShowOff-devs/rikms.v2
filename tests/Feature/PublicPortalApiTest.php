@@ -418,3 +418,21 @@ test('public portal can start empty', function () {
         ->assertJsonPath('total', 0)
         ->assertJsonCount(0, 'items');
 });
+
+test('public browse and agency endpoints use the public api limiter', function () {
+    config()->set('rikms.security.public_api_per_minute', 2);
+
+    $this->getJson('/api/public/research')->assertOk();
+    $this->getJson('/api/public/agencies')->assertOk();
+    $this->getJson('/api/public/summary')->assertTooManyRequests();
+});
+
+test('public downloads use their stricter limiter', function () {
+    config()->set('rikms.security.public_api_per_minute', 60);
+    config()->set('rikms.security.public_downloads_per_minute', 1);
+
+    createPublicPortalResearch('limited-download');
+
+    $this->getJson('/api/public/research/limited-download/download')->assertNotFound();
+    $this->getJson('/api/public/research/limited-download/download')->assertTooManyRequests();
+});

@@ -35,10 +35,10 @@ Route::get('/agencies/{slug}', fn (string $slug) => Inertia::render('agencies/sh
 ]))->name('agencies.show');
 Route::inertia('/contact', 'contact')->name('contact');
 Route::get('/approved-access/{token}', [ApprovedAccessController::class, 'show'])
-    ->middleware('throttle:30,1')
+    ->middleware('throttle:approved-access')
     ->name('approved-access.show');
 Route::get('/approved-access/{token}/download', [ApprovedAccessController::class, 'download'])
-    ->middleware('throttle:10,1')
+    ->middleware('throttle:approved-access')
     ->name('approved-access.download');
 Route::get('/privacy-policy', fn () => Inertia::render('public-policy', [
     'pageKey' => 'privacy-policy',

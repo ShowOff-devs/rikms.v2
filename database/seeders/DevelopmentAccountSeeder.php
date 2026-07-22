@@ -10,15 +10,15 @@ use Illuminate\Support\Facades\Hash;
 
 class DevelopmentAccountSeeder extends Seeder
 {
-    private const ALLOWED_ENVIRONMENTS = ['local', 'testing', 'pilot'];
+    private const ALLOWED_ENVIRONMENTS = ['local', 'testing'];
 
     /**
-     * Seed local and pilot-only development accounts.
+     * Seed explicitly enabled local/test development accounts.
      */
     public function run(): void
     {
         if (! $this->canSeedDevelopmentAccounts()) {
-            $this->command?->warn('Skipped development account seeding outside local/testing/pilot environments.');
+            $this->command?->warn('Skipped development account seeding. It requires local/testing and RIKMS_ALLOW_DEV_SEED_ACCOUNTS=true.');
 
             return;
         }
@@ -77,7 +77,7 @@ class DevelopmentAccountSeeder extends Seeder
     private function canSeedDevelopmentAccounts(): bool
     {
         return app()->environment(self::ALLOWED_ENVIRONMENTS)
-            || (bool) config('rikms.dev_seed_accounts.allow_outside_safe_environments', false);
+            && (bool) config('rikms.dev_seed_accounts.enabled', false);
     }
 
     private function findOrCreateDostAgency(): Agency
