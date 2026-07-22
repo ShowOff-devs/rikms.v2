@@ -26,6 +26,11 @@ export const permissionModuleOrder: PermissionModule[] = [
     'archive',
     'audit-logs',
     'platform-settings',
+    'rbac',
+    'roles',
+    'permissions',
+    'research-moderation',
+    'access-monitoring',
 ];
 
 export const permissionModuleLabels: Record<PermissionModule, string> = {
@@ -43,6 +48,11 @@ export const permissionModuleLabels: Record<PermissionModule, string> = {
     archive: 'Archive',
     'audit-logs': 'Audit Logs',
     'platform-settings': 'Platform Settings',
+    rbac: 'RBAC',
+    roles: 'Role Management',
+    permissions: 'Permission Management',
+    'research-moderation': 'Research Moderation',
+    'access-monitoring': 'Access Monitoring',
 };
 
 export function formatRbacDate(value: string) {

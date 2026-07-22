@@ -46,7 +46,10 @@ export function RoleActionsMenu({
                     <Eye className="size-4" aria-hidden="true" />
                     View Role
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => onEdit(role)}>
+                <DropdownMenuItem
+                    disabled={role.isSystemRole}
+                    onSelect={() => onEdit(role)}
+                >
                     <Edit3 className="size-4" aria-hidden="true" />
                     Edit Role
                 </DropdownMenuItem>
