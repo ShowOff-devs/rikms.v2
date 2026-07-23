@@ -31,6 +31,7 @@
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="PUBLIC_ACCESS_REQUESTS_ENABLED" value="true"/>
+        <env name="RIKMS_ALLOW_DEV_SEED_ACCOUNTS" value="true"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
     </php>
