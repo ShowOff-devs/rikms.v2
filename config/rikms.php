@@ -38,4 +38,20 @@ return [
         'public_downloads_per_minute' => (int) env('PUBLIC_DOWNLOAD_LIMIT_PER_MINUTE', 20),
         'approved_access_per_minute' => (int) env('APPROVED_ACCESS_LIMIT_PER_MINUTE', 10),
     ],
+
+    'public_cache' => [
+        'list_ttl_seconds' => (int) env('PUBLIC_CACHE_LIST_TTL_SECONDS', 60),
+        'summary_ttl_seconds' => (int) env('PUBLIC_CACHE_SUMMARY_TTL_SECONDS', 300),
+        'agency_ttl_seconds' => (int) env('PUBLIC_CACHE_AGENCY_TTL_SECONDS', 300),
+    ],
+
+    'uploads' => [
+        'quarantine_disk' => env('UPLOAD_QUARANTINE_DISK', 'local'),
+        'storage_disk' => env('UPLOAD_STORAGE_DISK', 'local'),
+        'malware_scanner' => env('MALWARE_SCANNER', 'none'),
+        'clamav_host' => env('CLAMAV_HOST', '127.0.0.1'),
+        'clamav_port' => (int) env('CLAMAV_PORT', 3310),
+        'clamav_timeout_seconds' => (float) env('CLAMAV_TIMEOUT_SECONDS', 10),
+        'pdf_max_text_chars' => (int) env('AI_PDF_MAX_TEXT_CHARS', 200000),
+    ],
 ];

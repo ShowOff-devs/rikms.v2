@@ -23,6 +23,7 @@ use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use App\Support\PublicMetadata;
 use App\Support\ResearchSlugger;
+use App\Support\SecurityEventLogger;
 use App\Support\Statuses;
 use App\Support\UserNotificationPreferences;
 use Illuminate\Http\JsonResponse;
@@ -32,6 +33,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Throwable;
 
 class AgencyResearchWriteController extends Controller
 {
@@ -251,32 +253,47 @@ class AgencyResearchWriteController extends Controller
         }
 
         $storedName = (string) Str::uuid().'.'.$uploadedFile->getClientOriginalExtension();
-        $quarantinePath = $uploadedFile->storeAs('research/quarantine', $storedName, 'local');
-        $scan = $this->uploadSecurityScanner->scanStoredFile('local', $quarantinePath);
+        $quarantineDisk = (string) config('rikms.uploads.quarantine_disk', 'local');
+        $storageDisk = (string) config('rikms.uploads.storage_disk', 'local');
+        $quarantinePath = $uploadedFile->storeAs('research/quarantine', $storedName, $quarantineDisk);
 
-        if (! $scan['clean']) {
-            Storage::disk('local')->delete($quarantinePath);
-
-            AuditLogger::record($request, 'research_file.security_rejected', null, null, null, [
-                'research_id' => $research->id,
-                'agency_id' => $research->agency_id,
-                'original_name' => $uploadedFile->getClientOriginalName(),
-                'size_bytes' => $uploadedFile->getSize(),
-                'checksum' => $checksum,
-                'security_scan' => $scan,
+        try {
+            $scan = $this->uploadSecurityScanner->scanStoredFile($quarantineDisk, $quarantinePath);
+        } catch (Throwable $exception) {
+            Storage::disk($quarantineDisk)->delete($quarantinePath);
+            $this->auditRejectedUpload($request, $research, $uploadedFile->getClientOriginalName(), $uploadedFile->getSize(), $checksum, [
+                'status' => 'scanner_error',
+                'engine' => (string) config('rikms.uploads.malware_scanner', 'none'),
             ]);
 
             return ApiResponse::error(
-                'The uploaded PDF did not pass security screening.',
-                ['file' => ['The uploaded PDF did not pass security screening.']],
+                'The uploaded file could not be accepted because it failed the document safety check.',
+                ['file' => ['The uploaded file could not be accepted because it failed the document safety check.']],
+                422,
+            );
+        }
+
+        if (! $scan['clean']) {
+            Storage::disk($quarantineDisk)->delete($quarantinePath);
+            $this->auditRejectedUpload($request, $research, $uploadedFile->getClientOriginalName(), $uploadedFile->getSize(), $checksum, $scan);
+
+            $encrypted = in_array('encrypted-pdf', $scan['signatures'], true);
+
+            return ApiResponse::error(
+                $encrypted
+                    ? 'Password-protected or encrypted PDFs are not supported during the pilot release.'
+                    : 'The uploaded file could not be accepted because it failed the document safety check.',
+                ['file' => [$encrypted
+                    ? 'Password-protected or encrypted PDFs are not supported during the pilot release.'
+                    : 'The uploaded file could not be accepted because it failed the document safety check.']],
                 422,
             );
         }
 
         $path = 'research/'.$research->id.'/'.$storedName;
 
-        if (! Storage::disk('local')->move($quarantinePath, $path)) {
-            Storage::disk('local')->delete($quarantinePath);
+        if (! $this->promoteQuarantinedFile($quarantineDisk, $quarantinePath, $storageDisk, $path)) {
+            Storage::disk($quarantineDisk)->delete($quarantinePath);
 
             AuditLogger::record($request, 'research_file.storage_failed', null, null, null, [
                 'research_id' => $research->id,
@@ -294,14 +311,14 @@ class AgencyResearchWriteController extends Controller
 
         $aiEnabled = $this->settings->aiProcessingEnabled();
 
-        $researchFile = DB::transaction(function () use ($request, $research, $uploadedFile, $checksum, $storedName, $path, $scan, $aiEnabled): ResearchFile {
+        $researchFile = DB::transaction(function () use ($request, $research, $uploadedFile, $checksum, $storedName, $storageDisk, $path, $scan, $aiEnabled): ResearchFile {
             $researchFile = ResearchFile::create([
                 'research_id' => $research->id,
                 'agency_id' => $research->agency_id,
                 'uploaded_by' => $request->user()->id,
                 'original_name' => $uploadedFile->getClientOriginalName(),
                 'stored_name' => $storedName,
-                'disk' => 'local',
+                'disk' => $storageDisk,
                 'path' => $path,
                 'mime_type' => $uploadedFile->getMimeType(),
                 'extension' => $uploadedFile->getClientOriginalExtension(),
@@ -317,6 +334,7 @@ class AgencyResearchWriteController extends Controller
                         'engine' => $scan['engine'],
                         'signatures' => $scan['signatures'],
                         'scanned_at' => $scan['scanned_at'],
+                        'malware_scanner' => $scan['malware_scanner'],
                     ],
                     'ai_processing' => $aiEnabled
                         ? [
@@ -378,7 +396,7 @@ class AgencyResearchWriteController extends Controller
             return ApiResponse::error('This research record is outside your agency scope.', [], 403);
         }
 
-        if ($file->archived_at !== null || $file->status === 'deleted') {
+        if ($file->archived_at !== null || $file->status !== 'active') {
             return ApiResponse::error('This research file is not available for download.', [], 404);
         }
 
@@ -520,6 +538,56 @@ class AgencyResearchWriteController extends Controller
     /**
      * @param  array<string, mixed>  $item
      */
+    private function promoteQuarantinedFile(string $quarantineDisk, string $quarantinePath, string $storageDisk, string $path): bool
+    {
+        if ($quarantineDisk === $storageDisk) {
+            return Storage::disk($quarantineDisk)->move($quarantinePath, $path);
+        }
+
+        $stream = Storage::disk($quarantineDisk)->readStream($quarantinePath);
+
+        if (! is_resource($stream)) {
+            return false;
+        }
+
+        try {
+            $stored = Storage::disk($storageDisk)->writeStream($path, $stream);
+        } finally {
+            fclose($stream);
+        }
+
+        if (! $stored) {
+            Storage::disk($storageDisk)->delete($path);
+
+            return false;
+        }
+
+        Storage::disk($quarantineDisk)->delete($quarantinePath);
+
+        return true;
+    }
+
+    private function auditRejectedUpload(
+        Request $request,
+        Research $research,
+        string $originalName,
+        int $size,
+        string $checksum,
+        array $scan,
+    ): void {
+        $metadata = [
+            'research_id' => $research->id,
+            'agency_id' => $research->agency_id,
+            'original_name' => $originalName,
+            'size_bytes' => $size,
+            'checksum' => $checksum,
+            'security_scan' => $scan,
+        ];
+
+        AuditLogger::record($request, 'research_file.security_rejected', null, null, null, $metadata);
+        SecurityEventLogger::record($request, 'upload.security_rejected', $request->user(), 'high', $metadata);
+    }
+
     private function isBlankPerformanceItem(array $item): bool
     {
         foreach ([

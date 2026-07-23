@@ -16,6 +16,10 @@ class ParsePdfDocumentJob implements ShouldQueue
 {
     use Queueable;
 
+    public int $timeout = 120;
+
+    public int $tries = 1;
+
     public function __construct(
         public int $researchId,
         public int $fileId,

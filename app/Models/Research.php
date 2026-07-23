@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\PublicResponseCache;
 use App\Support\Statuses;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -62,6 +63,15 @@ class Research extends Model
         'restored_at' => 'datetime',
     ];
 
+    protected static function booted(): void
+    {
+        $invalidate = fn (): mixed => app(PublicResponseCache::class)->invalidateResearch();
+
+        static::saved($invalidate);
+        static::deleted($invalidate);
+        static::restored($invalidate);
+    }
+
     public function agency()
     {
         return $this->belongsTo(Agency::class);
@@ -110,12 +120,13 @@ class Research extends Model
     public function scopePubliclyVisible(Builder $query): Builder
     {
         return $query
-            ->where('status', Statuses::RESEARCH_PUBLISHED)
-            ->whereNull('archived_at')
+            ->where('research.status', Statuses::RESEARCH_PUBLISHED)
+            ->whereNull('research.archived_at')
+            ->whereNull('research.superseded_by_id')
             ->where(function (Builder $query): void {
                 $query
-                    ->whereNull('access_level')
-                    ->orWhere('access_level', '!=', 'private');
+                    ->whereNull('research.access_level')
+                    ->orWhere('research.access_level', '!=', 'private');
             });
     }
 

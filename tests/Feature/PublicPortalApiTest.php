@@ -6,6 +6,7 @@ use App\Models\ResearchAnalyticsEvent;
 use App\Models\ResearchFile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 uses(RefreshDatabase::class);
@@ -435,4 +436,83 @@ test('public downloads use their stricter limiter', function () {
 
     $this->getJson('/api/public/research/limited-download/download')->assertNotFound();
     $this->getJson('/api/public/research/limited-download/download')->assertTooManyRequests();
+});
+
+test('public browse uses database pagination and clamps per page', function () {
+    [$agency, $first] = createPublicPortalResearch('database-page-1');
+
+    foreach (range(2, 55) as $index) {
+        Research::create([
+            'slug' => "database-page-{$index}",
+            'agency_id' => $agency->id,
+            'uploaded_by' => $first->uploaded_by,
+            'title' => "Database Page {$index}",
+            'publication_year' => 2026,
+            'category' => 'Scalability',
+            'sdgs' => ['SDG 9'],
+            'status' => 'published',
+            'access_level' => 'public',
+            'published_at' => now(),
+        ]);
+    }
+
+    $this->getJson('/api/public/research?per_page=500&page=1')
+        ->assertOk()
+        ->assertJsonPath('total', 55)
+        ->assertJsonPath('perPage', 50)
+        ->assertJsonCount(50, 'items');
+});
+
+test('public browse applies agency year document type and sdg filters in the database', function () {
+    Storage::fake('local');
+    [$agency, $matching] = createPublicPortalResearch('database-filter-match');
+    $matching->update(['publication_year' => 2024, 'sdgs' => ['SDG 9']]);
+    ResearchFile::create([
+        'research_id' => $matching->id,
+        'agency_id' => $agency->id,
+        'uploaded_by' => $matching->uploaded_by,
+        'original_name' => 'terminal.pdf',
+        'stored_name' => 'terminal.pdf',
+        'disk' => 'local',
+        'path' => 'terminal.pdf',
+        'file_type' => 'terminal-report',
+        'visibility' => 'public',
+        'access_level' => 'public',
+        'status' => 'active',
+    ]);
+
+    $this->getJson('/api/public/research?agency=smaarrdec&year=2024&document_type=terminal-report&sdg=SDG%209')
+        ->assertOk()
+        ->assertJsonPath('total', 1)
+        ->assertJsonPath('items.0.id', $matching->id)
+        ->assertJsonPath('facets.documentTypes.0.value', 'terminal-report');
+
+    $this->getJson('/api/public/research?year=2023')->assertJsonPath('total', 0);
+});
+
+test('public browse rejects unapproved sort fields', function () {
+    $this->getJson('/api/public/research?sort=password')
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('sort');
+});
+
+test('public list cache is parameter specific and invalidates after research changes', function () {
+    [, $research] = createPublicPortalResearch('cache-version-study');
+    $research->update(['title' => 'Cache Version Study']);
+
+    $this->getJson('/api/public/research?search=Cache%20Version')->assertJsonPath('total', 1);
+
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+    $this->getJson('/api/public/research?search=Cache%20Version')->assertJsonPath('total', 1);
+    expect(DB::getQueryLog())->toBe([]);
+    DB::disableQueryLog();
+
+    $this->getJson('/api/public/research?search=no-match')->assertJsonPath('total', 0);
+
+    $research->update(['title' => 'Changed Public Cache Title']);
+
+    $this->getJson('/api/public/research?search=Changed%20Public%20Cache')
+        ->assertJsonPath('total', 1)
+        ->assertJsonPath('items.0.title', 'Changed Public Cache Title');
 });

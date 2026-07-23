@@ -77,6 +77,10 @@
             "npm run types:check",
             "@test"
         ],
+        "security:audit": [
+            "composer audit --locked",
+            "npm audit --omit=dev"
+        ],
         "test": [
             "@php artisan config:clear --ansi",
             "@lint:check",

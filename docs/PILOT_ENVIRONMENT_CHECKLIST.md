@@ -74,6 +74,18 @@ sudo systemctl restart rikms-queue
 - File permissions checked on pilot host.
 - `storage:link` only where appropriate for public assets.
 - Private uploads and generated reports remain ignored.
+- `UPLOAD_QUARANTINE_DISK` and `UPLOAD_STORAGE_DISK` point to private disks.
+- `MALWARE_SCANNER=none` means real malware scanning is inactive; only the built-in PDF guard runs.
+- Before wider rollout, configure and test `MALWARE_SCANNER=clamav` with the correct `CLAMAV_HOST` and `CLAMAV_PORT`.
+- Password-protected/encrypted PDFs are rejected during the pilot.
+- PDF parser jobs have a 120-second timeout, one attempt, and bounded stored extraction text.
+
+## Public cache
+
+- Public browse cache defaults to 60 seconds.
+- Public summary, agency list, and agency detail cache defaults to 5 minutes.
+- Research and agency model changes advance scoped cache versions; authenticated and token responses are never cached.
+- SDG aggregation uses database JSON queries. Validate indexing/generated-column strategy on MySQL before national-scale rollout.
 
 ## MongoDB
 
@@ -108,6 +120,7 @@ sudo systemctl restart rikms-queue
 - No `.env`, credentials, database files, private uploads, logs, generated backups, or archives staged.
 - Composer audit blocker reviewed: `guzzlehttp/psr7 <2.10.2` has two medium advisories.
 - `npm audit --audit-level=moderate` currently reports 0 vulnerabilities.
+- CI runs `composer audit --locked` and `npm audit --omit=dev` without deployment secrets or production migrations.
 - Debug disabled.
 - Review whether `public/.user.ini` should be source-controlled or deployed by server configuration.
 

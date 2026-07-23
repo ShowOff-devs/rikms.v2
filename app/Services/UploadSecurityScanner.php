@@ -2,13 +2,16 @@
 
 namespace App\Services;
 
+use App\Contracts\MalwareScanner;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
 class UploadSecurityScanner
 {
+    public function __construct(private readonly MalwareScanner $malwareScanner) {}
+
     /**
-     * @return array{clean: bool, engine: string, signatures: list<string>, scanned_at: string}
+     * @return array{clean: bool, engine: string, signatures: list<string>, scanned_at: string, malware_scanner: array{active: bool, engine: string}}
      */
     public function scanStoredFile(string $disk, string $path): array
     {
@@ -19,12 +22,19 @@ class UploadSecurityScanner
         }
 
         $signatures = $this->matchingSignatures($absolutePath);
+        $malware = $signatures === []
+            ? $this->malwareScanner->scan($absolutePath)
+            : ['clean' => true, 'active' => false, 'engine' => 'not_run', 'signatures' => []];
 
         return [
-            'clean' => $signatures === [],
-            'engine' => 'built_in_pdf_guard',
-            'signatures' => $signatures,
+            'clean' => $signatures === [] && $malware['clean'],
+            'engine' => $malware['active'] ? 'built_in_pdf_guard+'.$malware['engine'] : 'built_in_pdf_guard',
+            'signatures' => array_values(array_unique([...$signatures, ...$malware['signatures']])),
             'scanned_at' => now()->toISOString(),
+            'malware_scanner' => [
+                'active' => $malware['active'],
+                'engine' => $malware['engine'],
+            ],
         ];
     }
 
@@ -40,6 +50,7 @@ class UploadSecurityScanner
             'pdf-short-javascript-action' => '/JS',
             'pdf-launch-action' => '/Launch',
             'pdf-embedded-file' => '/EmbeddedFile',
+            'encrypted-pdf' => '/Encrypt',
         ];
 
         $handle = fopen($absolutePath, 'rb');
