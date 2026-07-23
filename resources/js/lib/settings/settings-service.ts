@@ -16,7 +16,9 @@ export async function getAgencySettings() {
     return normalizeAgencySettings(data);
 }
 
-export async function updateAccountSettings(payload: AccountSettings) {
+export async function updateAccountSettings(
+    payload: AccountSettings & { currentPassword?: string },
+) {
     const { data } = await fetchApi<AccountSettings>(
         '/api/agency/settings/account',
         {
@@ -84,6 +86,15 @@ export async function uploadProfilePhoto(
             method: 'POST',
             body: formData,
         },
+    );
+
+    return data;
+}
+
+export async function removeProfilePhoto() {
+    const { data } = await fetchApi<{ profilePhotoUrl: null }>(
+        '/api/agency/settings/profile-photo',
+        { method: 'DELETE' },
     );
 
     return data;

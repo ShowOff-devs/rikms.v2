@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Agency;
+use App\Models\Notification;
 use App\Models\Research;
+use App\Services\SessionTimeoutResolver;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use App\Support\SecurityEventLogger;
@@ -20,6 +22,8 @@ use Throwable;
 
 class AgencyProfileSettingsController extends Controller
 {
+    public function __construct(private readonly SessionTimeoutResolver $timeoutResolver) {}
+
     public function profile(Request $request): JsonResponse
     {
         return ApiResponse::success('Agency profile retrieved.', $this->profilePayload($request));
@@ -145,19 +149,43 @@ class AgencyProfileSettingsController extends Controller
         $validated = $request->validate([
             'fullName' => ['required', 'string', 'max:255'],
             'emailAddress' => ['required', 'email', 'max:255', 'unique:users,email,'.$request->user()->id],
+            'currentPassword' => ['nullable', 'string'],
         ]);
 
         $user = $request->user();
-        $oldValues = $user->only(['name', 'email']);
+        $emailChanged = strcasecmp($user->email, $validated['emailAddress']) !== 0;
 
-        $user->update([
+        if ($emailChanged) {
+            $request->validate([
+                'currentPassword' => ['required', 'current_password:web'],
+            ]);
+        }
+
+        $oldValues = $user->only(['name', 'email', 'email_verified_at']);
+
+        $user->forceFill([
             'name' => $validated['fullName'],
             'email' => $validated['emailAddress'],
-        ]);
+            'email_verified_at' => $emailChanged ? null : $user->email_verified_at,
+        ])->save();
 
         AuditLogger::record($request, 'agency.account.updated', $user, $oldValues, $user->fresh()->only(array_keys($oldValues)));
 
-        return ApiResponse::success('Agency account settings updated.', $this->settingsPayload($request)['account']);
+        if ($emailChanged) {
+            $user->sendEmailVerificationNotification();
+            AuditLogger::record($request, 'agency.account.email_changed', $user, null, null, [
+                'verification_required' => true,
+                'email_domain' => str($user->email)->after('@')->toString(),
+            ]);
+        }
+
+        return ApiResponse::success(
+            $emailChanged ? 'Profile updated successfully. Please verify your new email address before continuing.' : 'Profile updated successfully.',
+            [
+                ...$this->settingsPayload($request)['account'],
+                'email_verification_required' => $emailChanged,
+            ],
+        );
     }
 
     public function updateNotifications(Request $request): JsonResponse
@@ -166,12 +194,22 @@ class AgencyProfileSettingsController extends Controller
             'notifyNewAccessRequests' => ['required', 'boolean'],
             'notifyRequestApprovalsDenials' => ['required', 'boolean'],
             'notifyNewResearchUploads' => ['required', 'boolean'],
-            'browserNotifications' => ['required', 'boolean'],
+            'browserNotifications' => ['required', 'boolean', 'declined'],
             'weeklyDigest' => ['required', 'boolean'],
             'monthlyAnalyticsReport' => ['required', 'boolean'],
         ]);
 
-        $request->user()->update(['notification_preferences' => $validated]);
+        $user = $request->user();
+        $oldValues = array_merge($this->defaultNotificationPreferences(), $user->notification_preferences ?? []);
+        $changedKeys = collect($validated)->filter(fn ($value, $key) => ($oldValues[$key] ?? null) !== $value)->keys()->values()->all();
+
+        $user->update(['notification_preferences' => $validated]);
+
+        if ($changedKeys !== []) {
+            AuditLogger::record($request, 'agency.notification_settings.updated', $user, $oldValues, $validated, [
+                'changed_keys' => $changedKeys,
+            ]);
+        }
 
         return ApiResponse::success('Agency notification settings updated.', $validated);
     }
@@ -240,35 +278,53 @@ class AgencyProfileSettingsController extends Controller
     public function uploadProfilePhoto(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'photo' => ['required', 'file', 'mimes:png,jpg,jpeg,svg', 'max:5120'],
+            'photo' => ['required', 'image', 'mimes:png,jpg,jpeg,webp', 'max:2048'],
         ]);
 
         $user = $request->user();
         $oldPhotoPath = $user->profile_photo_path;
-        $path = $validated['photo']->store('profile-photos', 'public');
-        $photoUrl = Storage::disk('public')->url($path);
+        $path = $validated['photo']->store("profile-photos/{$user->id}", 'public');
 
-        $user->update(['profile_photo_path' => $photoUrl]);
+        if (! is_string($path) || $path === '') {
+            return ApiResponse::error('Unable to store profile photo.', ['photo' => ['The photo could not be saved.']], 500);
+        }
+
+        try {
+            DB::transaction(function () use ($user, $oldPhotoPath, $path, $request, $validated): void {
+                $user->update(['profile_photo_path' => $path]);
+
+                AuditLogger::record($request, 'agency.profile_photo_uploaded', $user, ['profile_photo_path' => $oldPhotoPath], ['profile_photo_path' => $path], [
+                    'file_name' => $validated['photo']->getClientOriginalName(),
+                    'size_bytes' => $validated['photo']->getSize(),
+                ]);
+            });
+        } catch (Throwable $exception) {
+            Storage::disk('public')->delete($path);
+            throw $exception;
+        }
+
         $this->deletePublicDiskFile($oldPhotoPath, ['profile-photos/']);
 
-        AuditLogger::record(
-            $request,
-            'agency.profile_photo_uploaded',
-            $user,
-            ['profile_photo_path' => $oldPhotoPath],
-            ['profile_photo_path' => $photoUrl],
-            [
-                'file_name' => $validated['photo']->getClientOriginalName(),
-                'path' => $path,
-                'size_bytes' => $validated['photo']->getSize(),
-            ],
-        );
-
-        return ApiResponse::success('Profile photo uploaded.', [
-            'profilePhotoUrl' => $photoUrl,
+        return ApiResponse::success('Profile photo updated successfully.', [
+            'profilePhotoUrl' => Storage::disk('public')->url($path),
             'fileName' => $validated['photo']->getClientOriginalName(),
             'uploadedAt' => now()->toISOString(),
         ], [], 201);
+    }
+
+    public function removeProfilePhoto(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $oldPhotoPath = $user->profile_photo_path;
+
+        DB::transaction(function () use ($user, $oldPhotoPath, $request): void {
+            $user->update(['profile_photo_path' => null]);
+            AuditLogger::record($request, 'agency.profile_photo_removed', $user, ['profile_photo_path' => $oldPhotoPath], ['profile_photo_path' => null]);
+        });
+
+        $this->deletePublicDiskFile($oldPhotoPath, ['profile-photos/']);
+
+        return ApiResponse::success('Profile photo removed successfully.', ['profilePhotoUrl' => null]);
     }
 
     public function changePassword(Request $request): JsonResponse
@@ -282,7 +338,35 @@ class AgencyProfileSettingsController extends Controller
             'password' => Hash::make($validated['newPassword']),
         ]);
 
-        return ApiResponse::success('Agency account password changed.', [
+        $user = $request->user();
+        $currentSessionId = $request->hasSession() ? $request->session()->getId() : null;
+
+        if (config('session.driver') === 'database') {
+            DB::table(config('session.table', 'sessions'))
+                ->where('user_id', $user->id)
+                ->when($currentSessionId, fn ($query) => $query->where('id', '!=', $currentSessionId))
+                ->delete();
+        }
+
+        if ($request->hasSession()) {
+            $request->session()->regenerate();
+        }
+
+        AuditLogger::record($request, 'agency.account.password_changed', $user);
+        SecurityEventLogger::record($request, 'password.changed', $user, 'medium', ['other_sessions_revoked' => config('session.driver') === 'database']);
+        Notification::create([
+            'user_id' => $user->id,
+            'agency_id' => $user->agency_id,
+            'type' => 'security.password_changed',
+            'title' => 'Password updated',
+            'message' => 'Your password was updated. Other active sessions have been signed out.',
+            'data' => ['changed_at' => now()->toISOString()],
+            'priority' => 'high',
+            'status' => 'unread',
+            'action_url' => '/agency/settings',
+        ]);
+
+        return ApiResponse::success('Password updated successfully. Other active sessions have been signed out.', [
             'success' => true,
             'changedAt' => now()->toISOString(),
         ]);
@@ -344,6 +428,7 @@ class AgencyProfileSettingsController extends Controller
     {
         $user = $request->user()->loadMissing('agency');
         $notifications = array_merge($this->defaultNotificationPreferences(), $user->notification_preferences ?? []);
+        $notifications['browserNotifications'] = false;
         $security = array_merge($this->defaultSecurityPreferences($user), $user->security_preferences ?? []);
 
         return [
@@ -352,12 +437,12 @@ class AgencyProfileSettingsController extends Controller
                 'emailAddress' => $user->email,
                 'role' => $user->role,
                 'agency' => $user->agency?->short_name ?? $user->agency?->name ?? '',
-                'profilePhotoUrl' => $user->profile_photo_path,
+                'profilePhotoUrl' => $user->profile_photo_path ? Storage::disk('public')->url($this->publicDiskPath($user->profile_photo_path)) : null,
             ],
             'notifications' => $notifications,
             'security' => [
                 'twoFactorEnabled' => $user->hasEnabledTwoFactorAuthentication(),
-                'sessionTimeout' => (int) $security['sessionTimeout'],
+                'sessionTimeout' => $this->timeoutResolver->resolve($user->security_preferences ?? []),
                 'sessionManagementAvailable' => config('session.driver') === 'database',
                 'activeSessions' => $this->activeSessions($request),
                 'deactivationRequested' => $user->deactivation_requested_at !== null,
@@ -388,7 +473,7 @@ class AgencyProfileSettingsController extends Controller
                 ->get()
             : collect();
 
-        $timeout = (int) (($request->user()->security_preferences['sessionTimeout'] ?? null) ?: config('session.lifetime', 120));
+        $timeout = $this->timeoutResolver->resolve($request->user()->security_preferences ?? []);
 
         $currentSessionId = $request->hasSession() ? $request->session()->getId() : null;
 
@@ -422,8 +507,19 @@ class AgencyProfileSettingsController extends Controller
     private function defaultSecurityPreferences($user): array
     {
         return [
-            'sessionTimeout' => 30,
+            'sessionTimeout' => $this->timeoutResolver->resolve($user->security_preferences ?? []),
         ];
+    }
+
+    private function publicDiskPath(string $storedValue): string
+    {
+        if (Str::startsWith($storedValue, ['http://', 'https://', '/storage/'])) {
+            $path = parse_url($storedValue, PHP_URL_PATH);
+
+            return ltrim(Str::after((string) $path, '/storage/'), '/');
+        }
+
+        return ltrim($storedValue, '/');
     }
 
     private function browserFromUserAgent(string $userAgent): string

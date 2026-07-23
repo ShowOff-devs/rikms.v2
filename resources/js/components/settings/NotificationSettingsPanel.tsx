@@ -69,8 +69,10 @@ export function NotificationSettingsPanel({
                     <ToggleRow
                         icon={Monitor}
                         label="Browser notifications"
-                        description="Show timely notifications while you are using RIKMS."
+                        description="Browser notifications are not available during the pilot release."
                         checked={notifications.browserNotifications}
+                        disabled
+                        disabledReason="Not available during pilot"
                         onCheckedChange={(checked) =>
                             onNotificationChange(
                                 'browserNotifications',

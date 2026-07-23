@@ -9,6 +9,8 @@ type ChangePasswordCardProps = {
         field: keyof PasswordChangePayload,
         value: string,
     ) => void;
+    isSaving: boolean;
+    onSubmit: () => void;
 };
 
 const inputClass =
@@ -18,6 +20,8 @@ export function ChangePasswordCard({
     password,
     errors,
     onPasswordChange,
+    isSaving,
+    onSubmit,
 }: ChangePasswordCardProps) {
     const [visibleFields, setVisibleFields] = useState<
         Partial<Record<keyof PasswordChangePayload, boolean>>
@@ -77,6 +81,16 @@ export function ChangePasswordCard({
                         }
                     />
                 </div>
+            </div>
+            <div className="mt-5 flex justify-end">
+                <button
+                    type="button"
+                    onClick={onSubmit}
+                    disabled={isSaving}
+                    className="h-10 rounded-[10px] bg-[#1e3a8a] px-4 text-sm font-semibold text-white disabled:opacity-60"
+                >
+                    {isSaving ? 'Updating...' : 'Update Password'}
+                </button>
             </div>
         </section>
     );

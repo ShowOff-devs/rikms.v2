@@ -13,6 +13,16 @@ type AccountSettingsPanelProps = {
         value: string,
     ) => void;
     onPhotoSelected: (file: File) => void;
+    currentPassword: string;
+    emailChanged: boolean;
+    isSavingProfile: boolean;
+    isSavingPhoto: boolean;
+    isSavingPassword: boolean;
+    onCurrentPasswordChange: (value: string) => void;
+    onSaveProfile: () => void;
+    onUploadPhoto: () => void;
+    onRemovePhoto: () => void;
+    onSavePassword: () => void;
 };
 
 export function AccountSettingsPanel({
@@ -23,6 +33,16 @@ export function AccountSettingsPanel({
     onAccountChange,
     onPasswordChange,
     onPhotoSelected,
+    currentPassword,
+    emailChanged,
+    isSavingProfile,
+    isSavingPhoto,
+    isSavingPassword,
+    onCurrentPasswordChange,
+    onSaveProfile,
+    onUploadPhoto,
+    onRemovePhoto,
+    onSavePassword,
 }: AccountSettingsPanelProps) {
     return (
         <div className="space-y-6">
@@ -32,11 +52,21 @@ export function AccountSettingsPanel({
                 errors={errors}
                 onAccountChange={onAccountChange}
                 onPhotoSelected={onPhotoSelected}
+                currentPassword={currentPassword}
+                emailChanged={emailChanged}
+                isSavingProfile={isSavingProfile}
+                isSavingPhoto={isSavingPhoto}
+                onCurrentPasswordChange={onCurrentPasswordChange}
+                onSaveProfile={onSaveProfile}
+                onUploadPhoto={onUploadPhoto}
+                onRemovePhoto={onRemovePhoto}
             />
             <ChangePasswordCard
                 password={password}
                 errors={errors}
                 onPasswordChange={onPasswordChange}
+                isSaving={isSavingPassword}
+                onSubmit={onSavePassword}
             />
         </div>
     );

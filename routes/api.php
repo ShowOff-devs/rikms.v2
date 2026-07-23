@@ -80,6 +80,7 @@ Route::prefix('agency')
         Route::patch('/settings/notifications', [AgencyProfileSettingsController::class, 'updateNotifications'])->name('settings.notifications.update');
         Route::patch('/settings/security', [AgencyProfileSettingsController::class, 'updateSecurity'])->name('settings.security.update');
         Route::post('/settings/profile-photo', [AgencyProfileSettingsController::class, 'uploadProfilePhoto'])->name('settings.profile-photo.upload');
+        Route::delete('/settings/profile-photo', [AgencyProfileSettingsController::class, 'removeProfilePhoto'])->name('settings.profile-photo.remove');
         Route::post('/settings/password', [AgencyProfileSettingsController::class, 'changePassword'])->name('settings.password.update');
         Route::post('/settings/deactivation-request', [AgencyProfileSettingsController::class, 'requestDeactivation'])->name('settings.deactivation-request');
         Route::delete('/settings/sessions/{sessionId}', [AgencyProfileSettingsController::class, 'revokeSession'])->name('settings.sessions.revoke');
