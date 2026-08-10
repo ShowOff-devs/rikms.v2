@@ -1,5 +1,7 @@
 # RIKMS v2 Full System Audit
 
+> Historical snapshot. Original audit status: superseded in part. Reviewed 2026-08-04. Public access requests, protected management workflows, production upload hardening, CAPTCHA/CSP validation, operational tests, and dormant mock cleanup have changed since this audit. Claims below describe the audit date unless explicitly updated; use [the current production-readiness evidence](PRODUCTION_READINESS_EVIDENCE.md) for present status.
+
 ## 1. Audit Objective
 This audit checks the entire RIKMS v2 system for completion status, routing/auth correctness, database readiness, API/frontend integration, mock data, errors, test/build status, and the remaining work needed before demo and production hardening.
 
@@ -142,18 +144,16 @@ Broken/not verified:
 
 Frontend gaps:
 - `resources/js/data/mock-*.ts` files have been removed; remaining `resources/js/data` files are display/option helpers.
-- Report upload workflows and legacy upload AI suggestion helpers still have mock service files under `resources/js/lib/upload/services`.
+- The dormant research-upload, AI-metadata, and SDG-suggestion mock service files were removed in Phase 9; report workflows use their current real service modules.
 - Some browser workflow proof remains pending for report uploads and AI review/apply flows.
 
 ## 10. Mock Data Audit
 | File/path | Module | Mock type | Classification | Reason |
 |---|---|---|---|---|
 | `resources/js/data/mock-*.ts` | Legacy frontend mock data | static records/fallbacks | Removed for pilot | No runtime imports remain; display constants live in option/display helper files. |
-| `resources/js/lib/upload/services/mock-research-upload-service.ts` | Research upload | AI extraction/validation legacy helpers | Keep temporarily | AI jobs/results need stable browser fixtures before removal. |
-| `resources/js/lib/upload/services/mock-report-upload-service.ts` | Report uploads | upload/draft/submit/AI | Urgent replacement | Terminal/project accomplishment uploads currently do not persist real records. |
-| `resources/js/lib/upload/services/mock-ai-metadata-service.ts` | AI metadata | mock suggestions | Keep temporarily | Replace with real Mongo-backed AI results when fixtures are stable. |
-| `resources/js/lib/upload/services/mock-sdg-suggestion-service.ts` | SDG suggestions | mock suggestions | Keep temporarily | Replace after SDG classification results are reliable. |
-| `resources/js/lib/upload/services/mock-upload-draft-service.ts` | Generic upload wizard | local draft save | Keep temporarily | Wizard steps still include placeholders. |
+| `resources/js/lib/upload/services/mock-research-upload-service.ts` | Research upload | AI extraction/validation legacy helpers | Removed in Phase 9 | No imports or environment loader; real agency research/file APIs are active. |
+| `resources/js/lib/upload/services/mock-ai-metadata-service.ts` | AI metadata | mock suggestions | Removed in Phase 9 | No imports; real AI-result processing/read APIs are active. |
+| `resources/js/lib/upload/services/mock-sdg-suggestion-service.ts` | SDG suggestions | mock suggestions | Removed in Phase 9 | No imports; real AI-result processing/read APIs are active. |
 | `routes/api.php` local Mongo test route | AI/Mongo test | sample Mongo writes | Keep local only | Useful local test route; must remain disabled outside local. |
 
 Mock data removed in this audit: all remaining `resources/js/data/mock-*.ts` files.

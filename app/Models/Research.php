@@ -36,6 +36,11 @@ class Research extends Model
         'downloads',
         'embargo_until',
         'external_url',
+        'research_owner_name',
+        'research_owner_email',
+        'notify_owner_access_requests',
+        'notify_owner_research_inquiries',
+        'send_owner_copy_to_admin',
         'submitted_at',
         'approved_at',
         'published_at',
@@ -56,6 +61,9 @@ class Research extends Model
         'downloads' => 'integer',
         'revision_number' => 'integer',
         'embargo_until' => 'date',
+        'notify_owner_access_requests' => 'boolean',
+        'notify_owner_research_inquiries' => 'boolean',
+        'send_owner_copy_to_admin' => 'boolean',
         'submitted_at' => 'datetime',
         'approved_at' => 'datetime',
         'published_at' => 'datetime',
@@ -97,6 +105,11 @@ class Research extends Model
         return $this->hasMany(ResearchApproval::class);
     }
 
+    public function latestModerationDecision()
+    {
+        return $this->hasOne(ResearchApproval::class)->latestOfMany();
+    }
+
     public function files()
     {
         return $this->hasMany(ResearchFile::class);
@@ -110,6 +123,11 @@ class Research extends Model
     public function performanceItems()
     {
         return $this->hasMany(ResearchPerformanceItem::class)->orderBy('sort_order');
+    }
+
+    public function reportHighlights()
+    {
+        return $this->hasMany(ResearchReportHighlight::class)->orderBy('sort_order');
     }
 
     public function analyticsEvents()

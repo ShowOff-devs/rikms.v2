@@ -5,6 +5,7 @@ namespace App\Http\Responses;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
+use Throwable;
 
 class LoginResponse implements LoginResponseContract
 {
@@ -26,6 +27,14 @@ class LoginResponse implements LoginResponseContract
             $this->logout($request);
 
             return $this->failedResponse($request, 'These credentials are not authorized for the Agency Admin portal.');
+        }
+
+        if ($request->is('agency/login') && ! $user->hasVerifiedEmail()) {
+            try {
+                $user->sendEmailVerificationNotification();
+            } catch (Throwable $exception) {
+                report($exception);
+            }
         }
 
         $redirectTo = $this->redirectPath($user);

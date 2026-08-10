@@ -6,6 +6,7 @@ import {
     repositorySdgColors,
     repositoryStatusLabels,
 } from '@/data/repository-display';
+import { normalizeModerationIssueType } from '@/data/research-moderation-options';
 import {
     mapRepositoryPayloadToResearchPayload,
     submitAgencyResearch,
@@ -38,6 +39,15 @@ type AgencyResearchApiRecord = {
     agency?: { short_name?: string | null; name?: string | null };
     publication_year?: number | null;
     status: string;
+    revision_required?: boolean;
+    moderation_issue_type?: string | null;
+    moderation_note?: string | null;
+    moderated_at?: string | null;
+    moderation_reviewer_name?: string | null;
+    capabilities?: {
+        can_update?: boolean;
+        can_submit?: boolean;
+    };
     access_level?: string | null;
     sdgs?: string[];
     category?: string | null;
@@ -640,6 +650,16 @@ function mapRepositoryItemFromApi(
         documentType: mapRepositoryDocumentType(record, file),
         year: record.publication_year ?? new Date().getFullYear(),
         status: mapRepositoryStatus(record.status),
+        capabilities: {
+            canUpdate: Boolean(record.capabilities?.can_update),
+            canSubmit: Boolean(record.capabilities?.can_submit),
+        },
+        moderationNote: record.moderation_note?.trim() || undefined,
+        moderationConcernType: record.moderation_issue_type
+            ? normalizeModerationIssueType(record.moderation_issue_type)
+            : undefined,
+        moderationRequestedAt: record.moderated_at ?? undefined,
+        moderationReviewerName: record.moderation_reviewer_name ?? undefined,
         accessType: mapRepositoryAccessType(
             record.access_level,
             record.external_url,
@@ -676,6 +696,10 @@ function mapRepositoryItemFromApi(
 }
 
 function mapRepositoryStatus(status: string): RepositoryStatus {
+    if (status === 'rejected') {
+        return 'revision-required';
+    }
+
     if (
         status === 'draft' ||
         status === 'published' ||

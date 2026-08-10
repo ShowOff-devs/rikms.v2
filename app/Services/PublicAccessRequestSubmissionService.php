@@ -6,12 +6,8 @@ use App\Exceptions\DuplicatePublicAccessRequestException;
 use App\Http\Requests\Public\StorePublicAccessRequestRequest;
 use App\Models\AccessRequest;
 use App\Models\AuditLog;
-use App\Models\Notification;
 use App\Models\Research;
-use App\Models\User;
 use App\Support\Statuses;
-use App\Support\UserNotificationPreferences;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -19,6 +15,10 @@ use Throwable;
 
 class PublicAccessRequestSubmissionService
 {
+    public function __construct(
+        private readonly ResearchContactNotificationService $contactNotifications,
+    ) {}
+
     public function create(StorePublicAccessRequestRequest $request, Research $research): AccessRequest
     {
         $email = AccessRequest::normalizeRequesterEmail($request->validated('requester_email'));
@@ -59,7 +59,7 @@ class PublicAccessRequestSubmissionService
                 ]);
 
                 $this->recordAuditLog($request, $research, $accessRequest, $email);
-                $this->queueAgencyAdminNotifications($research, $accessRequest);
+                $this->contactNotifications->queueAccessRequestNotifications($research, $accessRequest);
                 $this->logSecurityEvent($request, $research, 'created', $email);
 
                 return $accessRequest;
@@ -112,54 +112,6 @@ class PublicAccessRequestSubmissionService
                 'error' => $exception->getMessage(),
             ]);
         }
-    }
-
-    private function queueAgencyAdminNotifications(Research $research, AccessRequest $accessRequest): void
-    {
-        DB::afterCommit(function () use ($research, $accessRequest): void {
-            try {
-                User::query()
-                    ->where('agency_id', $research->agency_id)
-                    ->where('status', 'active')
-                    ->where(function (Builder $query): void {
-                        $query->where('role', 'agency_admin')
-                            ->orWhereHas('roles', fn (Builder $query) => $query->where('slug', 'agency_admin'));
-                    })
-                    ->get()
-                    ->filter(fn (User $user): bool => UserNotificationPreferences::wants($user, 'notifyNewAccessRequests'))
-                    ->each(function (User $user) use ($research, $accessRequest): void {
-                        $alreadyNotified = Notification::query()
-                            ->where('user_id', $user->id)
-                            ->where('type', 'access_request.submitted')
-                            ->where('data->access_request_id', $accessRequest->id)
-                            ->exists();
-
-                        if ($alreadyNotified) {
-                            return;
-                        }
-
-                        Notification::create([
-                            'user_id' => $user->id,
-                            'agency_id' => $research->agency_id,
-                            'type' => 'access_request.submitted',
-                            'title' => 'New access request',
-                            'message' => 'A public user requested access to a research record.',
-                            'data' => [
-                                'research_id' => $research->id,
-                                'access_request_id' => $accessRequest->id,
-                            ],
-                            'action_url' => '/agency/access-requests',
-                            'priority' => 'normal',
-                            'status' => Statuses::NOTIFICATION_UNREAD,
-                        ]);
-                    });
-            } catch (Throwable $exception) {
-                Log::warning('Public access request notification write failed.', [
-                    'access_request_id' => $accessRequest->id,
-                    'error' => $exception->getMessage(),
-                ]);
-            }
-        });
     }
 
     private function isActiveDuplicateKeyViolation(QueryException $exception): bool

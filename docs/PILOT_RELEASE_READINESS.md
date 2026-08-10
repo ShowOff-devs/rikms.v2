@@ -2,6 +2,8 @@
 
 Audit date: 2026-06-13
 
+Status: Historical release snapshot, superseded in part as of 2026-08-04. Branch, file counts, test totals, dependency findings, and blockers below apply to that audit run. Use [the current production-readiness evidence](PRODUCTION_READINESS_EVIDENCE.md) for the current gate decision.
+
 ## Source State
 
 - Branch: `main`

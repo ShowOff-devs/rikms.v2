@@ -31,7 +31,7 @@ const actionsByStatus: Record<string, ResearchModerationAction[]> = {
     ],
     approved: ['view', 'publish', 'archive'],
     published: ['view', 'archive'],
-    rejected: ['view', 'return_to_draft', 'archive', 'keep_flagged'],
+    rejected: ['view', 'archive', 'keep_flagged'],
     archived: ['view'],
     superseded: ['view'],
     draft: ['view'],

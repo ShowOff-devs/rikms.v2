@@ -22,9 +22,10 @@ return [
             'pending',
         ],
         'captcha' => [
-            'enabled' => (bool) env('PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED', false),
+            'enabled' => filter_var(env('PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED', false), FILTER_VALIDATE_BOOL),
+            'frontend_enabled' => filter_var(env('VITE_PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED', false), FILTER_VALIDATE_BOOL),
             'provider' => env('CAPTCHA_PROVIDER', 'turnstile'),
-            'site_key' => env('CAPTCHA_SITE_KEY'),
+            'site_key' => env('VITE_CAPTCHA_SITE_KEY'),
             'secret_key' => env('CAPTCHA_SECRET_KEY'),
             'timeout_seconds' => (float) env('CAPTCHA_VERIFY_TIMEOUT_SECONDS', 3),
         ],
@@ -45,13 +46,26 @@ return [
         'agency_ttl_seconds' => (int) env('PUBLIC_CACHE_AGENCY_TTL_SECONDS', 300),
     ],
 
+    'scheduled_notifications' => [
+        'enabled' => filter_var(env('SCHEDULED_AGENCY_EMAILS_ENABLED', true), FILTER_VALIDATE_BOOL),
+        'timezone' => env('SCHEDULED_AGENCY_EMAILS_TIMEZONE', 'Asia/Manila'),
+        'weekly_digest' => [
+            'day' => (int) env('WEEKLY_DIGEST_DAY', 1),
+            'time' => env('WEEKLY_DIGEST_TIME', '08:00'),
+        ],
+        'monthly_analytics' => [
+            'day' => (int) env('MONTHLY_ANALYTICS_DAY', 1),
+            'time' => env('MONTHLY_ANALYTICS_TIME', '08:00'),
+        ],
+    ],
+
     'uploads' => [
         'quarantine_disk' => env('UPLOAD_QUARANTINE_DISK', 'local'),
         'storage_disk' => env('UPLOAD_STORAGE_DISK', 'local'),
         'malware_scanner' => env('MALWARE_SCANNER', 'none'),
-        'clamav_host' => env('CLAMAV_HOST', '127.0.0.1'),
-        'clamav_port' => (int) env('CLAMAV_PORT', 3310),
-        'clamav_timeout_seconds' => (float) env('CLAMAV_TIMEOUT_SECONDS', 10),
+        'clamav_host' => env('CLAMAV_HOST'),
+        'clamav_port' => (int) env('CLAMAV_PORT', 0),
+        'clamav_timeout_seconds' => (float) env('CLAMAV_TIMEOUT_SECONDS', 0),
         'pdf_max_text_chars' => (int) env('AI_PDF_MAX_TEXT_CHARS', 200000),
     ],
 ];

@@ -14,8 +14,14 @@ export type UploadWizardStore = UploadWizardState & {
     markStepComplete: (stepId: UploadStepId) => void;
     setDraftStatus: (status: UploadDraftStatus) => void;
     setDraftSavedAt: (savedAt: string | null) => void;
+    setDraftError: (error: string | null) => void;
     setValidationErrors: (stepId: UploadStepId, errors: FieldErrors) => void;
     clearValidationErrors: (stepId: UploadStepId) => void;
+    hydrate: (
+        stepData: UploadWizardState['stepData'],
+        activeStepId: UploadStepId,
+        completedStepIds: UploadStepId[],
+    ) => void;
 };
 
 export type UploadWizardStoreApi = ReturnType<typeof createUploadWizardStore>;
@@ -37,6 +43,7 @@ export function createUploadWizardStore(config: UploadWizardConfig) {
         ),
         draftSavedAt: null,
         draftStatus: 'idle',
+        draftError: null,
         validationErrors: {},
         setActiveStep: (stepId) =>
             set((state) => ({
@@ -59,6 +66,7 @@ export function createUploadWizardStore(config: UploadWizardConfig) {
             })),
         setDraftStatus: (draftStatus) => set({ draftStatus }),
         setDraftSavedAt: (draftSavedAt) => set({ draftSavedAt }),
+        setDraftError: (draftError) => set({ draftError }),
         setValidationErrors: (stepId, errors) =>
             set((state) => ({
                 validationErrors: {
@@ -72,6 +80,16 @@ export function createUploadWizardStore(config: UploadWizardConfig) {
                 delete nextErrors[stepId];
 
                 return { validationErrors: nextErrors };
+            }),
+        hydrate: (stepData, activeStepId, completedStepIds) =>
+            set({
+                stepData,
+                activeStepId,
+                completedStepIds,
+                validationErrors: {},
+                draftStatus: 'saved',
+                draftSavedAt: null,
+                draftError: null,
             }),
     }));
 }

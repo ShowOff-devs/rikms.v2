@@ -1,0 +1,18 @@
+[Unit]
+Description=RIKMS Laravel queue worker
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/rikms
+ExecStart=/usr/bin/php artisan queue:work database --queue=default --sleep=3 --tries=3 --backoff=10 --timeout=120 --max-time=3600
+ExecReload=/usr/bin/php artisan queue:restart
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=130
+
+[Install]
+WantedBy=multi-user.target

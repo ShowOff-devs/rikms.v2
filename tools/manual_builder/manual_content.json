@@ -1,0 +1,736 @@
+{
+  "agency": {
+    "title": "RIKMS Agency User Manual",
+    "role": "Agency Administrator",
+    "subtitle": "Managing institutional research, reports, access requests, and agency settings",
+    "version": "Version 1.0 | 5 August 2026",
+    "accent": "1E3A8A",
+    "sections": [
+      {
+        "title": "1. About this manual",
+        "lead": "This manual is for authorized Agency Administrators who maintain their institution's records in the Regionwide Integrated Knowledge Management System (RIKMS).",
+        "blocks": [
+          {"type": "subheading", "text": "Your role"},
+          {"type": "bullets", "items": [
+            "Create and maintain research studies, terminal reports, and project accomplishment reports for your assigned agency.",
+            "Review AI-assisted metadata before applying it to an official record.",
+            "Choose public metadata and document access rules.",
+            "Submit complete records for Super Admin review and publication.",
+            "Decide access requests for restricted records owned by your agency.",
+            "Maintain the agency profile, notification preferences, password, two-factor authentication, and sessions."
+          ]},
+          {"type": "note", "tone": "info", "label": "Scope", "text": "Agency Administrators can work only within their assigned agency. RIKMS blocks cross-agency record, file, request, and archive access."},
+          {"type": "subheading", "text": "Before you begin"},
+          {"type": "bullets", "items": [
+            "Use a current desktop browser and a stable internet connection.",
+            "Prepare the source document as a valid PDF. The effective upload limit is controlled by the platform and server configuration.",
+            "Confirm the title, authors, publication year, abstract, keywords, SDG alignment, ownership, and access classification before submission.",
+            "Never share your password, authentication code, or recovery codes."
+          ]}
+        ]
+      },
+      {
+        "title": "2. Sign in and protect your account",
+        "lead": "Agency users enter through the Agency Portal. The agency selected at sign-in must match the agency assigned to the account.",
+        "blocks": [
+          {"type": "subheading", "text": "Sign in"},
+          {"type": "steps", "items": [
+            "Open the RIKMS base address supplied by your organization, then go to /agency/login.",
+            "Select your agency from the Agency list.",
+            "Enter your agency email address and password.",
+            "Select Remember Me only on a private, trusted device.",
+            "Select Sign In to Portal. A successful sign-in opens the Agency Research Dashboard."
+          ]},
+          {"type": "note", "tone": "warn", "label": "Sign-in failure", "text": "If the agency selection is wrong, RIKMS rejects the login even when the email and password are correct. Recheck the agency first, then the credentials."},
+          {"type": "subheading", "text": "Forgotten password"},
+          {"type": "steps", "items": [
+            "Select Forgot Password? on the Agency Portal.",
+            "Select the agency and enter the registered email address.",
+            "Follow the reset message sent by the configured mail service. If no message arrives, check spam and contact the RIKMS support contact."
+          ]},
+          {"type": "subheading", "text": "Two-factor authentication"},
+          {"type": "steps", "items": [
+            "Open Settings, then Two-factor authentication.",
+            "Select Enable 2FA and scan the QR code with a TOTP-compatible authenticator app.",
+            "Confirm the code, then store the recovery codes in a secure location separate from your device.",
+            "Use Disable 2FA only when your organization permits it and you still control the account."
+          ]}
+        ]
+      },
+      {
+        "title": "3. Navigate the agency workspace",
+        "lead": "The top bar provides repository search, notifications, agency identity, and sign-out. The left sidebar provides the main modules and can be collapsed on desktop screens.",
+        "blocks": [
+          {"type": "table", "headers": ["Menu", "Use it for"], "widths": [1.8, 4.7], "rows": [
+            ["Dashboard", "Metrics, charts, recent uploads, pending requests, and quick actions."],
+            ["Research Repository", "Search, filter, view, edit, submit, revise, or archive agency records."],
+            ["Upload Research", "Start a Research Study, Terminal Report, or Project Accomplishment Report workflow."],
+            ["Access Requests", "Review requester details and approve or deny pending requests."],
+            ["Archive", "Find archived agency research, restore eligible records, or permanently delete when permitted."],
+            ["Analytics", "Analyze repository use and project report performance; export supported reports."],
+            ["Notifications", "Filter notices and mark them read or unread."],
+            ["Agency Profile", "Maintain the public-facing agency description, contact details, website, address, and logo."],
+            ["Settings", "Manage account information, password, notification preferences, security, sessions, and deactivation requests."]
+          ]},
+          {"type": "note", "tone": "info", "label": "Top-bar search", "text": "The search box is intended for research records. Module pages also provide their own filters; use those filters when you need status, year, SDG, category, or access-level criteria."}
+        ]
+      },
+      {
+        "title": "4. Use the Agency Research Dashboard",
+        "lead": "The dashboard is the daily starting point for agency work and uses current agency-scoped data.",
+        "blocks": [
+          {"type": "subheading", "text": "Dashboard areas"},
+          {"type": "bullets", "items": [
+            "Quick actions: Upload New Research, Manage Research, and View Access Requests.",
+            "Metric cards: current repository totals grouped by operational state.",
+            "Research by Year and Research by Category charts.",
+            "Recent Research Uploads with view, edit, and archive shortcuts.",
+            "Pending Access Requests with direct Approve action and a path to the full request page."
+          ]},
+          {"type": "subheading", "text": "Recommended daily review"},
+          {"type": "steps", "items": [
+            "Review pending access requests and open the complete request before making sensitive decisions.",
+            "Check recent uploads for drafts that still need metadata or files.",
+            "Open Notifications for returned, approved, published, archive, access, or security-related updates.",
+            "Use the repository to resolve records that are incomplete or awaiting action."
+          ]}
+        ]
+      },
+      {
+        "title": "5. Choose an upload workflow",
+        "lead": "Select Upload Research from the sidebar. RIKMS offers one six-step research workflow and two nine-step report workflows.",
+        "blocks": [
+          {"type": "table", "headers": ["Document type", "Workflow"], "widths": [2.1, 4.4], "rows": [
+            ["Research Study", "Doc Type > Upload > AI Metadata > SDG Tagging > Access > Review"],
+            ["Terminal Report", "Doc Type > Details > AI Metadata > Performance > PAP Classification > Financials > Highlights > SDG Tagging > Review"],
+            ["Project Accomplishment Report", "Doc Type > Details > AI Metadata > Performance > PAP Classification > Financials > Highlights > SDG Tagging > Review"]
+          ]},
+          {"type": "bullets", "items": [
+            "Use Research Study for scholarly or technical research records.",
+            "Use Terminal Report for final project reporting.",
+            "Use Project Accomplishment Report for periodic or accomplishment-based reporting.",
+            "Use Save Draft where available before leaving a long workflow."
+          ]},
+          {"type": "note", "tone": "warn", "label": "File requirement", "text": "The current backend accepts PDF research uploads. Renaming another file type to .pdf does not make it valid; invalid or unsafe files are rejected."}
+        ]
+      },
+      {
+        "title": "6. Upload a research study",
+        "lead": "The Research Study wizard keeps the official record relational while allowing optional AI-assisted PDF parsing, metadata extraction, and SDG suggestions.",
+        "blocks": [
+          {"type": "steps", "items": [
+            "Doc Type: confirm Research Study.",
+            "Upload: attach the PDF and optionally provide a manual title. Continue only after the file passes validation and upload.",
+            "AI Metadata: wait for processing when enabled. Review the detected title, abstract, methodology, related literature, framework, results, keywords, and authors. Edit incorrect values and select which eligible fields may be public.",
+            "SDG Tagging: review suggestions and select the Sustainable Development Goals that genuinely match the study.",
+            "Access: choose Public, Request Access, Restricted, Embargoed, or External Link as presented. Supply a future embargo date or valid external URL when required. Confirm the research owner; the owner email is not publicly displayed.",
+            "Review: verify the document, metadata, SDGs, public fields, and access rule. Save as draft or submit using the available final action."
+          ]},
+          {"type": "note", "tone": "info", "label": "AI is assistive", "text": "AI output is never a substitute for agency review. Apply only accurate suggestions. If AI is disabled or unavailable, the PDF can still be stored and the metadata can be completed manually."},
+          {"type": "subheading", "text": "Access choices"},
+          {"type": "table", "headers": ["Choice", "Meaning"], "widths": [1.7, 4.8], "rows": [
+            ["Public", "Public users can access the record according to the published public-file rules."],
+            ["Request Access", "Public users submit a request that your agency must decide."],
+            ["Restricted", "Hidden from normal public access workflows."],
+            ["Embargoed", "Access remains limited until the future embargo date."],
+            ["External Link", "The record points users to a validated external repository URL."]
+          ]}
+        ]
+      },
+      {
+        "title": "7. Upload terminal and accomplishment reports",
+        "lead": "Both report types use the same full reporting structure but retain their own document type and reporting context.",
+        "blocks": [
+          {"type": "steps", "items": [
+            "Details: attach the PDF and enter the report title, description, project dates, reporting period, reporting year, and agency context.",
+            "AI Metadata: review extracted fields, select public metadata, and confirm that the metadata has been validated.",
+            "Performance: add project or activity rows with targets, actual values, accomplishment percentage, status, and remarks. Review the report-level physical accomplishment value separately.",
+            "PAP Classification: choose the appropriate Program, Activity, or Project categories and beneficiary sectors. Apply AI suggestions only when they are correct.",
+            "Financials: enter allocated, released, obligated, and utilized amounts plus the financial as-of date. Confirm the calculated remaining balance and utilization rate.",
+            "Highlights: summarize accomplishments, issues, and outcomes; add supporting files when allowed and mark a featured highlight only when appropriate.",
+            "SDG Tagging: choose the relevant goals and validate the selection.",
+            "Review: inspect every section, save the draft if more work is needed, or submit the completed report."
+          ]},
+          {"type": "note", "tone": "warn", "label": "Calculation warning", "text": "Completeness, workflow status, physical accomplishment, and budget utilization are separate measures. Do not interpret one as proof of another. Correct source data instead of overriding a warning with unsupported values."}
+        ]
+      },
+      {
+        "title": "8. Manage the Research Repository",
+        "lead": "The repository lists records owned by your agency and supports grid or list view, filters, record details, and permitted actions.",
+        "blocks": [
+          {"type": "subheading", "text": "Find a record"},
+          {"type": "steps", "items": [
+            "Enter a title, author, keyword, agency, or document type in Search.",
+            "Refine the result by document type, status, SDG, access type, category, or other displayed facets.",
+            "Switch between Grid view and List view if one is easier to scan.",
+            "Open the record to review metadata, files, AI results, status, and access settings."
+          ]},
+          {"type": "subheading", "text": "Record lifecycle"},
+          {"type": "table", "headers": ["Status", "Agency action"], "widths": [1.6, 4.9], "rows": [
+            ["Draft", "Edit metadata and files, review AI results, then submit."],
+            ["Submitted / Under review", "Monitor the record. Editing is limited while moderation is in progress."],
+            ["Approved", "Await publication or the next Super Admin action."],
+            ["Published", "The public record is locked. Create a draft revision for changes."],
+            ["Rejected / Returned", "Read the moderation note, correct the draft or revision, and resubmit."],
+            ["Archived", "Use Archive to inspect and restore if allowed."],
+            ["Superseded", "Retained for version history; use the current revision for ongoing work."]
+          ]},
+          {"type": "note", "tone": "info", "label": "Publication authority", "text": "Submitting a record does not publish it. Publication is performed through the Super Admin moderation workflow after review."}
+        ]
+      },
+      {
+        "title": "9. Edit records, files, and AI results",
+        "lead": "Open a repository record to work with its bibliographic data, files, access rules, and AI-assisted results.",
+        "blocks": [
+          {"type": "steps", "items": [
+            "Edit the research title, abstract, publication year, authors and emails, keywords, category, SDGs, public metadata, and access control as applicable.",
+            "Upload an authorized PDF file. Download the current file to verify it, or remove an incorrect file only when the action is permitted.",
+            "Open AI results to inspect PDF parsing, metadata extraction, and SDG classification status.",
+            "Mark a result reviewed, or apply selected suggestions to the draft. Verify the saved values afterward.",
+            "Select Save Changes before leaving the page.",
+            "When the draft is complete, select Submit for Review and confirm the action."
+          ]},
+          {"type": "note", "tone": "warn", "label": "Published records", "text": "A published record is locked to protect the public version. Use Create Draft Revision, make the change in the new draft, and submit that revision for moderation."},
+          {"type": "note", "tone": "warn", "label": "Private downloads", "text": "Do not forward private or restricted file links. RIKMS checks authorization at download time, and access decisions are auditable."}
+        ]
+      },
+      {
+        "title": "10. Decide access requests",
+        "lead": "The Access Requests page shows requests for research owned by your agency. Decisions are recorded and may trigger requester email notification when mail is configured.",
+        "blocks": [
+          {"type": "steps", "items": [
+            "Open Access Requests and filter by status, date, organization, or search terms.",
+            "Open View Details. Verify the requester name, email, organization, request date, requested research, and purpose.",
+            "Confirm the request is legitimate and consistent with the record's policy and any legal, privacy, contractual, or embargo restrictions.",
+            "For approval, select Approve and confirm. For denial, select Deny, enter a clear public denial reason, and optionally add agency-only context.",
+            "Check the resulting status and any email-delivery feedback. Record alternative communication if the email could not be sent."
+          ]},
+          {"type": "note", "tone": "warn", "label": "Decision quality", "text": "A denial reason is shown to the requester and is required. Keep internal or sensitive analysis in the agency-only note, not in the public reason."},
+          {"type": "table", "headers": ["Status", "Meaning"], "widths": [1.5, 5.0], "rows": [
+            ["Pending", "No final agency decision has been recorded."],
+            ["Approved", "Access was granted through the approved-access workflow."],
+            ["Denied", "Access was refused with a recorded reason."],
+            ["Expired / Cancelled", "The request is no longer active; follow the displayed record history."]
+          ]}
+        ]
+      },
+      {
+        "title": "11. Archive and restore agency research",
+        "lead": "Archiving removes an eligible record from active agency views while preserving its history. The Archive page supports search, filters, restoration, and permitted permanent deletion.",
+        "blocks": [
+          {"type": "subheading", "text": "Archive a record"},
+          {"type": "steps", "items": [
+            "Open the record or repository action and select Archive.",
+            "Review the confirmation and enter the required reason when requested.",
+            "Confirm only after verifying that the record is eligible and no active public workflow depends on it."
+          ]},
+          {"type": "subheading", "text": "Restore a record"},
+          {"type": "steps", "items": [
+            "Open Archive and locate the record by search, document type, or archive date.",
+            "Select Restore, review the record details, and confirm.",
+            "Return to the repository and verify the restored status and files."
+          ]},
+          {"type": "note", "tone": "danger", "label": "Permanent deletion", "text": "Permanent deletion is destructive and may be blocked by retention or relationship rules. Use it only under an approved records-management process. Restoration is the normal recovery action."}
+        ]
+      },
+      {
+        "title": "12. Use Analytics",
+        "lead": "Agency Analytics contains Repository Analytics and Project Report Analytics. Filters change the current view and supported export output.",
+        "blocks": [
+          {"type": "subheading", "text": "Repository Analytics"},
+          {"type": "bullets", "items": [
+            "Summary metrics and yearly publications.",
+            "Category and SDG contribution distributions.",
+            "Download activity, access-request status, and most-accessed research.",
+            "Filters for year, document type, category, SDG, access type, and status.",
+            "Export options presented by the Export Report dialog."
+          ]},
+          {"type": "subheading", "text": "Project Report Analytics"},
+          {"type": "bullets", "items": [
+            "Report counts, completeness, workflow status, physical accomplishment, and financial-data coverage.",
+            "Budget totals for allotted, released, obligated, utilized, remaining balance, and utilization.",
+            "Filters for report type, year, reporting period, workflow, completeness, budget classification, accomplishment, funding source, and date range.",
+            "A record list that opens a detail view for report information, completeness sections, accomplishment, budget performance, and performance rows."
+          ]},
+          {"type": "note", "tone": "info", "label": "Interpretation", "text": "Analytics are calculated from persisted records. Missing report sections or financial fields affect completeness and coverage metrics; investigate the source record before reporting an anomaly."}
+        ]
+      },
+      {
+        "title": "13. Manage notifications",
+        "lead": "Notifications provide workflow updates for uploads, access requests, archives, analytics, settings, and related actions.",
+        "blocks": [
+          {"type": "steps", "items": [
+            "Open Notifications from the sidebar or bell icon.",
+            "Filter All, Unread, Uploads, Access Requests, Archive, Analytics, or Settings; use Search to narrow the list.",
+            "Open the notification's action link when one is available.",
+            "Mark a notice read or unread, or select Mark all as read when the queue has been reviewed."
+          ]},
+          {"type": "note", "tone": "info", "label": "Email delivery", "text": "In-app status and email delivery are separate. Email depends on platform and mail configuration; the recorded RIKMS decision remains authoritative."}
+        ]
+      },
+      {
+        "title": "14. Maintain the Agency Profile",
+        "lead": "The Agency Profile controls the institution information used in agency views and eligible public surfaces.",
+        "blocks": [
+          {"type": "steps", "items": [
+            "Open Agency Profile and select Edit Profile.",
+            "Review the agency name and short name. Change only fields your organization authorizes.",
+            "Update the description, website, contact email, and office address.",
+            "Upload a valid agency logo, preview it, and remove it only when a replacement or approved fallback is intended.",
+            "Save Changes and review the profile preview."
+          ]},
+          {"type": "note", "tone": "warn", "label": "Public information", "text": "Use official, current contact information. Do not place personal or confidential content in the agency description, address, or public contact fields."}
+        ]
+      },
+      {
+        "title": "15. Configure agency settings",
+        "lead": "Settings centralizes account, password, notification, security, session, and deactivation controls.",
+        "blocks": [
+          {"type": "table", "headers": ["Area", "Available controls"], "widths": [1.8, 4.7], "rows": [
+            ["Account information", "Profile photo, full name, email, role and agency reference, with current-password confirmation for sensitive changes."],
+            ["Password", "Current password, new password, and confirmation."],
+            ["Notifications", "Email preferences for new requests, decisions, and uploads. Browser notifications and scheduled digest/report delivery are labeled unavailable during the pilot."],
+            ["Security", "Two-factor authentication link and session/security preferences."],
+            ["Active sessions", "Review devices and revoke sessions you do not recognize."],
+            ["Danger zone", "Submit an account deactivation request."]
+          ]},
+          {"type": "note", "tone": "warn", "label": "Account deactivation", "text": "Deactivation is not a casual sign-out. It requests that access be disabled while institutional history is preserved. Confirm ongoing duties and transfer responsibility before requesting it."}
+        ]
+      },
+      {
+        "title": "16. Troubleshooting and safe practice",
+        "lead": "Most errors are caused by validation, status restrictions, expired sessions, platform configuration, or a file that does not meet upload rules.",
+        "blocks": [
+          {"type": "table", "headers": ["Problem", "What to do"], "widths": [2.2, 4.3], "rows": [
+            ["Login rejected", "Verify the agency selection, active account status, email, and password. Use password reset or contact the Super Admin."],
+            ["Page returns to login", "The session may have expired. Sign in again and repeat only the unsaved action."],
+            ["PDF upload fails", "Confirm it is a real PDF, within the effective limit, not corrupted, and not blocked by the security scanner."],
+            ["AI result is skipped or failed", "Continue manually. The platform may have AI disabled or the external service may be unavailable."],
+            ["Cannot edit a record", "Check the workflow status. Published and in-review records are intentionally locked; create a revision when available."],
+            ["Cannot archive or restore", "The record may be ineligible, outside agency scope, or protected by a linked workflow. Read the displayed error and escalate with the record identifier."],
+            ["Email did not arrive", "Check spam and the in-app result. Mail delivery is infrastructure-dependent; do not repeat a decision without first checking its recorded status."],
+            ["Analytics look incomplete", "Check filters and missing metadata, report sections, or financial fields in the source records."]
+          ]},
+          {"type": "subheading", "text": "Safe-use checklist"},
+          {"type": "bullets", "items": [
+            "Verify the record and agency before every submit, archive, restore, or access decision.",
+            "Use the least-public access setting consistent with the approved policy.",
+            "Treat AI suggestions as unverified until reviewed by an authorized person.",
+            "Sign out on shared devices and revoke unfamiliar sessions.",
+            "Report suspected unauthorized access, malware, or data exposure immediately."
+          ]}
+        ]
+      },
+      {
+        "title": "Appendix A. Agency quick paths",
+        "lead": "Paths are relative to the RIKMS base address provided by your organization.",
+        "blocks": [
+          {"type": "table", "headers": ["Task", "Path"], "widths": [3.8, 2.7], "rows": [
+            ["Agency sign-in", "/agency/login"],
+            ["Dashboard", "/agency/dashboard"],
+            ["Research repository", "/agency/research"],
+            ["Upload chooser", "/agency/upload"],
+            ["Access requests", "/agency/access-requests"],
+            ["Archive", "/agency/archive"],
+            ["Analytics", "/agency/analytics"],
+            ["Notifications", "/agency/notifications"],
+            ["Agency profile", "/agency/profile"],
+            ["Settings", "/agency/settings"]
+          ]},
+          {"type": "note", "tone": "info", "label": "Support request", "text": "When reporting an issue, include the page, record identifier, time, action attempted, displayed message, and whether the problem can be reproduced. Never send passwords, authentication codes, recovery codes, or confidential file contents."}
+        ]
+      }
+    ]
+  },
+  "superadmin": {
+    "title": "RIKMS Super Admin User Manual",
+    "role": "Super Administrator",
+    "subtitle": "Platform governance, moderation, access control, security, recovery, and system configuration",
+    "version": "Version 1.0 | 5 August 2026",
+    "accent": "0F172A",
+    "sections": [
+      {
+        "title": "1. About this manual",
+        "lead": "This manual is for authorized Super Administrators responsible for regionwide RIKMS governance and operations.",
+        "blocks": [
+          {"type": "subheading", "text": "Your responsibilities"},
+          {"type": "bullets", "items": [
+            "Manage participating agencies and Agency Administrator accounts.",
+            "Review research integrity, decide moderation actions, and publish approved records.",
+            "Monitor access-request decisions without replacing the responsible agency's routine review.",
+            "Manage roles and permissions while preserving last-Super-Admin protection.",
+            "Monitor security events, sessions, queue health, notifications, and audit activity.",
+            "Restore archived records and tightly control permanent deletion.",
+            "Configure platform settings, including access requests, MFA, session timeout, maintenance mode, and AI processing."
+          ]},
+          {"type": "note", "tone": "danger", "label": "Privileged role", "text": "Super Admin actions affect multiple agencies and are audited. Use a named account, enable MFA, verify the target before every write action, and never use this role for routine agency data entry."}
+        ]
+      },
+      {
+        "title": "2. Sign in and complete MFA",
+        "lead": "Super Administrators enter through the separate System Administration Portal.",
+        "blocks": [
+          {"type": "steps", "items": [
+            "Open the RIKMS base address supplied by the deployment owner, then go to /admin/login.",
+            "Enter the Admin Email and password. Select Remember this device only on a managed, private device.",
+            "Select Access System Portal.",
+            "If challenged, enter the current authenticator code or an unused recovery code.",
+            "If MFA setup is required, enable two-factor authentication, scan the QR code, confirm a code, and store recovery codes securely before opening protected admin pages."
+          ]},
+          {"type": "note", "tone": "warn", "label": "MFA enforcement", "text": "The database setting and deployment security floor can require Super Admin MFA. A deployment-level requirement cannot be bypassed from Platform Settings."},
+          {"type": "bullets", "items": [
+            "All login activity is monitored and logged.",
+            "Use Forgot Password? only through the approved recovery process.",
+            "Sign out after privileged work and revoke unfamiliar sessions in Security Center."
+          ]}
+        ]
+      },
+      {
+        "title": "3. Navigate the administration workspace",
+        "lead": "The navy top bar provides global search, notification access, the Super Admin menu, and sign-out. The left sidebar provides governance modules.",
+        "blocks": [
+          {"type": "table", "headers": ["Menu", "Primary use"], "widths": [2.4, 4.1], "rows": [
+            ["Dashboard", "Platform metrics, moderation queue, activity, security status, and quick actions."],
+            ["Agency Management", "Create, edit, activate, deactivate, assign administrators, and archive agencies."],
+            ["Agency Admin Users", "Create and maintain agency-level administrator accounts."],
+            ["System Research", "Browse, filter, view, open, and export records across agencies."],
+            ["Research Integrity & Moderation", "Review records, duplicates, flags, decisions, publication, and moderation activity."],
+            ["Access Request Monitoring", "Audit agency decisions, inspect trends, export, and override an approval to denial when justified."],
+            ["System Analytics", "Analyze repository, access, agency, project report, usage, and security data."],
+            ["System Notifications & Activity Logs", "Review notifications, logs, timeline, filters, export, and clear eligible notices."],
+            ["RBAC Management", "Manage roles, permission sets, user role assignments, and change history."],
+            ["Security Center", "Review alerts, events, sessions, queue health, and security report export."],
+            ["Archive", "Restore or permanently delete eligible archived research, agencies, users, and files."],
+            ["Platform Settings", "Configure supported global controls and view informational or deployment-managed settings."]
+          ]}
+        ]
+      },
+      {
+        "title": "4. Use the System Dashboard",
+        "lead": "The System Dashboard is the operating overview for all participating agencies.",
+        "blocks": [
+          {"type": "bullets", "items": [
+            "Metric cards for agencies, users, research, moderation, access, or other current platform totals.",
+            "Research upload trends and research-by-agency charts.",
+            "Pending Moderation panel for work requiring review.",
+            "System Activity feed and Security Status panel.",
+            "Quick Management Actions for creating an agency, managing users, viewing research, opening logs, managing RBAC, and opening Security Center."
+          ]},
+          {"type": "note", "tone": "info", "label": "Pilot limitation", "text": "The System Report button on the dashboard is intentionally unavailable during the pilot. Use module-specific CSV/export actions where they are enabled."},
+          {"type": "subheading", "text": "Daily triage"},
+          {"type": "steps", "items": [
+            "Review critical or high security alerts.",
+            "Review pending and flagged research records.",
+            "Check access-request anomalies and failed operational events.",
+            "Confirm queue health when AI/PDF processing is enabled.",
+            "Review recent privileged actions before making configuration changes."
+          ]}
+        ]
+      },
+      {
+        "title": "5. Manage agencies",
+        "lead": "Agency Management controls participating institutions and their relationship to research and Agency Administrator accounts.",
+        "blocks": [
+          {"type": "subheading", "text": "Create an agency"},
+          {"type": "steps", "items": [
+            "Open Agency Management and select Create New Agency.",
+            "Enter the full name, short name, type, initial status, description, website, contact email, and office address.",
+            "Optionally assign an available Agency Administrator.",
+            "Review the values and create the agency."
+          ]},
+          {"type": "subheading", "text": "Available row actions"},
+          {"type": "bullets", "items": [
+            "View Details and Edit Agency.",
+            "Deactivate or Activate.",
+            "Assign / Change Agency Admin.",
+            "View Research Records scoped to the agency.",
+            "Archive Agency."
+          ]},
+          {"type": "note", "tone": "warn", "label": "Dependency check", "text": "Before deactivation or archive, confirm who will own ongoing moderation, access requests, and records. Archiving preserves history; it is not the same as permanent deletion."}
+        ]
+      },
+      {
+        "title": "6. Manage Agency Admin users",
+        "lead": "Agency Admin Users maintains accounts assigned to participating agencies.",
+        "blocks": [
+          {"type": "steps", "items": [
+            "Select Create Agency Admin and enter the user's identity, email, agency, role, status, and required credential fields.",
+            "Use filters and search to locate an account.",
+            "Use View Details to verify agency, role, status, and last login.",
+            "Use Edit User to correct approved profile or assignment data.",
+            "Use Activate or Deactivate to control sign-in without erasing history.",
+            "Use Reset Password only after verifying the requester and follow the displayed secure handoff process.",
+            "Use Remove User only when the account should be soft-deleted/archived and institutional ownership has been transferred."
+          ]},
+          {"type": "note", "tone": "danger", "label": "Retention", "text": "Normal account removal preserves the user row, ownership history, decisions, audit logs, sessions, and related records through archive and soft deletion. Do not treat Remove User as anonymous cleanup."}
+        ]
+      },
+      {
+        "title": "7. Browse System Research",
+        "lead": "System Research Repository provides a cross-agency view without replacing the moderation controls on the dedicated moderation page.",
+        "blocks": [
+          {"type": "steps", "items": [
+            "Search titles or authors.",
+            "Filter by agency, status, year, category, SDG, and document type.",
+            "Select View for a summary or Open for the full record page.",
+            "Use Export Records, choose CSV and the required date range, then verify the downloaded file."
+          ]},
+          {"type": "bullets", "items": [
+            "Summary items show status, agency, year, title, authors, category, downloads, views, and SDG context.",
+            "Record detail can include official relational metadata plus PDF parsing, AI metadata, and SDG classification results when available.",
+            "Use the moderation module for approve, reject, return, publish, flag, and archive decisions."
+          ]}
+        ]
+      },
+      {
+        "title": "8. Moderate research integrity",
+        "lead": "Research Integrity & Moderation controls the official workflow from submitted records to approval and publication.",
+        "blocks": [
+          {"type": "steps", "items": [
+            "Filter or search the moderation queue and open View Details.",
+            "Select Review Record and examine required metadata, public fields, files, AI review state, SDG alignment, access classification, and any duplicate indicators.",
+            "Enter a concise moderation note documenting the decision or required follow-up.",
+            "Choose only an action allowed for the record's current status.",
+            "Confirm the action and verify the new status and activity entry."
+          ]},
+          {"type": "table", "headers": ["Current status", "Typical allowed actions"], "widths": [1.8, 4.7], "rows": [
+            ["Submitted", "View, approve, approve and publish, reject, or flag for review."],
+            ["Under review", "View, approve, approve and publish, reject, return to draft, or keep/flag for review."],
+            ["Approved", "View, publish, or archive."],
+            ["Published", "View or archive."],
+            ["Rejected", "View, return to draft, archive, or keep flagged as presented."],
+            ["Archived / Superseded / Draft", "Primarily view; recovery or agency revision flows handle later changes."]
+          ]},
+          {"type": "note", "tone": "warn", "label": "Separate approval and publication", "text": "Approve validates the record for the workflow; Publish exposes the eligible record. Approve and Publish combines both and should be used only when the review is fully complete."},
+          {"type": "subheading", "text": "Duplicate review"},
+          {"type": "bullets", "items": [
+            "Use the duplicate panel to compare titles, agencies, identifiers, and metadata.",
+            "Dismiss a false-positive pair only after documenting why the records are distinct.",
+            "Do not delete or merge records solely on similarity scoring."
+          ]}
+        ]
+      },
+      {
+        "title": "9. Monitor access requests",
+        "lead": "Access Request Monitoring provides regionwide oversight of requests and agency decisions.",
+        "blocks": [
+          {"type": "steps", "items": [
+            "Search or filter by status, agency, research, requester email, access level, and date range.",
+            "Open View Request Details and inspect the request, research, agency, decision, and audit context.",
+            "Use Audit Decision to record that the agency decision has been reviewed.",
+            "Use Override - Deny only on an approved request when policy, privacy, legal, or security grounds require revocation. Enter a complete rationale.",
+            "Use Export Access Report for authorized reporting and protect the exported requester data."
+          ]},
+          {"type": "note", "tone": "danger", "label": "Override authority", "text": "Override - Deny is an exceptional governance action, not a substitute for routine agency review. Confirm the exact request and preserve the rationale in the audit trail."}
+        ]
+      },
+      {
+        "title": "10. Use System Analytics",
+        "lead": "System Analytics combines platform-level repository, agency, access, usage, security, and project report analysis.",
+        "blocks": [
+          {"type": "bullets", "items": [
+            "Select This Year, Last 30 days, or All Time where presented.",
+            "Use charts for research by agency/category, upload trends, SDG contribution, platform usage, most-accessed research, and access-request status.",
+            "Use Project Report Analytics to filter by agency, report type, period, status, completeness, budget class, accomplishment, funding source, and date range.",
+            "Open report details for completeness sections, workflow status, accomplishment source, financial metrics, and performance rows.",
+            "Export only the required report and retain it according to data-handling policy."
+          ]},
+          {"type": "note", "tone": "info", "label": "Data quality", "text": "Analytics reflect persisted source records. Investigate missing fields, incomplete reports, and filter choices before interpreting a metric as an operational failure."}
+        ]
+      },
+      {
+        "title": "11. Review notifications and activity logs",
+        "lead": "System Notifications & Activity Logs provides both actionable notices and an auditable view of administrative and system activity.",
+        "blocks": [
+          {"type": "steps", "items": [
+            "Review notification tabs and mark eligible notices read when addressed.",
+            "Filter activity logs by search, status, role, agency, and action.",
+            "Use the timeline to reconstruct a sequence of related events.",
+            "Export Activity Log for an authorized audit or investigation.",
+            "Use Clear Notifications only after verifying that the selected notices can be cleared without disrupting an active response."
+          ]},
+          {"type": "note", "tone": "warn", "label": "Audit preservation", "text": "Clearing notifications does not authorize deletion of audit evidence. Audit logs are separate records and should be retained under the applicable policy."}
+        ]
+      },
+      {
+        "title": "12. Manage RBAC",
+        "lead": "Role-Based Access Control (RBAC) defines what authenticated users can view or manage.",
+        "blocks": [
+          {"type": "subheading", "text": "Roles and permissions"},
+          {"type": "steps", "items": [
+            "Open RBAC Management and review Roles, Permissions, User Role Assignments, and Change History.",
+            "Select Create New Role for a justified custom role. Give it a clear name and limited purpose.",
+            "Assign only the permissions needed for that purpose and save.",
+            "Use View Role before editing. System roles are protected from edits or deletion where indicated.",
+            "Use Duplicate Role as a starting point only when the copied permissions are reviewed one by one.",
+            "Delete a custom role only after removing or replacing all active assignments and reviewing the impact."
+          ]},
+          {"type": "subheading", "text": "User assignments"},
+          {"type": "steps", "items": [
+            "Locate the user in User Role Assignments.",
+            "Review current roles and effective permissions.",
+            "Assign, replace, or remove the role as required, then confirm the change summary.",
+            "Review Change History to verify the recorded actor and result."
+          ]},
+          {"type": "note", "tone": "danger", "label": "Last Super Admin", "text": "RIKMS protects against removing the final Super Admin assignment. Maintain at least one verified recovery-capable Super Admin account at all times."},
+          {"type": "note", "tone": "info", "label": "Least privilege", "text": "Avoid broad custom roles when a smaller permission set will work. Periodically remove roles that are no longer needed."}
+        ]
+      },
+      {
+        "title": "13. Operate the Security Center",
+        "lead": "Security Center brings together security summary data, alerts, events, active sessions, and queue health.",
+        "blocks": [
+          {"type": "steps", "items": [
+            "Review Critical and High alerts first, then inspect event details, actor, IP/context, time, and related metadata.",
+            "Acknowledge an alert when ownership of the investigation is clear.",
+            "Resolve only after the issue has been contained and the resolution is documented. Reopen if new evidence shows the issue remains active.",
+            "Review Active Admin Sessions and revoke a session that is unauthorized, lost, or no longer required.",
+            "Review Queue Health when PDF/AI work is delayed; use operational logs and the queue runbook for service-level recovery.",
+            "Export Security Report only for authorized incident, audit, or compliance work."
+          ]},
+          {"type": "note", "tone": "warn", "label": "Session revocation", "text": "Confirm the session identifier and user before revoking. Revocation interrupts the selected session but does not reset the user's password or resolve the underlying cause."}
+        ]
+      },
+      {
+        "title": "14. Restore or delete archived records",
+        "lead": "Archive & Data Recovery covers archived research, agencies, users, and files, plus archive activity and exports.",
+        "blocks": [
+          {"type": "steps", "items": [
+            "Select the correct archive tab and locate the record by search, agency, type, status, or date filter.",
+            "Use View Details to verify the record type, agency, archive actor, date, reason, and dependencies.",
+            "Use Restore and confirm. Verify the restored record in its primary module.",
+            "Use Delete Permanently only under an approved destruction process and only when backend safeguards permit it.",
+            "Use Export Archive Report for authorized retention or recovery reporting."
+          ]},
+          {"type": "note", "tone": "danger", "label": "Permanent deletion", "text": "Permanent deletion cannot be undone and may damage historical or legal evidence. Restoration is the normal action. Confirm backups, retention authority, dependencies, and exact target before deletion."},
+          {"type": "note", "tone": "info", "label": "User restoration", "text": "Restoring an archived user clears deletion/archive state, reactivates the account, and restores valid agency/role associations where supported. Revalidate access before notifying the user."}
+        ]
+      },
+      {
+        "title": "15. Configure Platform Settings",
+        "lead": "Platform Settings mixes active controls with informational, deferred, and deployment-managed settings. Read the status shown in the UI before assuming a value changes runtime behavior.",
+        "blocks": [
+          {"type": "table", "headers": ["Section", "Examples"], "widths": [2.1, 4.4], "rows": [
+            ["General", "System name, short name, language label, timezone label, and platform logo."],
+            ["Research Repository", "Maximum PDF upload size, allowed file types, and planned metadata/default-status policies."],
+            ["Access Control", "Public access-request enablement and planned default/embargo policies."],
+            ["Security Policies", "Super Admin MFA, session timeout, and deployment-managed login thresholds."],
+            ["Notifications", "Global preferences, including settings that remain deferred or deployment-managed."],
+            ["Maintenance", "Application-level maintenance mode and the public notice."],
+            ["AI Processing", "Enable or disable new PDF parsing, metadata extraction, SDG classification, and manual reruns."],
+            ["Backup & Recovery", "Informational backup frequency/status; backup execution is not configured in the pilot."]
+          ]},
+          {"type": "steps", "items": [
+            "Review the current values and status labels.",
+            "Change only the settings included in the approved change request.",
+            "Review validation errors and high-impact effects.",
+            "Select Save Changes. Use Discard Changes to abandon unsaved edits.",
+            "Verify the affected workflow and review the audit log."
+          ]},
+          {"type": "note", "tone": "warn", "label": "Infrastructure floors", "text": "Environment configuration can disable public access requests, force Super Admin MFA, cap uploads, and control mail or backup services. A database setting cannot override a stricter deployment security control."}
+        ]
+      },
+      {
+        "title": "16. Active and non-active settings",
+        "lead": "Use this reference to distinguish runtime controls from labels or planned behavior.",
+        "blocks": [
+          {"type": "table", "headers": ["Status", "Setting examples", "Meaning"], "widths": [1.25, 2.75, 2.5], "rows": [
+            ["Active", "Upload size, allowed PDF type, access requests enabled, Super Admin MFA, session timeout, maintenance mode, AI processing", "Changes affect current application behavior, subject to deployment floors."],
+            ["Informational", "Site labels, timezone label, maintenance notice text, backup last-run/frequency/status", "Displayed or stored information; may not control the underlying service."],
+            ["Deferred", "Default research status, metadata requirements, default access policy, embargo defaults, several notification toggles", "Planned control; do not describe it as enforced."],
+            ["Deployment-managed", "Failed-login threshold, lockout duration, email transport, actual backup execution", "Configured in infrastructure or environment, not by this page alone."]
+          ]},
+          {"type": "note", "tone": "danger", "label": "Backup limitation", "text": "The pilot Backup and Data Recovery panel does not execute database, file, or MongoDB backups. The execution button is disabled. Backups must be configured and performed by the deployment/system administrator."}
+        ]
+      },
+      {
+        "title": "17. Enable and disable maintenance mode",
+        "lead": "RIKMS maintenance mode is an application-level gate that blocks normal traffic while preserving Super Admin recovery access.",
+        "blocks": [
+          {"type": "steps", "items": [
+            "Prepare an approved maintenance window and a clear public notice.",
+            "Open Platform Settings > System Maintenance.",
+            "Enable Maintenance Mode, review the warning modal, enter or confirm the maintenance message, and save.",
+            "Verify that normal public and agency routes receive the maintenance response while admin recovery routes remain available.",
+            "Perform the approved work and monitor logs.",
+            "Return to Platform Settings, disable Maintenance Mode, save, and verify public, agency, and API recovery."
+          ]},
+          {"type": "note", "tone": "danger", "label": "Do not lock out recovery", "text": "Do not use infrastructure changes that remove the only Super Admin recovery path unless a tested out-of-band rollback exists."}
+        ]
+      },
+      {
+        "title": "18. Operating checklists",
+        "lead": "Use these checks as a starting point and adapt them to the organization's approved operating procedures.",
+        "blocks": [
+          {"type": "subheading", "text": "Daily"},
+          {"type": "bullets", "items": [
+            "Review critical/high security alerts and queue health.",
+            "Review pending moderation and access-monitoring anomalies.",
+            "Review failed system activity and recent privileged writes.",
+            "Confirm no unexpected maintenance or AI-processing state change."
+          ]},
+          {"type": "subheading", "text": "Weekly"},
+          {"type": "bullets", "items": [
+            "Review inactive or unassigned agency administrator accounts.",
+            "Review RBAC changes and custom roles for least privilege.",
+            "Review archived records awaiting recovery or approved disposition.",
+            "Review analytics for unusual download, request, or agency activity."
+          ]},
+          {"type": "subheading", "text": "Monthly or release-based"},
+          {"type": "bullets", "items": [
+            "Verify backup evidence with the deployment administrator; do not rely on the informational panel.",
+            "Test password recovery, MFA recovery, maintenance recovery, and session revocation in an approved non-production environment.",
+            "Review platform-setting status labels and document any environment-managed values.",
+            "Export and retain authorized audit/security reports according to policy.",
+            "Reconcile active agencies, users, roles, and assigned responsibilities."
+          ]}
+        ]
+      },
+      {
+        "title": "19. Troubleshooting and escalation",
+        "lead": "Privileged troubleshooting should preserve evidence and avoid unreviewed destructive changes.",
+        "blocks": [
+          {"type": "table", "headers": ["Problem", "Response"], "widths": [2.2, 4.3], "rows": [
+            ["Admin page blocked after login", "Complete MFA setup/challenge and confirm the account is active with Super Admin authorization."],
+            ["Setting saves but behavior does not change", "Check whether the setting is active, informational, deferred, or deployment-managed; check environment floors and cache invalidation."],
+            ["Upload limit differs from the page", "Compare the configured value with PHP, web-server, and proxy limits; the effective limit is the strictest."],
+            ["AI jobs remain queued or skipped", "Check AI Processing, queue health, worker status, MongoDB/OpenAI configuration, and job logs."],
+            ["Cannot remove a role", "Check system-role protection, active assignments, and last-Super-Admin protection."],
+            ["Cannot permanently delete", "The record may have protected relationships or lack an authorized deletion path. Restore or retain it and escalate."],
+            ["Email or digest does not run", "Mail transport and scheduled delivery may be deployment-managed or not implemented. Check the setting status and infrastructure."],
+            ["Maintenance recovery fails", "Use the preserved admin recovery route or the deployment rollback procedure; do not repeatedly change unrelated settings."]
+          ]},
+          {"type": "subheading", "text": "Escalation record"},
+          {"type": "bullets", "items": [
+            "Record the page, target identifier, user, agency, time, action, result, and exact error code/message.",
+            "Preserve relevant audit, security, queue, and application log references.",
+            "State whether data changed and whether rollback or restoration was attempted.",
+            "Never include passwords, MFA codes, recovery codes, API keys, session secrets, or unrestricted data exports."
+          ]}
+        ]
+      },
+      {
+        "title": "Appendix A. Super Admin quick paths",
+        "lead": "Paths are relative to the RIKMS base address provided by the deployment owner.",
+        "blocks": [
+          {"type": "table", "headers": ["Task", "Path"], "widths": [3.8, 2.7], "rows": [
+            ["Super Admin sign-in", "/admin/login"],
+            ["System Dashboard", "/admin/dashboard"],
+            ["Agency Management", "/admin/agencies"],
+            ["Agency Admin Users", "/admin/users"],
+            ["System Research", "/admin/research"],
+            ["Research Moderation", "/admin/moderation"],
+            ["Access Monitoring", "/admin/access-requests"],
+            ["System Analytics", "/admin/analytics"],
+            ["Notifications & Activity", "/admin/audit-logs"],
+            ["RBAC", "/admin/rbac"],
+            ["Security Center", "/admin/security"],
+            ["Archive & Recovery", "/admin/archive"],
+            ["Platform Settings", "/admin/settings"]
+          ]},
+          {"type": "note", "tone": "info", "label": "Change record", "text": "For every high-impact change, retain the authorization, before/after values, verification result, rollback method, and linked audit event."}
+        ]
+      }
+    ]
+  }
+}

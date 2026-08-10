@@ -25,11 +25,22 @@ export type AgencyResearchRecord = {
     access_level?: string | null;
     embargo_until?: string | null;
     external_url?: string | null;
+    research_owner_name?: string | null;
+    research_owner_email?: string | null;
+    notify_owner_access_requests?: boolean;
+    notify_owner_research_inquiries?: boolean;
+    send_owner_copy_to_admin?: boolean;
     report_detail?: AgencyResearchReportDetail | null;
     performance_items?: AgencyResearchPerformanceItem[];
+    report_highlights?: AgencyResearchHighlight[];
+    files?: AgencyResearchFile[];
     submitted_at?: string | null;
     created_at?: string | null;
     updated_at?: string | null;
+    agency?: {
+        name?: string | null;
+        short_name?: string | null;
+    };
 };
 
 export type AgencyResearchReportDetail = {
@@ -44,6 +55,12 @@ export type AgencyResearchReportDetail = {
     utilized_amount?: string | number | null;
     physical_accomplishment_percent?: string | number | null;
     financial_as_of_date?: string | null;
+    pap_categories?: string[];
+    pap_description?: string | null;
+    beneficiary_sectors?: string[];
+    performance_remarks?: string | null;
+    last_wizard_step?: string | null;
+    draft_version?: number;
 };
 
 export type AgencyResearchPerformanceItem = {
@@ -52,10 +69,35 @@ export type AgencyResearchPerformanceItem = {
     project_name?: string | null;
     target_value?: string | number | null;
     actual_value?: string | number | null;
+    target_numeric_value?: string | number | null;
+    actual_numeric_value?: string | number | null;
+    unit?: string | null;
     accomplishment_percentage?: string | number | null;
     project_status?: string | null;
     remarks?: string | null;
     sort_order?: number | null;
+};
+
+export type AgencyResearchFile = {
+    id: number;
+    research_id: number;
+    report_highlight_id?: number | null;
+    original_name: string;
+    mime_type: string | null;
+    size_bytes: number;
+    file_type: string;
+    status: string;
+    archived_at?: string | null;
+};
+
+export type AgencyResearchHighlight = {
+    id?: number;
+    research_id?: number;
+    title?: string | null;
+    description?: string | null;
+    is_featured?: boolean;
+    sort_order?: number;
+    files?: AgencyResearchFile[];
 };
 
 export type AgencyResearchPayload = {
@@ -71,8 +113,16 @@ export type AgencyResearchPayload = {
     access_level?: string;
     embargo_until?: string | null;
     external_url?: string | null;
+    research_owner_name?: string;
+    research_owner_email?: string;
+    notify_owner_access_requests?: boolean;
+    notify_owner_research_inquiries?: boolean;
+    send_owner_copy_to_admin?: boolean;
     report_details?: AgencyResearchReportDetail;
     performance_items?: AgencyResearchPerformanceItem[];
+    report_highlights?: AgencyResearchHighlight[];
+    expected_updated_at?: string | null;
+    expected_draft_version?: number | null;
 };
 
 export type PublicMetadataField = {
@@ -90,6 +140,14 @@ export async function createAgencyResearchDraft(
             method: 'POST',
             body: JSON.stringify(payload),
         },
+    );
+
+    return data;
+}
+
+export async function getAgencyResearch(id: string | number) {
+    const { data } = await fetchApi<AgencyResearchRecord>(
+        `/api/agency/research/${id}`,
     );
 
     return data;
@@ -163,7 +221,7 @@ export function mapUploadStateToResearchPayload(
         abstract: metadata.abstract || null,
         authors,
         publication_year: new Date().getFullYear(),
-        category: 'Uncategorized',
+        category: state.researchCategory || 'Uncategorized',
         sdg_tags: state.selectedSdgs.map((sdg) => `SDG ${sdg}`),
         keywords,
         public_metadata_fields: state.metadata
@@ -183,6 +241,11 @@ export function mapUploadStateToResearchPayload(
             state.accessType === 'external-link'
                 ? state.externalUrl.trim()
                 : null,
+        research_owner_name: state.researchOwnerName.trim(),
+        research_owner_email: state.researchOwnerEmail.trim().toLowerCase(),
+        notify_owner_access_requests: state.notifyAccessRequests,
+        notify_owner_research_inquiries: state.notifyResearchInquiries,
+        send_owner_copy_to_admin: state.sendCopyToAdmin,
     };
 }
 

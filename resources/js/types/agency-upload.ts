@@ -54,6 +54,7 @@ export type AgencyUploadState = {
     metadata: MetadataField[];
     aiSuggestedSdgs: number[];
     aiSdgResultAvailable: boolean;
+    researchCategory: string;
     selectedSdgs: number[];
     accessType: AccessType;
     embargoDate: string;

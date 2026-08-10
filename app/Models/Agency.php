@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\PublicResponseCache;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
@@ -39,6 +40,15 @@ class Agency extends Model
     protected $appends = [
         'logo_url',
     ];
+
+    protected static function booted(): void
+    {
+        $invalidate = fn (): mixed => app(PublicResponseCache::class)->invalidateAgencies();
+
+        static::saved($invalidate);
+        static::deleted($invalidate);
+        static::restored($invalidate);
+    }
 
     public function getLogoUrlAttribute(): ?string
     {

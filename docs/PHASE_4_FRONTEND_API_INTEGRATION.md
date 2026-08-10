@@ -162,11 +162,11 @@ Implemented:
 
 ## 13. Mock Fallbacks Removed
 
-No mock data files were deleted. Real write services are now used for the connected Phase 4 flows, but legacy mock modules remain until browser verification is complete.
+Phase 9 later confirmed that the three legacy research-upload/AI/SDG mock modules had no static, dynamic, test, demo, or environment-gated imports and removed them. Connected flows use the real agency research, file, and AI-result APIs.
 
 ## 14. Mock Fallbacks Retained
 
-- `mock-research-upload-service.ts`: AI extraction and legacy draft/upload/submit helpers retained with TODO Phase 5 comments.
+- Research upload and AI-result mock helpers: removed in Phase 9 after repository-wide reachability and production-build verification.
 - Repository archive/restore/file replacement: retained with TODO Phase 5 comments until agency-scoped APIs exist.
 - Access request read fallback: retained until browser verification with seeded real data.
 - Admin moderation read fallback: retained until browser verification with seeded real data.

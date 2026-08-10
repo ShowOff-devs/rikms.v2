@@ -39,21 +39,33 @@ export default function ApprovedAccessPage({
                             <ShieldAlert className="size-10 text-[#b45309]" />
                         )}
                         <h1 className="mt-5 text-[28px] leading-9 font-bold text-[#1e3a8a]">
-                            {valid ? 'Your access request has been approved.' : 'Approved access unavailable'}
+                            {valid
+                                ? 'Your access request has been approved.'
+                                : 'Approved access unavailable'}
                         </h1>
                         {valid ? (
                             <>
                                 <div className="mt-6 rounded-xl border border-[#dbeafe] bg-[#eff6ff] p-5">
-                                    <p className="font-semibold text-[#1e3a8a]">{researchTitle}</p>
-                                    <p className="mt-1 text-sm text-[#475569]">{agencyName}</p>
+                                    <p className="font-semibold text-[#1e3a8a]">
+                                        {researchTitle}
+                                    </p>
+                                    <p className="mt-1 text-sm text-[#475569]">
+                                        {agencyName}
+                                    </p>
                                     {expiresAt && (
                                         <p className="mt-3 text-sm text-[#475569]">
-                                            Access expires: {new Date(expiresAt).toLocaleString()}
+                                            Access expires:{' '}
+                                            {new Date(
+                                                expiresAt,
+                                            ).toLocaleString()}
                                         </p>
                                     )}
                                 </div>
                                 <p className="mt-6 text-sm leading-6 text-[#475569]">
-                                    You may download the approved research file using the button below. This access is limited to the approved request and may expire according to the approval terms.
+                                    You may download the approved research file
+                                    using the button below. This access is
+                                    limited to the approved request and may
+                                    expire according to the approval terms.
                                 </p>
                                 <a
                                     href={downloadUrl}
@@ -63,7 +75,8 @@ export default function ApprovedAccessPage({
                                     Download Approved File
                                 </a>
                                 <p className="mt-5 text-xs leading-5 text-[#64748b]">
-                                    This link is for the approved request only. Do not forward it.
+                                    This link is for the approved request only.
+                                    Do not forward it.
                                 </p>
                             </>
                         ) : (

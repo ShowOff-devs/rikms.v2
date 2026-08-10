@@ -1,5 +1,7 @@
 # Phase 0 Backend/Database Audit
 
+> Historical snapshot. Original audit status: superseded in part. Reviewed 2026-08-04. Several schema, protected API, upload, and mock-service gaps described below were implemented later; use [the current production-readiness evidence](PRODUCTION_READINESS_EVIDENCE.md) for present status. MySQL execution still requires CI/staging evidence.
+
 ## 1. Current Backend Status
 
 RIKMS v2 currently has a Laravel 12 backend with Inertia/React pages, Fortify/Sanctum authentication support, relational Eloquent models for core entities, public API controllers for agencies and research, and MongoDB model classes for AI/PDF metadata.

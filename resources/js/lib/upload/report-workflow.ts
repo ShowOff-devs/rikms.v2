@@ -31,6 +31,8 @@ export const REPORT_STEP_IDS = {
     review: 'review',
 } as const satisfies Record<string, UploadStepId>;
 
+export const OFFICIAL_CALCULATED_TOLERANCE = 5;
+
 export const reportStepLabels: Record<UploadStepId, string> = {
     'doc-type': 'Doc Type',
     upload: 'Upload',
@@ -138,9 +140,12 @@ export function createReportDetailsData(): ReportDetailsData {
         projectStartDate: '',
         projectEndDate: '',
         reportingPeriod: '',
-        reportingYear: '2026',
-        agency: 'Department of Science and Technology - Region XI',
+        reportingYear: String(new Date().getFullYear()),
+        agency: '',
         uploadStatus: 'idle',
+        lastWizardStep: null,
+        serverUpdatedAt: null,
+        serverDraftVersion: null,
     };
 }
 
@@ -166,6 +171,9 @@ export function createPerformanceProject(
         projectName,
         targetValue: null,
         actualValue: null,
+        targetNumericValue: null,
+        actualNumericValue: null,
+        unit: '',
         accomplishmentPercentage: null,
         projectStatus: 'not-reported',
         remarks: '',
@@ -183,10 +191,7 @@ export function createReportPerformanceData(): ReportPerformanceData {
 export function createReportPAPClassificationData(): ReportPAPClassificationData {
     return {
         papCategories: [],
-        aiSuggestedPAPCategories: [
-            'Research and Development',
-            'Regional Development',
-        ],
+        aiSuggestedPAPCategories: [],
         papDescription: '',
         beneficiarySectors: [],
         aiSuggestionApplied: false,
@@ -212,15 +217,16 @@ export function createReportHighlightsData(): ReportHighlightsData {
         highlightDescription: '',
         supportingFiles: [],
         featuredHighlight: false,
+        uploadError: null,
     };
 }
 
 export function createReportSDGTaggingData(): ReportSDGTaggingData {
     return {
-        selectedSDGs: [9, 17],
-        aiSuggestedSDGs: [9, 17],
-        aiSuggestionsApplied: true,
-        sdgSelectionValidated: true,
+        selectedSDGs: [],
+        aiSuggestedSDGs: [],
+        aiSuggestionsApplied: false,
+        sdgSelectionValidated: false,
     };
 }
 
@@ -275,16 +281,16 @@ export function calculateProjectStatus(
 export function calculatePerformanceProject(
     project: ReportPerformanceProject,
 ): ReportPerformanceProject {
-    const targetValue = leadingNumericValue(project.targetValue);
-    const actualValue = leadingNumericValue(project.actualValue);
+    const targetValue = project.targetNumericValue;
+    const actualValue = project.actualNumericValue;
     const canCalculate =
         targetValue !== null &&
         actualValue !== null &&
         targetValue > 0 &&
         actualValue >= 0;
     const accomplishmentPercentage = canCalculate
-        ? Math.min(100, Math.round((actualValue / targetValue) * 10000) / 100)
-        : project.accomplishmentPercentage;
+        ? Math.round((actualValue / targetValue) * 10000) / 100
+        : null;
 
     return {
         ...project,
@@ -293,20 +299,34 @@ export function calculatePerformanceProject(
     };
 }
 
-function leadingNumericValue(value: string | null): number | null {
-    if (value === null || value.trim() === '') {
-        return null;
-    }
+export function reportAccomplishmentSummary(
+    performance: ReportPerformanceData,
+) {
+    const percentages = performance.performanceProjects
+        .map((project) => project.accomplishmentPercentage)
+        .filter((value): value is number => value !== null);
+    const calculatedPercentage =
+        percentages.length > 0
+            ? Math.round(
+                  (percentages.reduce((total, value) => total + value, 0) /
+                      percentages.length) *
+                      100,
+              ) / 100
+            : null;
+    const officialPercentage = performance.physicalAccomplishmentPercent;
 
-    const match = value.trim().match(/^[+-]?(?:\d+\.?\d*|\.\d+)/u);
-
-    if (!match) {
-        return null;
-    }
-
-    const parsed = Number.parseFloat(match[0]);
-
-    return Number.isFinite(parsed) ? parsed : null;
+    return {
+        officialPercentage,
+        calculatedPercentage,
+        displayPercentage: officialPercentage ?? calculatedPercentage,
+        source: officialPercentage !== null ? 'official' : 'calculated',
+        difference:
+            officialPercentage !== null && calculatedPercentage !== null
+                ? Math.round(
+                      Math.abs(officialPercentage - calculatedPercentage) * 100,
+                  ) / 100
+                : null,
+    };
 }
 
 export function calculateFinancials(

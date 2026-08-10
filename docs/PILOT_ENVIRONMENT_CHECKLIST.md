@@ -13,7 +13,7 @@
 
 ## Database
 
-- SQLite pilot path or MySQL staging credentials are set through environment only.
+- MySQL 8.4 pilot credentials are set through environment only. SQLite remains suitable for local development, not release acceptance.
 - Back up the pilot database before migration.
 - Confirm `php artisan migrate:status` before and after deployment.
 - Run incremental `php artisan migrate` only on a safe copy first.
@@ -118,8 +118,8 @@ sudo systemctl restart rikms-queue
 ## Security
 
 - No `.env`, credentials, database files, private uploads, logs, generated backups, or archives staged.
-- Composer audit blocker reviewed: `guzzlehttp/psr7 <2.10.2` has two medium advisories.
-- `npm audit --audit-level=moderate` currently reports 0 vulnerabilities.
+- Locked PHP dependencies include the Guzzle 7.15.2 and CommonMark 2.9.1 security remediations.
+- `composer audit --locked` and `npm audit --omit=dev` must both report zero advisories for the release SHA.
 - CI runs `composer audit --locked` and `npm audit --omit=dev` without deployment secrets or production migrations.
 - Debug disabled.
 - Review whether `public/.user.ini` should be source-controlled or deployed by server configuration.
@@ -131,11 +131,13 @@ php artisan optimize:clear
 php artisan route:list
 php artisan migrate:status
 php artisan test
-composer test
-npm run types:check
+composer lint:check
+npm run format:check
 npm run lint:check
-npm run lint
+npm run types:check
+npm run test:frontend
 npm run build
-npm audit --audit-level=moderate
-composer audit
+npm audit --omit=dev
+composer audit --locked
+git diff --check
 ```

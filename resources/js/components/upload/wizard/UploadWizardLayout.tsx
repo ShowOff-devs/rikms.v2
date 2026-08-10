@@ -50,6 +50,12 @@ export default function UploadWizardLayout({
                     activeStepId={state.activeStepId}
                     completedStepIds={state.completedStepIds}
                     lockedStepIds={config.lockedStepIds}
+                    invalidStepIds={Object.entries(state.validationErrors)
+                        .filter(
+                            ([, errors]) =>
+                                Object.keys(errors ?? {}).length > 0,
+                        )
+                        .map(([stepId]) => stepId as UploadStepId)}
                     onStepSelect={onStepSelect}
                 />
 

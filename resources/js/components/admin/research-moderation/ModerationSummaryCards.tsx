@@ -13,7 +13,7 @@ type SummaryCard = {
 const summaryCards: SummaryCard[] = [
     {
         key: 'flaggedResearchRecords',
-        label: 'Flagged Research Records',
+        label: 'Open Moderation Records',
         icon: Flag,
         tone: 'bg-[#fff7ed] text-[#f54900]',
         iconColor: 'text-[#f54900]',

@@ -102,6 +102,7 @@ Route::prefix('agency')
         Route::delete('/research/{research}/archive', [AgencyArchiveController::class, 'destroyResearch'])->name('research.archive.destroy');
         Route::get('/research/{research}/files', [AgencyResearchWriteController::class, 'files'])->name('research.files.index');
         Route::post('/research/{research}/files', [AgencyResearchWriteController::class, 'storeFile'])->name('research.files.store');
+        Route::post('/research/{research}/highlights/{highlight}/files', [AgencyResearchWriteController::class, 'storeHighlightFile'])->name('research.highlights.files.store');
         Route::get('/research/{research}/files/{file}/download', [AgencyResearchWriteController::class, 'downloadFile'])->name('research.files.download');
         Route::delete('/research/{research}/files/{file}', [AgencyResearchWriteController::class, 'destroyFile'])->name('research.files.destroy');
         Route::get('/archive/research', [AgencyArchiveController::class, 'research'])->name('archive.research');

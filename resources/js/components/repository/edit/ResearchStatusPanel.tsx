@@ -21,7 +21,12 @@ import type {
     RepositoryUpdatePayload,
 } from '@/types/repository';
 
-const statusOptions: RepositoryStatus[] = ['draft', 'published', 'archived'];
+const statusOptions: RepositoryStatus[] = [
+    'draft',
+    'revision-required',
+    'published',
+    'archived',
+];
 const accessOptions: Array<{
     value: RepositoryAccessType;
     label: string;
@@ -86,7 +91,7 @@ export function ResearchStatusPanel({
                 <p className="text-xs font-semibold text-[#364153]">
                     Research Status
                 </p>
-                <div className="mt-2 grid grid-cols-3 gap-2">
+                <div className="mt-2 grid grid-cols-2 gap-2">
                     {statusOptions.map((option) => (
                         <span
                             key={option}

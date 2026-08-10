@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ApprovedAccessController;
 use App\Models\Agency;
+use App\Models\Research;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -98,6 +99,14 @@ Route::middleware(['auth', 'verified', 'role:agency_admin', 'agency.scope'])->gr
     Route::inertia('/agency/upload', 'agency/upload')->name('agency.upload');
     Route::inertia('/agency/upload/research', 'agency/upload/research')->name('agency.upload.research');
     Route::inertia('/agency/upload/terminal-report', 'agency/upload/terminal-report')->name('agency.upload.terminal-report');
+    Route::get('/agency/upload/terminal-report/{research}', function (Request $request, Research $research) {
+        abort_unless($request->user()?->can('updateAgencyDraft', $research), 403);
+        abort_unless(str_contains(mb_strtolower((string) $research->category), 'terminal report'), 404);
+
+        return Inertia::render('agency/upload/terminal-report', [
+            'researchId' => (string) $research->id,
+        ]);
+    })->name('agency.upload.terminal-report.edit');
     Route::inertia('/agency/upload/project-accomplishment', 'agency/upload/project-accomplishment')->name('agency.upload.project-accomplishment');
 });
 

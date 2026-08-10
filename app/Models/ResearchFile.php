@@ -11,6 +11,7 @@ class ResearchFile extends Model
 
     protected $fillable = [
         'research_id',
+        'report_highlight_id',
         'agency_id',
         'uploaded_by',
         'original_name',
@@ -45,6 +46,11 @@ class ResearchFile extends Model
     public function research()
     {
         return $this->belongsTo(Research::class);
+    }
+
+    public function reportHighlight()
+    {
+        return $this->belongsTo(ResearchReportHighlight::class, 'report_highlight_id');
     }
 
     public function agency()

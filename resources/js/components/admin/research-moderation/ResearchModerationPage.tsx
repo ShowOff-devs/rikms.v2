@@ -21,6 +21,7 @@ import type {
     FlaggedResearchRecord,
     ModerationActivity,
     ModerationFilters,
+    ModerationIssueType,
     ModerationReportExportOptions,
     ModerationSummary,
 } from '@/types/research-moderation';
@@ -130,7 +131,7 @@ function makeDuplicateModerationRecord(
         agency: match.matchingAgency,
         uploadedBy: 'Duplicate Detection Service',
         uploaderRole: 'System-generated moderation flag',
-        issueType: 'duplicate-research',
+        issueType: 'possible_duplicate',
         year: match.matchingYear ?? new Date(match.detectedAt).getFullYear(),
         status: 'pending-review',
         dateFlagged: new Date().toISOString().slice(0, 10),
@@ -243,7 +244,12 @@ export function ResearchModerationPage() {
     const years = useMemo(
         () =>
             Array.from(
-                new Set(records.map((record) => String(record.year))),
+                new Set(
+                    records
+                        .map((record) => record.year)
+                        .filter((year): year is number => year !== undefined)
+                        .map(String),
+                ),
             ).sort((left, right) => Number(right) - Number(left)),
         [records],
     );
@@ -426,12 +432,14 @@ export function ResearchModerationPage() {
         record: FlaggedResearchRecord,
         duplicate?: DuplicateResearchMatch | null,
         note?: string,
+        issueType: ModerationIssueType = 'other_manual_review',
     ) => {
         setIsActionLoading(true);
 
         try {
             const updatedRecord = await flagResearchForReview(record.id, {
                 note,
+                issueType,
             });
             setRecords((current) => {
                 const exists = current.some((item) => item.id === record.id);
@@ -562,6 +570,7 @@ export function ResearchModerationPage() {
             | 'returned'
             | 'archived',
         note: string,
+        issueType?: ModerationIssueType,
     ) => {
         if (!selectedReviewRecord) {
             return;
@@ -580,7 +589,12 @@ export function ResearchModerationPage() {
         }
 
         if (action === 'flagged') {
-            await flagRecord(selectedReviewRecord, null, note);
+            await flagRecord(
+                selectedReviewRecord,
+                null,
+                note,
+                issueType ?? 'other_manual_review',
+            );
         }
 
         if (action === 'returned') {
@@ -592,7 +606,10 @@ export function ResearchModerationPage() {
         }
     };
 
-    const handleConfirmAction = async (note?: string) => {
+    const handleConfirmAction = async (
+        note?: string,
+        issueType?: ModerationIssueType,
+    ) => {
         if (!confirmationRecord || !confirmationAction) {
             return;
         }
@@ -606,7 +623,12 @@ export function ResearchModerationPage() {
         }
 
         if (confirmationAction === 'flag') {
-            await flagRecord(confirmationRecord, confirmationDuplicate, note);
+            await flagRecord(
+                confirmationRecord,
+                confirmationDuplicate,
+                note,
+                issueType ?? 'other_manual_review',
+            );
         }
 
         if (confirmationAction === 'return_to_draft') {
@@ -783,6 +805,7 @@ export function ResearchModerationPage() {
             />
 
             <ReviewResearchRecordModal
+                key={selectedReviewRecord?.id ?? 'closed-review'}
                 record={selectedReviewRecord}
                 open={Boolean(selectedReviewRecord)}
                 isSaving={isActionLoading}
@@ -795,6 +818,7 @@ export function ResearchModerationPage() {
             />
 
             <ModerationConfirmationModal
+                key={`${confirmationRecord?.id ?? 'closed'}-${confirmationAction ?? 'none'}`}
                 record={confirmationRecord}
                 action={confirmationAction}
                 open={Boolean(confirmationRecord && confirmationAction)}

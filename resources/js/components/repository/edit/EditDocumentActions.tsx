@@ -3,6 +3,8 @@ import { Archive, Check, Copy, LoaderCircle, Send, Save } from 'lucide-react';
 export function EditDocumentActions({
     isSaving,
     canEdit,
+    canSubmit,
+    isRevisionRequired = false,
     lockedMessage,
     onSave,
     onSaveDraft,
@@ -13,6 +15,8 @@ export function EditDocumentActions({
 }: {
     isSaving: boolean;
     canEdit: boolean;
+    canSubmit: boolean;
+    isRevisionRequired?: boolean;
     lockedMessage?: string;
     onSave: () => void;
     onSaveDraft: () => void;
@@ -70,11 +74,13 @@ export function EditDocumentActions({
                         <button
                             type="button"
                             onClick={onPublish}
-                            disabled={isSaving}
+                            disabled={isSaving || !canSubmit}
                             className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border border-[#bbf7d0] bg-[#f0fdf4] px-4 text-sm font-semibold text-[#008236] disabled:opacity-50"
                         >
                             <Send className="size-4" />
-                            Publish Research
+                            {isRevisionRequired
+                                ? 'Resubmit for Review'
+                                : 'Submit for Review'}
                         </button>
                         <button
                             type="button"

@@ -11,6 +11,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Notifications\AccessRequestApprovedNotification;
 use App\Notifications\AccessRequestDeniedNotification;
+use App\Notifications\ResearchOwnerAccessRequestNotification;
 use App\Services\AccessRequestEmailNotificationService;
 use App\Support\AccessRequestEmailNotificationResult;
 use App\Support\AccessRequestMailFailureAuditor;
@@ -178,6 +179,80 @@ test('public access request notifications respect agency admin preferences', fun
     ]);
 });
 
+test('public access request notifies the configured research owner and honors admin copy preference', function () {
+    NotificationFacade::fake();
+
+    $agency = createPhase7Agency('phase-7-research-owner-notification');
+    $uploader = createPhase7User('agency_admin', $agency);
+    $owner = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $uploader);
+    $research->forceFill([
+        'research_owner_name' => $owner->name,
+        'research_owner_email' => $owner->email,
+        'notify_owner_access_requests' => true,
+        'send_owner_copy_to_admin' => false,
+    ])->save();
+
+    $this->postJson(
+        "/api/public/research/{$research->slug}/access-requests",
+        phase7PublicPayload(['requester_email' => 'owner-routing@example.test']),
+    )->assertCreated();
+
+    $this->assertDatabaseHas('notifications', [
+        'type' => 'access_request.submitted',
+        'user_id' => $owner->id,
+        'agency_id' => $agency->id,
+    ]);
+    $this->assertDatabaseMissing('notifications', [
+        'type' => 'access_request.submitted',
+        'user_id' => $uploader->id,
+    ]);
+
+    NotificationFacade::assertSentOnDemand(
+        ResearchOwnerAccessRequestNotification::class,
+        function (ResearchOwnerAccessRequestNotification $notification, array $channels, object $notifiable) use ($owner, $research): bool {
+            $mail = $notification->toMail($notifiable);
+
+            return $channels === ['mail']
+                && $notifiable->routeNotificationFor('mail') === $owner->email
+                && $notification instanceof ShouldQueue
+                && $notification->data['research_title'] === $research->title
+                && $notification->data['requester_name'] === 'Public Researcher'
+                && $mail->attachments === []
+                && $mail->rawAttachments === [];
+        },
+    );
+});
+
+test('research owner access notifications can be disabled while retaining an agency admin copy', function () {
+    NotificationFacade::fake();
+
+    $agency = createPhase7Agency('phase-7-owner-notification-disabled');
+    $uploader = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $uploader);
+    $research->forceFill([
+        'research_owner_name' => 'External Research Owner',
+        'research_owner_email' => 'external.owner@example.test',
+        'notify_owner_access_requests' => false,
+        'send_owner_copy_to_admin' => true,
+    ])->save();
+
+    $this->postJson(
+        "/api/public/research/{$research->slug}/access-requests",
+        phase7PublicPayload(['requester_email' => 'admin-copy@example.test']),
+    )->assertCreated();
+
+    $this->assertDatabaseHas('notifications', [
+        'type' => 'access_request.submitted',
+        'user_id' => $uploader->id,
+        'agency_id' => $agency->id,
+    ]);
+    NotificationFacade::assertSentOnDemandTimes(
+        ResearchOwnerAccessRequestNotification::class,
+        0,
+    );
+});
+
 test('public access request validation and duplicate pending requests are blocked', function () {
     $agency = createPhase7Agency('phase-7-validation-agency');
     $agencyAdmin = createPhase7User('agency_admin', $agency);
@@ -311,7 +386,7 @@ test('honeypot submissions are rejected without records audit logs or notificati
     expect(Notification::query()->where('type', 'access_request.submitted')->exists())->toBeFalse();
 });
 
-test('captcha is optional by default and enforced when enabled', function () {
+test('captcha may be explicitly disabled in the testing environment', function () {
     $agency = createPhase7Agency('phase-7-captcha-agency');
     $agencyAdmin = createPhase7User('agency_admin', $agency);
     $research = createPhase7Research($agency, $agencyAdmin);
@@ -320,27 +395,22 @@ test('captcha is optional by default and enforced when enabled', function () {
         "/api/public/research/{$research->slug}/access-requests",
         phase7PublicPayload(['requester_email' => 'captcha-disabled@example.test']),
     )->assertCreated();
+});
+
+test('enabled captcha configuration verifies a token end to end', function () {
+    $agency = createPhase7Agency('phase-7-captcha-valid');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
 
     config([
         'rikms.public_access_requests.captcha.enabled' => true,
+        'rikms.public_access_requests.captcha.frontend_enabled' => true,
+        'rikms.public_access_requests.captcha.provider' => 'turnstile',
+        'rikms.public_access_requests.captcha.site_key' => 'test-site-key',
         'rikms.public_access_requests.captcha.secret_key' => 'test-secret',
     ]);
 
-    Http::fakeSequence()
-        ->push(['success' => false], 200)
-        ->push(['success' => true], 200);
-
-    $this->postJson(
-        "/api/public/research/{$research->slug}/access-requests",
-        phase7PublicPayload([
-            'requester_email' => 'captcha-invalid@example.test',
-            'captcha_token' => 'invalid-token',
-        ]),
-    )
-        ->assertUnprocessable()
-        ->assertJsonValidationErrors(['captcha_token']);
-
-    expect(AccessRequest::query()->where('requester_email', 'captcha-invalid@example.test')->exists())->toBeFalse();
+    Http::fake(['*' => Http::response(['success' => true])]);
 
     $this->postJson(
         "/api/public/research/{$research->slug}/access-requests",
@@ -356,6 +426,70 @@ test('captcha is optional by default and enforced when enabled', function () {
         return ($body['secret'] ?? null) === 'test-secret'
             && ($body['response'] ?? null) === 'valid-token';
     });
+});
+
+test('enabled captcha rejects a missing token with a safe message', function () {
+    $agency = createPhase7Agency('phase-7-captcha-missing');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+
+    config([
+        'rikms.public_access_requests.captcha.enabled' => true,
+        'rikms.public_access_requests.captcha.secret_key' => 'test-secret',
+    ]);
+
+    $this->postJson(
+        "/api/public/research/{$research->slug}/access-requests",
+        phase7PublicPayload(['requester_email' => 'captcha-missing@example.test']),
+    )
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.captcha_token.0', 'We could not verify the submission. Please try again.');
+
+    Http::assertNothingSent();
+});
+
+test('enabled captcha rejects invalid tokens', function () {
+    $agency = createPhase7Agency('phase-7-captcha-invalid');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+
+    config([
+        'rikms.public_access_requests.captcha.enabled' => true,
+        'rikms.public_access_requests.captcha.secret_key' => 'test-secret',
+    ]);
+    Http::fake(['*' => Http::response(['success' => false])]);
+
+    $this->postJson(
+        "/api/public/research/{$research->slug}/access-requests",
+        phase7PublicPayload([
+            'requester_email' => 'captcha-invalid@example.test',
+            'captcha_token' => 'invalid-token',
+        ]),
+    )
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['captcha_token']);
+});
+
+test('enabled captcha fails closed when the provider is unavailable', function () {
+    $agency = createPhase7Agency('phase-7-captcha-unavailable');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+
+    config([
+        'rikms.public_access_requests.captcha.enabled' => true,
+        'rikms.public_access_requests.captcha.secret_key' => 'test-secret',
+    ]);
+    Http::fake(fn () => throw new RuntimeException('Simulated provider outage'));
+
+    $this->postJson(
+        "/api/public/research/{$research->slug}/access-requests",
+        phase7PublicPayload([
+            'requester_email' => 'captcha-unavailable@example.test',
+            'captcha_token' => 'provider-token',
+        ]),
+    )
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.captcha_token.0', 'We could not verify the submission. Please try again.');
 });
 
 test('public access request throttling limits repeated IP and email submissions', function () {

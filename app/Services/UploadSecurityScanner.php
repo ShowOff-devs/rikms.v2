@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Contracts\MalwareScanner;
+use App\Exceptions\MalwareScanException;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
@@ -25,6 +26,15 @@ class UploadSecurityScanner
         $malware = $signatures === []
             ? $this->malwareScanner->scan($absolutePath)
             : ['clean' => true, 'active' => false, 'engine' => 'not_run', 'signatures' => []];
+
+        if (! is_bool($malware['clean'] ?? null)
+            || ! is_bool($malware['active'] ?? null)
+            || ! is_string($malware['engine'] ?? null)
+            || trim($malware['engine']) === ''
+            || ! is_array($malware['signatures'] ?? null)
+            || collect($malware['signatures'])->contains(fn (mixed $signature): bool => ! is_string($signature))) {
+            throw new MalwareScanException('malformed_response');
+        }
 
         return [
             'clean' => $signatures === [] && $malware['clean'],

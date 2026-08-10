@@ -15,7 +15,14 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import type { FlaggedResearchRecord } from '@/types/research-moderation';
+import {
+    moderationIssueTypeLabels,
+    moderatorSelectableIssueTypes,
+} from '@/data/research-moderation-options';
+import type {
+    FlaggedResearchRecord,
+    ModerationIssueType,
+} from '@/types/research-moderation';
 
 export type ModerationConfirmationAction =
     | 'resolve'
@@ -51,10 +58,10 @@ const actionCopy: Record<
         buttonClass: 'bg-[#1e3a8a] text-white hover:bg-[#172554]',
     },
     flag: {
-        title: 'Flag Record for Review?',
+        title: 'Request Research Revision?',
         description:
-            'This will move the record into pending review for further moderation.',
-        confirmLabel: 'Flag for Review',
+            'This will record the issue and hold the research for agency revision.',
+        confirmLabel: 'Request Revision',
         icon: Flag,
         buttonClass: 'bg-[#ca3500] text-white hover:bg-[#9f2d00]',
     },
@@ -89,9 +96,12 @@ export function ModerationConfirmationModal({
     open: boolean;
     isSaving: boolean;
     onOpenChange: (open: boolean) => void;
-    onConfirm: (note?: string) => void;
+    onConfirm: (note?: string, issueType?: ModerationIssueType) => void;
 }) {
     const [note, setNote] = useState('');
+    const [issueType, setIssueType] = useState<ModerationIssueType | null>(
+        null,
+    );
     const [validationError, setValidationError] = useState<string | null>(null);
 
     if (!record || !action) {
@@ -100,26 +110,47 @@ export function ModerationConfirmationModal({
 
     const copy = actionCopy[action];
     const Icon = copy.icon;
-    const requiresRationale = action === 'archive';
+    const requiresRationale = action === 'archive' || action === 'flag';
+    const effectiveIssueType =
+        issueType ??
+        (moderatorSelectableIssueTypes.includes(record.issueType)
+            ? record.issueType
+            : 'other_manual_review');
 
     const handleConfirm = () => {
         const trimmedNote = note.trim();
+        const minimumRationaleLength =
+            action === 'flag' &&
+            (effectiveIssueType === 'policy_noncompliance' ||
+                effectiveIssueType === 'incomplete_metadata')
+                ? 20
+                : 10;
 
-        if (requiresRationale && trimmedNote.length < 10) {
+        if (requiresRationale && trimmedNote.length < minimumRationaleLength) {
             setValidationError(
-                'Archive rationale must be at least 10 characters.',
+                action === 'flag' &&
+                    effectiveIssueType === 'policy_noncompliance'
+                    ? 'Identify the applicable policy provision or provide a specific policy noncompliance explanation.'
+                    : action === 'flag' &&
+                        effectiveIssueType === 'incomplete_metadata'
+                      ? 'List the missing or invalid metadata fields in the revision instructions.'
+                      : `${action === 'archive' ? 'Archive' : 'Review'} rationale must be at least 10 characters.`,
             );
 
             return;
         }
 
         setValidationError(null);
-        onConfirm(trimmedNote || undefined);
+        onConfirm(
+            trimmedNote || undefined,
+            action === 'flag' ? effectiveIssueType : undefined,
+        );
     };
 
     const handleOpenChange = (nextOpen: boolean) => {
         if (!nextOpen && !isSaving) {
             setNote('');
+            setIssueType(null);
             setValidationError(null);
         }
 
@@ -148,16 +179,54 @@ export function ModerationConfirmationModal({
                     </p>
                 </div>
 
+                {action === 'flag' ? (
+                    <div>
+                        <label
+                            htmlFor="moderation-issue-type"
+                            className="text-sm font-semibold text-[#1e2939]"
+                        >
+                            Concern Type
+                        </label>
+                        <select
+                            id="moderation-issue-type"
+                            value={effectiveIssueType}
+                            onChange={(event) =>
+                                setIssueType(
+                                    event.target.value as ModerationIssueType,
+                                )
+                            }
+                            disabled={isSaving}
+                            className="mt-2 h-10 w-full rounded-[10px] border border-[#e5e7eb] bg-white px-3 text-sm text-[#1e2939] outline-none focus:border-[#1e3a8a]/40 focus:ring-2 focus:ring-[#1e3a8a]/10 disabled:opacity-60"
+                        >
+                            {moderatorSelectableIssueTypes.map((value) => (
+                                <option key={value} value={value}>
+                                    {moderationIssueTypeLabels[value]}
+                                </option>
+                            ))}
+                        </select>
+                        {effectiveIssueType === 'policy_noncompliance' ? (
+                            <p className="mt-1 text-xs leading-5 text-[#b91c1c]">
+                                Use only when a documented policy or governance
+                                rule has been breached.
+                            </p>
+                        ) : null}
+                    </div>
+                ) : null}
+
                 {requiresRationale ? (
                     <div>
                         <label
                             htmlFor="archive-rationale"
                             className="text-sm font-semibold text-[#1e2939]"
                         >
-                            Archive rationale
+                            {action === 'archive'
+                                ? 'Archive rationale'
+                                : 'Revision instructions'}
                         </label>
                         <p className="mt-1 text-xs leading-5 text-[#6a7282]">
-                            Explain why this research record is being archived.
+                            {action === 'archive'
+                                ? 'Explain why this research record is being archived.'
+                                : 'Explain what must be reviewed or revised by the agency.'}{' '}
                             This rationale will be retained in the moderation
                             audit trail.
                         </p>

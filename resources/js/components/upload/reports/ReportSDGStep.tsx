@@ -27,32 +27,39 @@ export default function ReportSDGStep(props: UploadWizardStepProps) {
             tone="green"
         >
             <div className="space-y-5">
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-[#ddd6fe] bg-[#f5f3ff] p-4">
-                    <div>
-                        <p className="flex items-center gap-2 text-sm font-bold text-[#7c3aed]">
-                            <Sparkles className="size-4" />
-                            AI suggested SDG{' '}
-                            {data.aiSuggestedSDGs.join(', SDG ')}
-                        </p>
-                        <p className="mt-1 text-xs text-[#6a7282]">
-                            These are pre-selected recommendations. You can add
-                            or remove goals before review.
-                        </p>
+                {data.aiSuggestedSDGs.length > 0 ? (
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-[#ddd6fe] bg-[#f5f3ff] p-4">
+                        <div>
+                            <p className="flex items-center gap-2 text-sm font-bold text-[#7c3aed]">
+                                <Sparkles className="size-4" />
+                                AI suggested SDG{' '}
+                                {data.aiSuggestedSDGs.join(', SDG ')}
+                            </p>
+                            <p className="mt-1 text-xs text-[#6a7282]">
+                                These are pre-selected recommendations. You can
+                                add or remove goals before review.
+                            </p>
+                        </div>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="rounded-[14px] border-[#ddd6fe] text-[#7c3aed]"
+                            onClick={() =>
+                                updateSDGTagging({
+                                    selectedSDGs: data.aiSuggestedSDGs,
+                                    aiSuggestionsApplied: true,
+                                })
+                            }
+                        >
+                            Apply Suggestions
+                        </Button>
                     </div>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        className="rounded-[14px] border-[#ddd6fe] text-[#7c3aed]"
-                        onClick={() =>
-                            updateSDGTagging({
-                                selectedSDGs: data.aiSuggestedSDGs,
-                                aiSuggestionsApplied: true,
-                            })
-                        }
-                    >
-                        Apply Suggestions
-                    </Button>
-                </div>
+                ) : (
+                    <div className="rounded-[14px] border border-[#e5e7eb] bg-[#f9fafb] p-4 text-xs text-[#6a7282]">
+                        No AI-generated SDG suggestions are available. Select
+                        the applicable goals manually.
+                    </div>
+                )}
 
                 <SDGGrid
                     selectedSDGs={data.selectedSDGs}

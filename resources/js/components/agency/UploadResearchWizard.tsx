@@ -33,6 +33,14 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { repositoryCategoryColors } from '@/data/repository-display';
+import {
     getAgencyAiResults,
     processAgencyAiResults,
 } from '@/lib/agency/agency-ai-results-service';
@@ -88,6 +96,7 @@ const toneClasses: Record<string, string> = {
 const aiResultsPollIntervalMs = 3000;
 const aiResultsPollTimeoutMs = 30000;
 const successfulAiStatuses = ['completed', 'pending_review'];
+const researchCategoryOptions = Object.keys(repositoryCategoryColors);
 
 function dateInputValue(date: Date) {
     const year = date.getFullYear();
@@ -110,6 +119,17 @@ function isFutureDateValue(value: string) {
 
 function hasValidExternalUrl(value: string) {
     return /^https?:\/\//.test(value.trim());
+}
+
+function hasValidEmail(value: string) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+function hasValidResearchOwner(state: AgencyUploadState) {
+    return (
+        state.researchOwnerName.trim().length > 0 &&
+        hasValidEmail(state.researchOwnerEmail)
+    );
 }
 
 function StepBadge({ step }: { step: number }) {
@@ -1126,6 +1146,51 @@ function SdgStep({
             subtitle="Select Sustainable Development Goals - used for repository classification and filtering."
             step={4}
         >
+            <div className="mb-5 rounded-[14px] border border-[#bfdbfe] bg-[#f8faff] p-4">
+                <div className="grid items-center gap-4 md:grid-cols-[1fr_320px]">
+                    <div>
+                        <p className="text-sm font-semibold text-[#101828]">
+                            Research Category
+                        </p>
+                        <p className="mt-1 text-xs text-[#6a7282]">
+                            Manually select the primary category used for
+                            repository filtering and analytics.
+                        </p>
+                    </div>
+                    <Select
+                        value={state.researchCategory || undefined}
+                        onValueChange={(value) =>
+                            setState((current) => ({
+                                ...current,
+                                researchCategory: value,
+                            }))
+                        }
+                    >
+                        <SelectTrigger
+                            className="h-10 w-full rounded-[10px] border-[#bfdbfe] bg-white"
+                            aria-label="Research Category"
+                        >
+                            <SelectValue placeholder="Select research category" />
+                        </SelectTrigger>
+                        <SelectContent className="border-[#bfdbfe] bg-white">
+                            {researchCategoryOptions.map((category) => (
+                                <SelectItem key={category} value={category}>
+                                    <span
+                                        className="size-2.5 rounded-full"
+                                        style={{
+                                            backgroundColor:
+                                                repositoryCategoryColors[
+                                                    category
+                                                ],
+                                        }}
+                                    />
+                                    {category}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
             <div className="mb-5 flex items-center justify-between rounded-[14px] border border-[#fde68a] bg-[#fffbeb] p-4">
                 <div className="flex items-center gap-3">
                     <div className="flex size-10 items-center justify-center rounded-[10px] bg-[#fef3c7] text-[#d97706]">
@@ -1221,9 +1286,11 @@ function SdgStep({
 function AccessStep({
     state,
     setState,
+    accountEmail,
 }: {
     state: AgencyUploadState;
     setState: React.Dispatch<React.SetStateAction<AgencyUploadState>>;
+    accountEmail: string;
 }) {
     const iconMap: Record<AccessType, React.ReactNode> = {
         public: <Globe2 className="size-5" />,
@@ -1346,6 +1413,7 @@ function AccessStep({
                             Research Owner Name
                         </span>
                         <Input
+                            required
                             value={state.researchOwnerName}
                             onChange={(event) =>
                                 setState((current) => ({
@@ -1363,6 +1431,7 @@ function AccessStep({
                         </span>
                         <div className="mt-2 flex gap-2">
                             <Input
+                                required
                                 type="email"
                                 value={state.researchOwnerEmail}
                                 onChange={(event) =>
@@ -1373,6 +1442,10 @@ function AccessStep({
                                 }
                                 className="h-10 rounded-[10px] border-[#e5e7eb] bg-[#f9fafb]"
                                 placeholder="owner@agency.gov.ph"
+                                aria-invalid={
+                                    state.researchOwnerEmail.length > 0 &&
+                                    !hasValidEmail(state.researchOwnerEmail)
+                                }
                             />
                             <Button
                                 type="button"
@@ -1381,14 +1454,19 @@ function AccessStep({
                                 onClick={() =>
                                     setState((current) => ({
                                         ...current,
-                                        researchOwnerEmail:
-                                            'agency.admin@dost.gov.ph',
+                                        researchOwnerEmail: accountEmail,
                                     }))
                                 }
                             >
                                 Use my account email
                             </Button>
                         </div>
+                        {!hasValidResearchOwner(state) && (
+                            <p className="mt-2 text-[11px] font-medium text-[#b91c1c]">
+                                Enter the research owner name and a valid email
+                                address to continue.
+                            </p>
+                        )}
                     </label>
                     <div className="rounded-[10px] border border-[#bfdbfe] bg-[#eff6ff] p-3 text-xs leading-5 text-[#1e3a8a]">
                         Owner email will not be publicly displayed. RIKMS will
@@ -1497,8 +1575,9 @@ function ReviewStep({
               'Document type confirmed',
               'File uploaded',
               'Public metadata selected',
-              'SDG tags selected',
+              'Research category and SDG tags selected',
               `Access set to ${getAccessLabel(state.accessType)}`,
+              'Research owner contact confirmed',
           ];
 
     return (
@@ -1518,7 +1597,7 @@ function ReviewStep({
                         </p>
                     </div>
                     <span className="text-xs text-[#6a7282]">
-                        {validationChecks.length}/5 passed
+                        {validationChecks.length}/6 passed
                     </span>
                 </div>
                 <div className="mt-3 h-1.5 rounded-full bg-[#dcfce7]">
@@ -1624,6 +1703,14 @@ function ReviewStep({
                 step="Step 4"
                 onEdit={() => onEdit(4)}
             >
+                <div className="mb-4 rounded-[10px] border border-[#e5e7eb] bg-[#f8faff] p-3">
+                    <p className="text-[11px] font-bold text-[#99a1af] uppercase">
+                        Research Category
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-[#1e3a8a]">
+                        {state.researchCategory}
+                    </p>
+                </div>
                 <div className="flex flex-wrap gap-2">
                     {state.selectedSdgs.map((id) => {
                         const sdg = sdgOptions.find(
@@ -1661,6 +1748,16 @@ function ReviewStep({
                             )?.description
                         }
                     </p>
+                </div>
+                <div className="mt-4 grid gap-4 text-sm md:grid-cols-2">
+                    <ReviewItem
+                        label="Research Owner"
+                        value={state.researchOwnerName}
+                    />
+                    <ReviewItem
+                        label="Owner Email"
+                        value={state.researchOwnerEmail}
+                    />
                 </div>
             </ReviewSection>
         </WizardCard>
@@ -1801,8 +1898,9 @@ function readinessCount(state: AgencyUploadState) {
         Boolean(state.documentType),
         Boolean(state.file),
         state.aiHasRun && state.metadata.length > 0,
-        state.selectedSdgs.length > 0,
-        Boolean(state.accessType),
+        state.selectedSdgs.length > 0 &&
+            state.researchCategory.trim().length > 0,
+        canUseAccessSettings(state) && hasValidResearchOwner(state),
     ].filter(Boolean).length;
 }
 
@@ -1820,19 +1918,14 @@ function canContinue(currentStep: number, state: AgencyUploadState) {
     }
 
     if (currentStep === 4) {
-        return state.selectedSdgs.length > 0;
+        return (
+            state.selectedSdgs.length > 0 &&
+            state.researchCategory.trim().length > 0
+        );
     }
 
     if (currentStep === 5) {
-        if (state.accessType === 'embargo') {
-            return isFutureDateValue(state.embargoDate);
-        }
-
-        if (state.accessType === 'external-link') {
-            return hasValidExternalUrl(state.externalUrl);
-        }
-
-        return true;
+        return canUseAccessSettings(state) && hasValidResearchOwner(state);
     }
 
     return true;
@@ -1845,14 +1938,17 @@ function validateResearchSubmission(state: AgencyUploadState) {
         state.aiHasRun && state.metadata.some((field) => field.isPublic)
             ? 'Public metadata selected'
             : '',
-        state.selectedSdgs.length > 0 ? 'SDG tags selected' : '',
+        state.selectedSdgs.length > 0 && state.researchCategory.trim()
+            ? 'Research category and SDG tags selected'
+            : '',
         canUseAccessSettings(state)
             ? `Access set to ${getAccessLabel(state.accessType)}`
             : '',
+        hasValidResearchOwner(state) ? 'Research owner contact confirmed' : '',
     ].filter(Boolean);
 
     return {
-        passed: checks.length === 5,
+        passed: checks.length === 6,
         checks,
     };
 }
@@ -1869,7 +1965,11 @@ function canUseAccessSettings(state: AgencyUploadState) {
     return Boolean(state.accessType);
 }
 
-export default function UploadResearchWizard() {
+export default function UploadResearchWizard({
+    accountEmail,
+}: {
+    accountEmail: string;
+}) {
     const [state, setState] = useState<AgencyUploadState>(
         createInitialUploadState,
     );
@@ -1939,6 +2039,7 @@ export default function UploadResearchWizard() {
                 }).format(new Date()),
             );
             setSubmitError(null);
+            router.visit('/agency/research');
         } catch (error) {
             setSubmitError(apiMessage(error, 'Unable to save draft.'));
             setState((current) => ({
@@ -2024,7 +2125,11 @@ export default function UploadResearchWizard() {
                             <SdgStep state={state} setState={setState} />
                         )}
                         {currentStep === 5 && (
-                            <AccessStep state={state} setState={setState} />
+                            <AccessStep
+                                state={state}
+                                setState={setState}
+                                accountEmail={accountEmail}
+                            />
                         )}
                         {currentStep === 6 && (
                             <ReviewStep

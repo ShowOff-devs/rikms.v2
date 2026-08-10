@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the RIKMS Laravel scheduler
+After=network.target
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/rikms
+ExecStart=/usr/bin/php artisan schedule:run --no-interaction

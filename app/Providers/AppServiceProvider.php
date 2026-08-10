@@ -2,7 +2,11 @@
 
 namespace App\Providers;
 
+use App\Contracts\MalwareScanner;
 use App\Models\User;
+use App\Services\MalwareScanner\ClamAvMalwareScanner;
+use App\Services\MalwareScanner\FakeMalwareScanner;
+use App\Services\MalwareScanner\NullMalwareScanner;
 use App\Support\SecurityEventLogger;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Events\Failed;
@@ -26,7 +30,16 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(MalwareScanner::class, function () {
+            return match ((string) config('rikms.uploads.malware_scanner', 'none')) {
+                'none' => new NullMalwareScanner,
+                'clamav' => new ClamAvMalwareScanner,
+                'fake' => app()->environment('testing')
+                    ? new FakeMalwareScanner
+                    : throw new RuntimeException('The fake malware scanner is restricted to testing.'),
+                default => throw new RuntimeException('Unsupported MALWARE_SCANNER configuration.'),
+            };
+        });
     }
 
     /**
@@ -65,6 +78,11 @@ class AppServiceProvider extends ServiceProvider
 
     protected function enforceProductionSecurityConfiguration(): void
     {
+        if (! app()->environment(['local', 'testing', 'pilot', 'staging', 'production'])
+            && config('rikms.public_access_requests.captcha.enabled') !== true) {
+            throw new RuntimeException('Unsafe environment configuration: CAPTCHA may be disabled only in local or testing.');
+        }
+
         if (! app()->environment(['pilot', 'staging', 'production'])) {
             return;
         }
@@ -91,6 +109,20 @@ class AppServiceProvider extends ServiceProvider
             $violations[] = 'LOG_LEVEL must be warning, error, or critical';
         }
 
+        $cspMode = (string) config('security_headers.csp.mode');
+
+        if (app()->environment(['pilot', 'staging']) && $cspMode !== 'report-only') {
+            $violations[] = 'CSP_MODE must be report-only in pilot and staging';
+        }
+
+        if (app()->environment('production') && $cspMode !== 'enforce') {
+            $violations[] = 'CSP_MODE must be enforce in production';
+        }
+
+        if (app()->environment('production') && config('security_headers.csp.production_validated') !== true) {
+            $violations[] = 'CSP_PRODUCTION_VALIDATED must be true before production enforcement';
+        }
+
         if (! config('rikms.security.force_super_admin_mfa')) {
             $violations[] = 'RIKMS_FORCE_SUPER_ADMIN_MFA must be true';
         }
@@ -107,12 +139,49 @@ class AppServiceProvider extends ServiceProvider
             $violations[] = 'QUEUE_CONNECTION must not be sync';
         }
 
-        if (config('rikms.public_access_requests.enabled') && ! config('rikms.public_access_requests.captcha.enabled')) {
-            $violations[] = 'PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED must be true while public access requests are enabled';
+        if (config('rikms.uploads.malware_scanner') !== 'clamav') {
+            $violations[] = 'MALWARE_SCANNER must be clamav';
         }
 
-        if (config('rikms.public_access_requests.enabled') && config('rikms.public_access_requests.captcha.enabled') && ! config('rikms.public_access_requests.captcha.secret_key')) {
-            $violations[] = 'CAPTCHA_SECRET_KEY must be set while public access request CAPTCHA is enabled';
+        if (trim((string) config('rikms.uploads.clamav_host')) === '') {
+            $violations[] = 'CLAMAV_HOST must be configured';
+        }
+
+        $clamavPort = (int) config('rikms.uploads.clamav_port');
+
+        if ($clamavPort < 1 || $clamavPort > 65535) {
+            $violations[] = 'CLAMAV_PORT must be between 1 and 65535';
+        }
+
+        if ((float) config('rikms.uploads.clamav_timeout_seconds') <= 0) {
+            $violations[] = 'CLAMAV_TIMEOUT_SECONDS must be greater than zero';
+        }
+
+        $captchaEnabled = config('rikms.public_access_requests.captcha.enabled') === true;
+        $frontendCaptchaEnabled = config('rikms.public_access_requests.captcha.frontend_enabled') === true;
+
+        if (! $captchaEnabled) {
+            $violations[] = 'PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED must be true';
+        }
+
+        if ($frontendCaptchaEnabled !== $captchaEnabled) {
+            $violations[] = 'VITE_PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED must match PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED';
+        }
+
+        if (config('rikms.public_access_requests.captcha.provider') !== 'turnstile') {
+            $violations[] = 'CAPTCHA_PROVIDER must be turnstile';
+        }
+
+        if (trim((string) config('rikms.public_access_requests.captcha.site_key')) === '') {
+            $violations[] = 'VITE_CAPTCHA_SITE_KEY must be configured';
+        }
+
+        if (trim((string) config('rikms.public_access_requests.captcha.secret_key')) === '') {
+            $violations[] = 'CAPTCHA_SECRET_KEY must be configured';
+        }
+
+        if ((float) config('rikms.public_access_requests.captcha.timeout_seconds') <= 0) {
+            $violations[] = 'CAPTCHA_VERIFY_TIMEOUT_SECONDS must be greater than zero';
         }
 
         if (config('rikms.dev_seed_accounts.allow_outside_safe_environments')) {

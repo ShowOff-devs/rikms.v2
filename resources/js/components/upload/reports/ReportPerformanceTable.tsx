@@ -25,7 +25,7 @@ const statusLabels: Record<ReportPerformanceProject['projectStatus'], string> =
     };
 
 const tableGridClass =
-    'grid min-w-[960px] grid-cols-[2.2fr_1.4fr_1.4fr_0.9fr_1.1fr_44px]';
+    'grid min-w-[1120px] grid-cols-[2.2fr_1fr_1fr_0.9fr_0.9fr_1.1fr_44px]';
 
 const inputClass =
     'h-11 w-full rounded-[10px] border border-[#d1d5dc] px-3 text-sm leading-5 outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10';
@@ -62,8 +62,12 @@ export default function ReportPerformanceTable({
     data,
     onChange,
 }: ReportPerformanceTableProps) {
-    const stringOrNull = (value: string) =>
-        value.trim() === '' ? null : value;
+    const numberOrNull = (value: string) => {
+        const normalized = value.replaceAll(',', '').trim();
+        const parsed = Number(normalized);
+
+        return normalized === '' || !Number.isFinite(parsed) ? null : parsed;
+    };
 
     const updateProject = (
         id: string,
@@ -119,6 +123,7 @@ export default function ReportPerformanceTable({
                         'Activity / Output / Indicator',
                         'Target',
                         'Actual',
+                        'Unit',
                         'Accomplishment %',
                         'Status',
                         '',
@@ -156,31 +161,58 @@ export default function ReportPerformanceTable({
                         </div>
                         <div role="cell" className="p-2">
                             <input
-                                value={project.targetValue ?? ''}
-                                onChange={(event) =>
+                                type="text"
+                                inputMode="decimal"
+                                value={project.targetNumericValue ?? ''}
+                                onChange={(event) => {
+                                    const numeric = numberOrNull(
+                                        event.target.value,
+                                    );
                                     updateProject(project.id, {
-                                        targetValue: stringOrNull(
-                                            event.target.value,
-                                        ),
-                                    })
-                                }
-                                placeholder="Target: e.g. 10 trainings"
-                                aria-label="Target value"
+                                        targetNumericValue: numeric,
+                                        targetValue:
+                                            numeric === null
+                                                ? null
+                                                : String(numeric),
+                                    });
+                                }}
+                                placeholder="e.g. 1,000"
+                                aria-label="Numeric target value"
                                 className={inputClass}
                             />
                         </div>
                         <div role="cell" className="p-2">
                             <input
-                                value={project.actualValue ?? ''}
+                                type="text"
+                                inputMode="decimal"
+                                value={project.actualNumericValue ?? ''}
+                                onChange={(event) => {
+                                    const numeric = numberOrNull(
+                                        event.target.value,
+                                    );
+                                    updateProject(project.id, {
+                                        actualNumericValue: numeric,
+                                        actualValue:
+                                            numeric === null
+                                                ? null
+                                                : String(numeric),
+                                    });
+                                }}
+                                placeholder="e.g. 800"
+                                aria-label="Numeric actual value"
+                                className={inputClass}
+                            />
+                        </div>
+                        <div role="cell" className="p-2">
+                            <input
+                                value={project.unit}
                                 onChange={(event) =>
                                     updateProject(project.id, {
-                                        actualValue: stringOrNull(
-                                            event.target.value,
-                                        ),
+                                        unit: event.target.value,
                                     })
                                 }
-                                placeholder="Actual: e.g. 8 trainings"
-                                aria-label="Actual value"
+                                placeholder="e.g. trainings"
+                                aria-label="Target and actual unit"
                                 className={inputClass}
                             />
                         </div>
@@ -221,7 +253,7 @@ export default function ReportPerformanceTable({
                     </div>
                 ))}
                 {data.performanceProjects.length === 0 ? (
-                    <div className="min-w-[960px] border-t border-[#e5e7eb] px-4 py-8 text-center text-sm text-[#99a1af]">
+                    <div className="min-w-[1120px] border-t border-[#e5e7eb] px-4 py-8 text-center text-sm text-[#99a1af]">
                         Add at least one project row to continue.
                     </div>
                 ) : null}

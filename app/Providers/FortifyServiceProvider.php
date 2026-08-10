@@ -7,6 +7,7 @@ use App\Actions\Fortify\ResetUserPassword;
 use App\Http\Responses\LoginResponse as RoleAwareLoginResponse;
 use App\Http\Responses\PasswordResetLinkRequestResponse;
 use App\Http\Responses\TwoFactorLoginResponse as RoleAwareTwoFactorLoginResponse;
+use App\Http\Responses\VerifyEmailResponse as RoleAwareVerifyEmailResponse;
 use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -18,6 +19,7 @@ use Inertia\Inertia;
 use Laravel\Fortify\Contracts\FailedPasswordResetLinkRequestResponse as FailedPasswordResetLinkRequestResponseContract;
 use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
 use Laravel\Fortify\Contracts\TwoFactorLoginResponse as TwoFactorLoginResponseContract;
+use Laravel\Fortify\Contracts\VerifyEmailResponse as VerifyEmailResponseContract;
 use Laravel\Fortify\Fortify;
 
 class FortifyServiceProvider extends ServiceProvider
@@ -30,6 +32,7 @@ class FortifyServiceProvider extends ServiceProvider
         $this->app->singleton(LoginResponseContract::class, RoleAwareLoginResponse::class);
         $this->app->singleton(FailedPasswordResetLinkRequestResponseContract::class, PasswordResetLinkRequestResponse::class);
         $this->app->singleton(TwoFactorLoginResponseContract::class, RoleAwareTwoFactorLoginResponse::class);
+        $this->app->singleton(VerifyEmailResponseContract::class, RoleAwareVerifyEmailResponse::class);
     }
 
     /**

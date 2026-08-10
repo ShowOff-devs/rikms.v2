@@ -1,4 +1,10 @@
-import { AlertTriangle, CircleAlert, Copy, FileText } from 'lucide-react';
+import {
+    AlertTriangle,
+    CircleAlert,
+    Copy,
+    FileText,
+    SearchCheck,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import {
     moderationIssueTypeLabels,
@@ -39,29 +45,37 @@ const issueStyles: Record<
     ModerationIssueType,
     { className: string; icon: LucideIcon }
 > = {
-    'duplicate-research': {
+    possible_duplicate: {
         className: 'border-[#ffd6a8] bg-[#fff7ed] text-[#ca3500]',
         icon: Copy,
     },
-    'incomplete-metadata': {
+    incomplete_metadata: {
         className: 'border-[#bfdbfe] bg-[#eff6ff] text-[#2563eb]',
         icon: CircleAlert,
     },
-    'policy-violation': {
-        className: 'border-[#fecaca] bg-[#fef2f2] text-[#dc2626]',
-        icon: AlertTriangle,
-    },
-    'missing-abstract': {
+    metadata_inconsistency: {
         className: 'border-[#e9d5ff] bg-[#faf5ff] text-[#9333ea]',
         icon: FileText,
     },
-    'missing-keywords': {
+    document_file_issue: {
         className: 'border-[#bae6fd] bg-[#f0f9ff] text-[#0284c7]',
-        icon: CircleAlert,
+        icon: FileText,
     },
-    'incomplete-author-affiliation': {
+    authorship_attribution_concern: {
         className: 'border-[#fed7aa] bg-[#fff7ed] text-[#ea580c]',
         icon: CircleAlert,
+    },
+    privacy_restricted_data_concern: {
+        className: 'border-[#fecaca] bg-[#fef2f2] text-[#dc2626]',
+        icon: AlertTriangle,
+    },
+    policy_noncompliance: {
+        className: 'border-[#fecaca] bg-[#fef2f2] text-[#dc2626]',
+        icon: AlertTriangle,
+    },
+    other_manual_review: {
+        className: 'border-[#fde68a] bg-[#fffbeb] text-[#b45309]',
+        icon: SearchCheck,
     },
 };
 
@@ -167,7 +181,7 @@ export function FlaggedResearchTable({
                                 Uploaded By
                             </th>
                             <th scope="col" className="px-6">
-                                Issue Type
+                                Concern Type
                             </th>
                             <th scope="col" className="px-6">
                                 Year
@@ -252,7 +266,7 @@ export function FlaggedResearchTable({
                                         />
                                     </td>
                                     <td className="px-6 text-xs text-[#4a5565]">
-                                        {record.year}
+                                        {record.year ?? 'Not provided'}
                                     </td>
                                     <td className="px-6">
                                         <StatusBadge status={record.status} />

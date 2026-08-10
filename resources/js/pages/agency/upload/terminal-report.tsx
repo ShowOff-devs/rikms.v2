@@ -5,7 +5,13 @@ import UploadWizard from '@/components/upload/wizard/UploadWizard';
 import { terminalReportUploadConfig } from '@/config/upload/terminalReportUploadConfig';
 import { useAgencySession } from '@/lib/auth/agency-auth';
 
-export default function TerminalReportUploadPage() {
+type TerminalReportUploadPageProps = {
+    researchId?: string;
+};
+
+export default function TerminalReportUploadPage({
+    researchId,
+}: TerminalReportUploadPageProps) {
     const session = useAgencySession();
     const [search, setSearch] = useState('');
 
@@ -31,7 +37,12 @@ export default function TerminalReportUploadPage() {
                 search={search}
                 onSearchChange={setSearch}
             >
-                <UploadWizard config={terminalReportUploadConfig} />
+                <UploadWizard
+                    config={terminalReportUploadConfig}
+                    initialResearchId={researchId}
+                    agencyName={session.agencyName}
+                    recoveryScope={`${session.agencyId}:${session.email}`}
+                />
             </AgencyAdminLayout>
         </>
     );

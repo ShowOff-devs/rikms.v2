@@ -1,0 +1,11 @@
+[Unit]
+Description=Invoke the RIKMS Laravel scheduler every minute
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+Persistent=true
+AccuracySec=1s
+Unit=rikms-scheduler.service
+
+[Install]
+WantedBy=timers.target

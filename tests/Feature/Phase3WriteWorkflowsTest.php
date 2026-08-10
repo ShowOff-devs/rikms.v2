@@ -179,6 +179,11 @@ test('agency admin can create update and submit own draft research', function ()
         'sdg_tags' => ['SDG 6'],
         'publication_year' => 2026,
         'access_level' => 'request_required',
+        'research_owner_name' => 'Dr. Maria Researcher',
+        'research_owner_email' => ' Owner.Contact@Example.Test ',
+        'notify_owner_access_requests' => true,
+        'notify_owner_research_inquiries' => true,
+        'send_owner_copy_to_admin' => true,
         'agency_id' => 999999,
     ]);
 
@@ -187,6 +192,11 @@ test('agency admin can create update and submit own draft research', function ()
         ->assertJsonStructure(['message', 'data', 'meta'])
         ->assertJsonPath('data.status', 'draft')
         ->assertJsonPath('data.agency_id', $agency->id)
+        ->assertJsonPath('data.research_owner_name', 'Dr. Maria Researcher')
+        ->assertJsonPath('data.research_owner_email', 'owner.contact@example.test')
+        ->assertJsonPath('data.notify_owner_access_requests', true)
+        ->assertJsonPath('data.notify_owner_research_inquiries', true)
+        ->assertJsonPath('data.send_owner_copy_to_admin', true)
         ->assertJsonPath('data.public_metadata.1.key', 'methodology')
         ->assertJsonPath('data.public_metadata.2.key', 'results_and_discussion')
         ->assertJsonPath('data.public_metadata_fields.2', 'results_and_discussion');
@@ -225,6 +235,11 @@ test('agency admin can create update and submit own draft research', function ()
         'agency_id' => $agency->id,
         'uploaded_by' => $user->id,
         'status' => 'submitted',
+        'research_owner_name' => 'Dr. Maria Researcher',
+        'research_owner_email' => 'owner.contact@example.test',
+        'notify_owner_access_requests' => true,
+        'notify_owner_research_inquiries' => true,
+        'send_owner_copy_to_admin' => true,
     ]);
     expect(Research::findOrFail($researchId)->public_metadata)
         ->toMatchArray([
@@ -244,6 +259,40 @@ test('agency admin can create update and submit own draft research', function ()
     $this->assertDatabaseHas('audit_logs', ['event' => 'research.created']);
     $this->assertDatabaseHas('audit_logs', ['event' => 'research.updated']);
     $this->assertDatabaseHas('audit_logs', ['event' => 'research.submitted']);
+});
+
+test('agency research drafts default owner contact to the authenticated uploader', function () {
+    $agency = createPhase3Agency('default-owner-contact-agency');
+    $user = createPhase3User('agency_admin', $agency);
+
+    $this->actingAs($user)
+        ->postJson('/api/agency/research', [
+            'title' => 'Default Owner Contact Research',
+            'access_level' => 'request_required',
+        ])
+        ->assertCreated()
+        ->assertJsonPath('data.research_owner_name', $user->name)
+        ->assertJsonPath('data.research_owner_email', mb_strtolower($user->email))
+        ->assertJsonPath('data.notify_owner_access_requests', true)
+        ->assertJsonPath('data.notify_owner_research_inquiries', false)
+        ->assertJsonPath('data.send_owner_copy_to_admin', false);
+});
+
+test('agency research owner contact rejects invalid values', function () {
+    $agency = createPhase3Agency('invalid-owner-contact-agency');
+    $user = createPhase3User('agency_admin', $agency);
+
+    $this->actingAs($user)
+        ->postJson('/api/agency/research', [
+            'title' => 'Invalid Owner Contact Research',
+            'research_owner_email' => 'not-an-email',
+            'notify_owner_access_requests' => 'yes',
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors([
+            'research_owner_email',
+            'notify_owner_access_requests',
+        ]);
 });
 
 test('agency admin can save long selected public metadata sections', function () {
@@ -565,6 +614,164 @@ test('super admin can moderate research and invalid transitions fail', function 
     $this->assertDatabaseHas('audit_logs', ['event' => 'research.approved']);
     $this->assertDatabaseHas('audit_logs', ['event' => 'research.published']);
     $this->assertDatabaseHas('notifications', ['type' => 'research.approved']);
+});
+
+test('revision requests normalize concern types and default safely when omitted', function () {
+    $agency = createPhase3Agency('moderation-issue-agency');
+    $agencyAdmin = createPhase3User('agency_admin', $agency);
+    $superAdmin = createPhase3User('super_admin');
+    $policyConcern = createPhase3Research($agency, $agencyAdmin, 'submitted');
+    $incompleteRecord = createPhase3Research($agency, $agencyAdmin, 'submitted');
+
+    $this->actingAs($superAdmin)
+        ->postJson("/api/admin/research/{$policyConcern->id}/reject", [
+            'issue_type' => 'policy-violation',
+            'notes' => 'The submission breaches the documented publication policy.',
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.status', 'rejected')
+        ->assertJsonPath('data.moderation_issue_type', 'policy_noncompliance')
+        ->assertJsonPath('data.moderation_note', 'The submission breaches the documented publication policy.');
+
+    $this->actingAs($superAdmin)
+        ->postJson("/api/admin/research/{$incompleteRecord->id}/reject", [
+            'notes' => 'Complete the missing metadata before resubmitting this record.',
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.moderation_issue_type', 'other_manual_review');
+
+    $this->assertDatabaseHas('research_approvals', [
+        'research_id' => $policyConcern->id,
+        'issue_type' => 'policy_noncompliance',
+    ]);
+    $this->assertDatabaseHas('research_approvals', [
+        'research_id' => $incompleteRecord->id,
+        'issue_type' => 'other_manual_review',
+    ]);
+});
+
+test('revision request is actionable for the owning agency from notification through resubmission', function () {
+    $agency = createPhase3Agency('revision-workflow-agency');
+    $otherAgency = createPhase3Agency('revision-workflow-other-agency');
+    $agencyAdmin = createPhase3User('agency_admin', $agency);
+    $otherAgencyAdmin = createPhase3User('agency_admin', $otherAgency);
+    $superAdmin = createPhase3User('super_admin');
+    $research = createPhase3Research($agency, $agencyAdmin, 'submitted');
+    $instructions = 'Complete the abstract and keywords fields before resubmitting this research.';
+
+    $this->actingAs($superAdmin)
+        ->postJson("/api/admin/research/{$research->id}/reject", [
+            'issue_type' => 'incomplete_metadata',
+            'notes' => $instructions,
+        ])
+        ->assertOk()
+        ->assertJsonPath('message', 'Research revision requested.')
+        ->assertJsonPath('data.status', 'rejected')
+        ->assertJsonPath('data.revision_required', true)
+        ->assertJsonPath('data.moderation_issue_type', 'incomplete_metadata')
+        ->assertJsonPath('data.moderation_note', $instructions);
+
+    $this->assertDatabaseHas('research_approvals', [
+        'research_id' => $research->id,
+        'reviewed_by' => $superAdmin->id,
+        'status' => 'rejected',
+        'issue_type' => 'incomplete_metadata',
+        'remarks' => $instructions,
+    ]);
+
+    $notification = Notification::query()
+        ->where('agency_id', $agency->id)
+        ->where('type', 'research.revision_requested')
+        ->sole();
+
+    expect($notification->title)->toBe('Revision Requested')
+        ->and($notification->message)->toBe($instructions)
+        ->and($notification->action_url)->toBe("/agency/research/{$research->id}")
+        ->and($notification->data['research_id'])->toBe($research->id)
+        ->and($notification->data['concern_type'])->toBe('incomplete_metadata')
+        ->and($notification->data['instructions'])->toBe($instructions)
+        ->and($notification->data['severity'])->toBe('blocking')
+        ->and($notification->data['moderation_date'])->toBeString();
+
+    expect($agencyAdmin->can('updateAgencyDraft', $research->fresh()))->toBeTrue()
+        ->and($agencyAdmin->can('submit', $research->fresh()))->toBeTrue()
+        ->and($otherAgencyAdmin->can('updateAgencyDraft', $research->fresh()))->toBeFalse();
+
+    $this->actingAs($agencyAdmin)
+        ->getJson('/api/agency/notifications?per_page=10')
+        ->assertOk()
+        ->assertJsonPath('data.0.type', 'research.revision_requested')
+        ->assertJsonPath('data.0.action_url', "/agency/research/{$research->id}")
+        ->assertJsonPath('data.0.data.concern_type', 'incomplete_metadata')
+        ->assertJsonPath('data.0.data.instructions', $instructions);
+
+    $this->actingAs($agencyAdmin)
+        ->getJson('/api/agency/research?per_page=10')
+        ->assertOk()
+        ->assertJsonPath('data.0.id', $research->id)
+        ->assertJsonPath('data.0.moderation_issue_type', 'incomplete_metadata')
+        ->assertJsonPath('data.0.moderation_note', $instructions)
+        ->assertJsonPath('data.0.capabilities.can_update', true);
+
+    $this->actingAs($agencyAdmin)
+        ->getJson("/api/agency/research/{$research->id}")
+        ->assertOk()
+        ->assertJsonPath('data.status', 'rejected')
+        ->assertJsonPath('data.revision_required', true)
+        ->assertJsonPath('data.capabilities.can_update', true)
+        ->assertJsonPath('data.capabilities.can_submit', true)
+        ->assertJsonPath('data.moderation_issue_type', 'incomplete_metadata')
+        ->assertJsonPath('data.moderation_note', $instructions)
+        ->assertJsonPath('data.moderation_reviewer_name', $superAdmin->name)
+        ->assertJsonPath('data.moderated_at', fn ($value) => is_string($value) && $value !== '');
+
+    $this->actingAs($otherAgencyAdmin)
+        ->getJson("/api/agency/research/{$research->id}")
+        ->assertForbidden();
+
+    $this->actingAs($otherAgencyAdmin)
+        ->patchJson("/api/agency/research/{$research->id}", [
+            'abstract' => 'Unauthorized change.',
+        ])
+        ->assertForbidden();
+
+    $this->actingAs($agencyAdmin)
+        ->patchJson("/api/agency/research/{$research->id}", [
+            'abstract' => 'Completed abstract after moderator feedback.',
+            'keywords' => ['revision', 'complete'],
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.status', 'rejected')
+        ->assertJsonPath('data.moderation_note', $instructions);
+
+    $this->actingAs($agencyAdmin)
+        ->postJson("/api/agency/research/{$research->id}/submit", [
+            'notes' => 'The requested metadata corrections are complete.',
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.status', 'submitted')
+        ->assertJsonPath('data.revision_required', false)
+        ->assertJsonPath('data.capabilities.can_update', false)
+        ->assertJsonPath('data.capabilities.can_submit', false);
+
+    $this->assertDatabaseHas('research', [
+        'id' => $research->id,
+        'status' => 'submitted',
+        'abstract' => 'Completed abstract after moderator feedback.',
+    ]);
+    $this->assertDatabaseHas('research_approvals', [
+        'research_id' => $research->id,
+        'issue_type' => 'incomplete_metadata',
+        'remarks' => $instructions,
+    ]);
+    $this->assertDatabaseHas('audit_logs', [
+        'event' => 'research.rejected',
+        'auditable_id' => $research->id,
+    ]);
+    $this->assertDatabaseHas('audit_logs', [
+        'event' => 'research.submitted',
+        'auditable_id' => $research->id,
+    ]);
 });
 
 test('admin moderation endpoints enforce the official status transition matrix', function () {

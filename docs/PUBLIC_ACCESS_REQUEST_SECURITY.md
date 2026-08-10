@@ -38,16 +38,20 @@ The public form includes a visually hidden `website` field. Human users should l
 
 ## CAPTCHA
 
-CAPTCHA is optional and disabled by default. Cloudflare Turnstile can be enabled with:
+Cloudflare Turnstile is mandatory in `pilot`, `staging`, and `production`. It may be disabled only in the `local` and `testing` environments. The frontend and backend use this contract:
 
 ```env
 PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED=true
+VITE_PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED=true
 CAPTCHA_PROVIDER=turnstile
-CAPTCHA_SITE_KEY=
+VITE_CAPTCHA_SITE_KEY=public-site-key
 CAPTCHA_SECRET_KEY=
+CAPTCHA_VERIFY_TIMEOUT_SECONDS=3
 ```
 
-Server-side verification uses a short HTTP timeout and does not log CAPTCHA secrets or complete tokens. Local development works without CAPTCHA.
+The two enabled flags must match. `VITE_CAPTCHA_SITE_KEY` is the sole public site key and must be present during the Vite build and Laravel runtime/config-cache step. `CAPTCHA_SECRET_KEY` is backend-only and must never use a `VITE_` prefix. Deployed environments reject disabled or mismatched flags, unsupported providers, missing keys, and non-positive timeouts at startup.
+
+The browser disables submission until Turnstile returns a token. Missing client configuration or an unavailable widget produces a generic unavailable message. Server-side verification uses a short HTTP timeout and fails closed for missing or invalid tokens, provider errors, and malformed responses without exposing secrets, tokens, or provider details to users.
 
 ## Data Retained
 
@@ -82,7 +86,7 @@ php artisan route:list --except-vendor
 ## Production Recommendations
 
 - Configure trusted proxies so Laravel resolves client IPs correctly.
-- Enable CAPTCHA if public abuse is observed or expected.
+- Keep CAPTCHA enabled in every pilot, staging, and production deployment.
 - Keep rate limits aligned with observed agency review capacity.
 - Monitor logs for `duplicate_pending`, `honeypot_triggered`, `captcha_failed`, and `created` reason codes.
 - Consider a WAF or edge-level bot control for sustained attacks.

@@ -16,6 +16,11 @@ class AccessRequestDeniedNotification extends Notification implements ShouldQueu
 
     public int $tries = 3;
 
+    public int $timeout = 60;
+
+    /** @var array<int, int> */
+    public array $backoff = [10, 30, 60];
+
     /**
      * @param  array<string, mixed>  $data
      */
