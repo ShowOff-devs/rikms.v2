@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\AgencyProjectReportAnalyticsController;
 use App\Http\Controllers\Api\AgencyReadController;
 use App\Http\Controllers\Api\AgencyResearchWriteController;
 use App\Http\Controllers\Api\AiResultController;
+use App\Http\Controllers\Api\CspReportController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PublicAccessRequestController;
 use App\Http\Controllers\Api\PublicAgencyController;
@@ -30,6 +31,10 @@ use App\Services\PlatformSettingsService;
 use App\Support\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+
+Route::post('/security/csp-reports', [CspReportController::class, 'store'])
+    ->middleware('throttle:csp-reports')
+    ->name('security.csp-reports.store');
 
 Route::prefix('public')->middleware('throttle:public-api')->group(function () {
     Route::get('/platform-settings', function (PlatformSettingsService $settings) {
@@ -198,6 +203,7 @@ Route::prefix('admin')
         Route::post('/security/events/{securityEvent}/reopen', [AdminSecurityController::class, 'reopen'])->name('security.events.reopen');
         Route::get('/security/summary', [AdminSecurityController::class, 'summary'])->name('security.summary');
         Route::get('/security/queue-health', [AdminSecurityController::class, 'queueHealth'])->middleware('permission:security.view')->name('security.queue-health');
+        Route::get('/security/csp-reports', [CspReportController::class, 'index'])->middleware('permission:security.view')->name('security.csp-reports.index');
         Route::get('/security/sessions', [AdminSecurityController::class, 'sessions'])->name('security.sessions');
         Route::delete('/security/sessions/{sessionId}', [AdminSecurityController::class, 'revokeSession'])->name('security.sessions.revoke');
         Route::get('/system-activity/notifications', [AdminSystemActivityController::class, 'notifications'])->name('system-activity.notifications');
@@ -206,6 +212,7 @@ Route::prefix('admin')
         Route::get('/system-activity/timeline', [AdminSystemActivityController::class, 'timeline'])->name('system-activity.timeline');
         Route::get('/system-activity/export', [AdminSystemActivityController::class, 'export'])->name('system-activity.export');
         Route::get('/platform-settings', [AdminReadController::class, 'platformSettings'])->middleware('permission:platform_settings.view')->name('platform-settings.index');
+        Route::get('/platform-settings/backup-readiness', [AdminPlatformSettingController::class, 'backupReadiness'])->middleware('permission:platform_settings.view')->name('platform-settings.backup-readiness');
         Route::patch('/platform-settings/{setting}', [AdminPlatformSettingController::class, 'update'])->middleware('permission:platform_settings.manage')->name('platform-settings.update');
         Route::post('/platform-settings/bulk-update', [AdminPlatformSettingController::class, 'bulkUpdate'])->middleware('permission:platform_settings.manage')->name('platform-settings.bulk-update');
         Route::post('/platform-settings/logo', [AdminPlatformSettingController::class, 'uploadLogo'])->middleware('permission:platform_settings.manage')->name('platform-settings.logo.upload');

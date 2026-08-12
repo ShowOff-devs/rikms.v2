@@ -31,6 +31,9 @@
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="MALWARE_SCANNER" value="fake"/>
+        <!-- Preserve the single-disk test harness; focused tests cover cross-disk promotion. -->
+        <env name="UPLOAD_QUARANTINE_DISK" value="local"/>
+        <env name="UPLOAD_STORAGE_DISK" value="local"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>

@@ -303,8 +303,8 @@ class AgencyResearchWriteController extends Controller
         }
 
         $storedName = (string) Str::uuid().'.'.$uploadedFile->getClientOriginalExtension();
-        $quarantineDisk = (string) config('rikms.uploads.quarantine_disk', 'local');
-        $storageDisk = (string) config('rikms.uploads.storage_disk', 'local');
+        $quarantineDisk = (string) config('rikms.uploads.quarantine_disk', 'upload_quarantine');
+        $storageDisk = (string) config('rikms.uploads.storage_disk', 'private_uploads');
         $quarantinePath = $uploadedFile->storeAs('research/quarantine', $storedName, $quarantineDisk);
 
         try {
@@ -506,8 +506,8 @@ class AgencyResearchWriteController extends Controller
 
         $extension = mb_strtolower($uploadedFile->getClientOriginalExtension());
         $storedName = (string) Str::uuid().'.'.$extension;
-        $quarantineDisk = (string) config('rikms.uploads.quarantine_disk', 'local');
-        $storageDisk = (string) config('rikms.uploads.storage_disk', 'local');
+        $quarantineDisk = (string) config('rikms.uploads.quarantine_disk', 'upload_quarantine');
+        $storageDisk = (string) config('rikms.uploads.storage_disk', 'private_uploads');
         $quarantinePath = $uploadedFile->storeAs('research/quarantine', $storedName, $quarantineDisk);
 
         try {

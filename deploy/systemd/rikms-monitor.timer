@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the independent RIKMS operational monitor every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Persistent=true
+AccuracySec=30s
+Unit=rikms-monitor.service
+
+[Install]
+WantedBy=timers.target

@@ -43,6 +43,8 @@ Review `.env.example` before migration. Never copy production secrets into local
 
 For active frontend development, run `npm run dev`. Laravel Herd may be used instead of `php artisan serve`.
 
+`composer dev` starts the local web server, database queue worker, scheduler, and Vite together. If Herd already serves the application, run the runtime processes in separate terminals with `composer runtime:worker` and `composer runtime:scheduler`, then confirm both heartbeats with `composer runtime:check`.
+
 ## Runtime services
 
 ### Queue worker
@@ -50,7 +52,7 @@ For active frontend development, run `npm run dev`. Laravel Herd may be used ins
 Production must use a persistent worker. The database queue is configured with a 120-second worker timeout and a default `DB_QUEUE_RETRY_AFTER` of 180 seconds. AI metadata and SDG jobs have three attempts with bounded backoff; PDF parsing has one bounded attempt. Failed jobs use the configured failed-job driver.
 
 ```bash
-php artisan queue:work database --queue=default --sleep=3 --tries=3 --timeout=120 --max-time=3600
+php artisan queue:work database --queue=health,default --sleep=3 --tries=3 --timeout=120 --max-time=3600
 php artisan queue:failed
 php artisan queue:restart
 ```
@@ -80,12 +82,22 @@ Set `MONGODB_URI` and `MONGODB_DATABASE` for the secondary AI/parsing store. Set
 
 Production requires `MALWARE_SCANNER=clamav` plus a tested private `CLAMAV_HOST`, `CLAMAV_PORT`, and timeout. `none` is permitted only outside production; the fake scanner is explicitly test-only. Scanner timeout, connection failure, malformed response, infection, cleanup failure, and promotion failure are handled as closed upload failures. User messages do not include scanner internals.
 
+### Private upload storage
+
+A public domain is not required for local private upload storage. New research PDFs use two server-local disks by default:
+
+- `upload_quarantine` stores untrusted files under `storage/app/quarantine` until scanning succeeds.
+- `private_uploads` stores accepted files under `storage/app/private`.
+
+Both disks have private visibility, disable Laravel local file serving, and sit outside `public/`. Do not add either directory to `filesystems.links` or expose it through the web server. The existing `local` disk continues to point at `storage/app/private` so previously stored database records remain readable. On the pilot host, grant the application service account read/write access to both directories, deny other OS users, monitor capacity, and include accepted private files—but not transient quarantine contents—in encrypted off-host backups. Downloads must continue through the authorized application routes.
+
 ### CAPTCHA
 
 Public access requests use a single backend/frontend contract:
 
 - `PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED` and `VITE_PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED` must agree.
 - `CAPTCHA_PROVIDER=turnstile`, `CAPTCHA_SECRET_KEY`, and `VITE_CAPTCHA_SITE_KEY` are required when enabled in production.
+- `CAPTCHA_ALLOWED_HOSTNAMES` must list the exact deployment hostnames returned by Turnstile Siteverify.
 - Only `VITE_CAPTCHA_SITE_KEY` is public. The secret must never use a `VITE_` prefix.
 - Disabling CAPTCHA is restricted to permitted local/test environments. Provider failure fails closed in production.
 
@@ -133,6 +145,8 @@ SQLite is the default automated-test database. The `mysql-integration` GitHub Ac
 ## Backup, restore, and rollback
 
 RIKMS does not currently execute or orchestrate backups. Backup settings in the UI are informational. Operations owns scheduled, encrypted, off-host backups for MySQL, private/public files, and MongoDB, including retention, access control, monitoring, and restore drills. No release is production-ready until a staging restore has been evidenced. See [docs/BACKUP_FEATURE_STATUS.md](docs/BACKUP_FEATURE_STATUS.md).
+
+The Super Admin backup panel now includes preparation fields and a read-only destination readiness check. External-drive mount paths and encryption keys remain server-side through `BACKUP_*` environment values. Readiness does not create a backup, delete files, or prove restore capability.
 
 Application rollback should switch to the previously verified release, restore compatible cached configuration, restart workers gracefully, and verify health. Database rollback is release-specific: do not run blind or destructive migration rollbacks. Take a verified backup first and use a reviewed forward fix when data-loss risk exists. Restore data only through the approved recovery procedure.
 

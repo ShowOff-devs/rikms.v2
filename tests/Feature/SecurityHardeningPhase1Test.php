@@ -23,11 +23,15 @@ test('local responses include baseline headers without csp or hsts by default', 
 test('local csp may be configured as report only', function () {
     config()->set('app.env', 'local');
     config()->set('security_headers.csp.mode', 'report-only');
+    config()->set('security_headers.csp.report_uri', '/api/security/csp-reports');
 
-    $this->get('/')
+    $response = $this->get('/')
         ->assertOk()
         ->assertHeader('Content-Security-Policy-Report-Only')
         ->assertHeaderMissing('Content-Security-Policy');
+
+    expect($response->headers->get('Content-Security-Policy-Report-Only'))
+        ->toContain('report-uri /api/security/csp-reports');
 });
 
 test('staging responses include only report only csp and no hsts', function () {
@@ -101,6 +105,14 @@ test('testing environment resolves only the explicit fake malware scanner', func
     expect(app(MalwareScanner::class))->toBeInstanceOf(FakeMalwareScanner::class);
 });
 
+test('turnstile frontend and backend use the same fixed action', function () {
+    $expectedAction = (string) config('rikms.public_access_requests.captcha.expected_action');
+    $frontend = file_get_contents(resource_path('js/pages/research/show.tsx'));
+
+    expect($expectedAction)->toBe('public_access_request')
+        ->and($frontend)->toContain("action: '{$expectedAction}'");
+});
+
 test('deployed environments reject unsafe security service configuration', function (array $override, string $violation) {
     $originalEnvironment = $this->app->environment();
     $this->app->detectEnvironment(fn (): string => 'production');
@@ -119,6 +131,8 @@ test('deployed environments reject unsafe security service configuration', funct
         'queue.default' => 'database',
         'security_headers.csp.mode' => 'enforce',
         'security_headers.csp.production_validated' => true,
+        'security_headers.csp.report_uri' => '/api/security/csp-reports',
+        'security_headers.csp.collector.enabled' => true,
         'rikms.public_access_requests.enabled' => false,
         'rikms.public_access_requests.captcha.enabled' => true,
         'rikms.public_access_requests.captcha.frontend_enabled' => true,
@@ -126,10 +140,13 @@ test('deployed environments reject unsafe security service configuration', funct
         'rikms.public_access_requests.captcha.site_key' => 'test-site-key',
         'rikms.public_access_requests.captcha.secret_key' => 'test-secret-key',
         'rikms.public_access_requests.captcha.timeout_seconds' => 3,
+        'rikms.public_access_requests.captcha.allowed_hostnames' => ['rikms.example.test'],
         'rikms.uploads.malware_scanner' => 'clamav',
         'rikms.uploads.clamav_host' => 'clamav.internal',
         'rikms.uploads.clamav_port' => 3310,
         'rikms.uploads.clamav_timeout_seconds' => 10,
+        'rikms.uploads.quarantine_disk' => 'upload_quarantine',
+        'rikms.uploads.storage_disk' => 'private_uploads',
     ]);
     config()->set($override);
 
@@ -153,8 +170,17 @@ test('deployed environments reject unsafe security service configuration', funct
     'missing host' => [['rikms.uploads.clamav_host' => ''], 'CLAMAV_HOST must be configured'],
     'invalid port' => [['rikms.uploads.clamav_port' => 0], 'CLAMAV_PORT must be between 1 and 65535'],
     'invalid timeout' => [['rikms.uploads.clamav_timeout_seconds' => 0], 'CLAMAV_TIMEOUT_SECONDS must be greater than zero'],
+    'invalid stream limit' => [['rikms.uploads.clamav_stream_max_length_mb' => 0], 'CLAMAV_STREAM_MAX_LENGTH_MB must be greater than zero'],
+    'non-database pilot queue' => [['queue.default' => 'redis'], 'QUEUE_CONNECTION must be database for the pilot runtime'],
+    'shared upload disk' => [['rikms.uploads.storage_disk' => 'upload_quarantine'], 'UPLOAD_QUARANTINE_DISK and UPLOAD_STORAGE_DISK must be separate'],
+    'public upload disk' => [['rikms.uploads.storage_disk' => 'public'], 'Upload disk [public] must not be public'],
     'csp not enforced' => [['security_headers.csp.mode' => 'report-only'], 'CSP_MODE must be enforce in production'],
     'csp staging evidence missing' => [['security_headers.csp.production_validated' => false], 'CSP_PRODUCTION_VALIDATED must be true before production enforcement'],
+    'csp report endpoint missing' => [['security_headers.csp.report_uri' => ''], 'CSP_REPORT_URI must be configured'],
+    'internal csp collector disabled' => [['security_headers.csp.collector.enabled' => false], 'CSP_REPORT_COLLECTOR_ENABLED must be true for the internal report URI'],
+    'missing captcha hostname allowlist' => [['rikms.public_access_requests.captcha.allowed_hostnames' => []], 'CAPTCHA_ALLOWED_HOSTNAMES must contain at least one hostname'],
+    'invalid captcha hostname allowlist' => [['rikms.public_access_requests.captcha.allowed_hostnames' => ['https://rikms.example.test']], 'CAPTCHA_ALLOWED_HOSTNAMES must contain only valid hostnames'],
+    'monitoring enabled without destination' => [['monitoring.alerts_enabled' => true], 'Monitoring alerts require a valid email recipient or HTTPS webhook'],
 ]);
 
 test('deployed environments accept the complete captcha contract', function () {
@@ -175,16 +201,21 @@ test('deployed environments accept the complete captcha contract', function () {
         'queue.default' => 'database',
         'security_headers.csp.mode' => 'enforce',
         'security_headers.csp.production_validated' => true,
+        'security_headers.csp.report_uri' => '/api/security/csp-reports',
+        'security_headers.csp.collector.enabled' => true,
         'rikms.uploads.malware_scanner' => 'clamav',
         'rikms.uploads.clamav_host' => 'clamav.internal',
         'rikms.uploads.clamav_port' => 3310,
         'rikms.uploads.clamav_timeout_seconds' => 10,
+        'rikms.uploads.quarantine_disk' => 'upload_quarantine',
+        'rikms.uploads.storage_disk' => 'private_uploads',
         'rikms.public_access_requests.captcha.enabled' => true,
         'rikms.public_access_requests.captcha.frontend_enabled' => true,
         'rikms.public_access_requests.captcha.provider' => 'turnstile',
         'rikms.public_access_requests.captcha.site_key' => 'test-site-key',
         'rikms.public_access_requests.captcha.secret_key' => 'test-secret-key',
         'rikms.public_access_requests.captcha.timeout_seconds' => 3,
+        'rikms.public_access_requests.captcha.allowed_hostnames' => ['rikms.example.test'],
     ]);
 
     $provider = new AppServiceProvider($this->app);
@@ -249,16 +280,21 @@ test('deployed environments reject inconsistent captcha configuration', function
         'queue.default' => 'database',
         'security_headers.csp.mode' => 'enforce',
         'security_headers.csp.production_validated' => true,
+        'security_headers.csp.report_uri' => '/api/security/csp-reports',
+        'security_headers.csp.collector.enabled' => true,
         'rikms.uploads.malware_scanner' => 'clamav',
         'rikms.uploads.clamav_host' => 'clamav.internal',
         'rikms.uploads.clamav_port' => 3310,
         'rikms.uploads.clamav_timeout_seconds' => 10,
+        'rikms.uploads.quarantine_disk' => 'upload_quarantine',
+        'rikms.uploads.storage_disk' => 'private_uploads',
         'rikms.public_access_requests.captcha.enabled' => true,
         'rikms.public_access_requests.captcha.frontend_enabled' => true,
         'rikms.public_access_requests.captcha.provider' => 'turnstile',
         'rikms.public_access_requests.captcha.site_key' => 'test-site-key',
         'rikms.public_access_requests.captcha.secret_key' => 'test-secret-key',
         'rikms.public_access_requests.captcha.timeout_seconds' => 3,
+        'rikms.public_access_requests.captcha.allowed_hostnames' => ['rikms.example.test'],
     ]);
     config()->set($override);
 
@@ -290,4 +326,10 @@ test('deployed environments reject inconsistent captcha configuration', function
     'missing backend secret' => [[
         'rikms.public_access_requests.captcha.secret_key' => '',
     ], 'CAPTCHA_SECRET_KEY must be configured'],
+    'missing allowed hostnames' => [[
+        'rikms.public_access_requests.captcha.allowed_hostnames' => [],
+    ], 'CAPTCHA_ALLOWED_HOSTNAMES must contain at least one hostname'],
+    'invalid allowed hostname' => [[
+        'rikms.public_access_requests.captcha.allowed_hostnames' => ['rikms.example.test/path'],
+    ], 'CAPTCHA_ALLOWED_HOSTNAMES must contain only valid hostnames'],
 ]);

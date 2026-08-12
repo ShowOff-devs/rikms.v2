@@ -47,11 +47,12 @@ CAPTCHA_PROVIDER=turnstile
 VITE_CAPTCHA_SITE_KEY=public-site-key
 CAPTCHA_SECRET_KEY=
 CAPTCHA_VERIFY_TIMEOUT_SECONDS=3
+CAPTCHA_ALLOWED_HOSTNAMES=pilot.example.gov.ph
 ```
 
-The two enabled flags must match. `VITE_CAPTCHA_SITE_KEY` is the sole public site key and must be present during the Vite build and Laravel runtime/config-cache step. `CAPTCHA_SECRET_KEY` is backend-only and must never use a `VITE_` prefix. Deployed environments reject disabled or mismatched flags, unsupported providers, missing keys, and non-positive timeouts at startup.
+The two enabled flags must match. `VITE_CAPTCHA_SITE_KEY` is the sole public site key and must be present during the Vite build and Laravel runtime/config-cache step. `CAPTCHA_SECRET_KEY` is backend-only and must never use a `VITE_` prefix. `CAPTCHA_ALLOWED_HOSTNAMES` is a comma-separated exact allowlist without schemes, ports, paths, or wildcards. Use separate hostnames and widget credentials per environment. Deployed environments reject disabled or mismatched flags, unsupported providers, missing keys, missing or invalid hostnames, and non-positive timeouts at startup.
 
-The browser disables submission until Turnstile returns a token. Missing client configuration or an unavailable widget produces a generic unavailable message. Server-side verification uses a short HTTP timeout and fails closed for missing or invalid tokens, provider errors, and malformed responses without exposing secrets, tokens, or provider details to users.
+The browser sends the fixed Turnstile action `public_access_request` and disables submission until Turnstile returns a token. Missing client configuration or an unavailable widget produces a generic unavailable message. Server-side verification uses a short HTTP timeout and fails closed unless Siteverify returns success, that exact action, and an exact allowed hostname. Failures do not expose secrets, tokens, received hostnames, or provider details to users or logs.
 
 ## Data Retained
 

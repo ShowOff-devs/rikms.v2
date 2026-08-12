@@ -12,6 +12,13 @@ return [
         'mode' => env('CSP_MODE', $defaultCspMode),
         'production_validated' => filter_var(env('CSP_PRODUCTION_VALIDATED', false), FILTER_VALIDATE_BOOL),
         'report_uri' => env('CSP_REPORT_URI'),
+        'collector' => [
+            'enabled' => filter_var(env('CSP_REPORT_COLLECTOR_ENABLED', true), FILTER_VALIDATE_BOOL),
+            'max_payload_bytes' => (int) env('CSP_REPORT_MAX_PAYLOAD_BYTES', 65536),
+            'max_reports_per_request' => (int) env('CSP_REPORT_MAX_REPORTS_PER_REQUEST', 20),
+            'rate_limit_per_minute' => (int) env('CSP_REPORT_LIMIT_PER_MINUTE', 120),
+            'retention_days' => (int) env('CSP_REPORT_RETENTION_DAYS', 30),
+        ],
         'directives' => [
             'default-src' => ["'self'"],
             'base-uri' => ["'self'"],

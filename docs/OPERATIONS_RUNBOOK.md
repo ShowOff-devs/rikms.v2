@@ -29,11 +29,28 @@ php artisan queue:restart
 sudo systemctl reload-or-restart rikms-queue.service
 ```
 
-The worker receives `SIGTERM`, has 130 seconds to finish its current 120-second job, and is recycled after one hour to pick up code and release memory. The scheduler timer invokes `schedule:run` every minute. Laravel schedules `queue:monitor database:default --max=100` every minute, the opted-in agency weekly digest on Monday, and the opted-in monthly analytics report on the first day of each month. All scheduled jobs use overlap prevention; agency emails also use a single-server lock.
+The worker prioritizes the lightweight `health` queue and then processes the application `default` queue. It receives `SIGTERM`, has 130 seconds to finish its current 120-second job, and is recycled after one hour to pick up code and release memory. The scheduler timer invokes `schedule:run` every minute. Laravel monitors both database queues every minute, schedules the opted-in agency weekly digest on Monday, and schedules the opted-in monthly analytics report on the first day of each month. All scheduled jobs use overlap prevention; agency emails also use a single-server lock.
+
+Every scheduler invocation records a scheduler heartbeat and queues a lightweight worker-heartbeat job. A fresh scheduler heartbeat proves that `schedule:run` is executing; a fresh worker heartbeat proves that the database worker consumed a recently queued job. Both default to stale after 300 seconds. Verify them without exposing application data:
+
+```bash
+php artisan rikms:runtime-check
+```
+
+The command exits non-zero if the pilot is not using the database queue driver, the database or queue tables are unavailable, or either heartbeat is missing/stale. The protected admin queue-health endpoint exposes the same sanitized heartbeat state. Configure `RUNTIME_HEARTBEAT_STALE_AFTER_SECONDS` only if the scheduler interval changes, and keep it comfortably above one minute.
 
 The agency email schedules default to 08:00 `Asia/Manila`. Override them with `SCHEDULED_AGENCY_EMAILS_TIMEZONE`, `WEEKLY_DIGEST_DAY`, `WEEKLY_DIGEST_TIME`, `MONTHLY_ANALYTICS_DAY`, and `MONTHLY_ANALYTICS_TIME`. `SCHEDULED_AGENCY_EMAILS_ENABLED=false` disables both schedules. Keep the configured cache store, queue worker, and mail transport healthy before enabling delivery.
 
 ## Monitoring and failed jobs
+
+The independent monitoring entry point is:
+
+```bash
+php artisan rikms:monitor-check
+php artisan rikms:monitor-check --alert
+```
+
+Install `deploy/systemd/rikms-monitor.service` and `.timer` so alert evaluation does not depend on the Laravel scheduler or queue. Configure synchronous email and/or HTTPS webhook delivery through `MONITORING_*`; identical incidents are cooldown-limited and recovery notices are supported. See `docs/MONITORING_DEPLOYMENT.md` for Grafana Cloud log shipping and the staging alert drill.
 
 Monitor:
 
@@ -52,6 +69,7 @@ php artisan queue:failed
 php artisan queue:retry <failed-job-uuid>
 php artisan queue:forget <failed-job-uuid>
 php artisan schedule:list
+php artisan rikms:runtime-check
 sudo systemctl status rikms-queue.service rikms-scheduler.timer
 sudo journalctl -u rikms-queue.service -u rikms-scheduler.service --since today
 ```
