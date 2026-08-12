@@ -57,13 +57,18 @@
         ],
         "dev": [
             "Composer\\Config::disableProcessTimeout",
-            "npx concurrently -c \"#93c5fd,#c4b5fd,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1\" \"npm run dev\" --names='server,queue,vite'"
+            "npx concurrently -c \"#93c5fd,#c4b5fd,#86efac,#fdba74\" \"php artisan serve\" \"php artisan queue:listen database --queue=health,default --tries=3 --timeout=120\" \"php artisan schedule:work\" \"npm run dev\" --names='server,queue,scheduler,vite'"
         ],
         "dev:ssr": [
             "npm run build:ssr",
             "Composer\\Config::disableProcessTimeout",
-            "npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1\" \"php artisan pail --timeout=0\" \"php artisan inertia:start-ssr\" --names=server,queue,logs,ssr --kill-others"
+            "npx concurrently -c \"#93c5fd,#c4b5fd,#86efac,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan queue:listen database --queue=health,default --tries=3 --timeout=120\" \"php artisan schedule:work\" \"php artisan pail --timeout=0\" \"php artisan inertia:start-ssr\" --names=server,queue,scheduler,logs,ssr --kill-others"
         ],
+        "runtime:worker": "@php artisan queue:work database --queue=health,default --sleep=3 --tries=3 --backoff=10 --timeout=120 --max-time=3600",
+        "runtime:scheduler": "@php artisan schedule:work",
+        "runtime:check": "@php artisan rikms:runtime-check",
+        "clamav:check": "@php artisan rikms:clamav-check",
+        "monitor:check": "@php artisan rikms:monitor-check",
         "lint": [
             "pint --parallel"
         ],

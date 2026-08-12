@@ -408,9 +408,15 @@ test('enabled captcha configuration verifies a token end to end', function () {
         'rikms.public_access_requests.captcha.provider' => 'turnstile',
         'rikms.public_access_requests.captcha.site_key' => 'test-site-key',
         'rikms.public_access_requests.captcha.secret_key' => 'test-secret',
+        'rikms.public_access_requests.captcha.allowed_hostnames' => ['rikms.example.test'],
+        'rikms.public_access_requests.captcha.expected_action' => 'public_access_request',
     ]);
 
-    Http::fake(['*' => Http::response(['success' => true])]);
+    Http::fake(['*' => Http::response([
+        'success' => true,
+        'hostname' => 'rikms.example.test',
+        'action' => 'public_access_request',
+    ])]);
 
     $this->postJson(
         "/api/public/research/{$research->slug}/access-requests",
@@ -426,6 +432,62 @@ test('enabled captcha configuration verifies a token end to end', function () {
         return ($body['secret'] ?? null) === 'test-secret'
             && ($body['response'] ?? null) === 'valid-token';
     });
+});
+
+test('enabled captcha rejects a valid token issued for another hostname', function () {
+    $agency = createPhase7Agency('phase-7-captcha-hostname');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+
+    config([
+        'rikms.public_access_requests.captcha.enabled' => true,
+        'rikms.public_access_requests.captcha.secret_key' => 'test-secret',
+        'rikms.public_access_requests.captcha.allowed_hostnames' => ['rikms.example.test'],
+        'rikms.public_access_requests.captcha.expected_action' => 'public_access_request',
+    ]);
+    Http::fake(['*' => Http::response([
+        'success' => true,
+        'hostname' => 'attacker.example.test',
+        'action' => 'public_access_request',
+    ])]);
+
+    $this->postJson(
+        "/api/public/research/{$research->slug}/access-requests",
+        phase7PublicPayload([
+            'requester_email' => 'captcha-hostname@example.test',
+            'captcha_token' => 'valid-wrong-host-token',
+        ]),
+    )->assertUnprocessable()->assertJsonValidationErrors(['captcha_token']);
+
+    expect(AccessRequest::query()->where('requester_email', 'captcha-hostname@example.test')->exists())->toBeFalse();
+});
+
+test('enabled captcha rejects a valid token issued for another action', function () {
+    $agency = createPhase7Agency('phase-7-captcha-action');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+
+    config([
+        'rikms.public_access_requests.captcha.enabled' => true,
+        'rikms.public_access_requests.captcha.secret_key' => 'test-secret',
+        'rikms.public_access_requests.captcha.allowed_hostnames' => ['rikms.example.test'],
+        'rikms.public_access_requests.captcha.expected_action' => 'public_access_request',
+    ]);
+    Http::fake(['*' => Http::response([
+        'success' => true,
+        'hostname' => 'rikms.example.test',
+        'action' => 'login',
+    ])]);
+
+    $this->postJson(
+        "/api/public/research/{$research->slug}/access-requests",
+        phase7PublicPayload([
+            'requester_email' => 'captcha-action@example.test',
+            'captcha_token' => 'valid-wrong-action-token',
+        ]),
+    )->assertUnprocessable()->assertJsonValidationErrors(['captcha_token']);
+
+    expect(AccessRequest::query()->where('requester_email', 'captcha-action@example.test')->exists())->toBeFalse();
 });
 
 test('enabled captcha rejects a missing token with a safe message', function () {

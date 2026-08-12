@@ -31,6 +31,9 @@
 - `QUEUE_CONNECTION` set, currently database-compatible.
 - Queue worker configured outside the web process.
 - Failed jobs monitored.
+- `MONITORING_ALERTS_ENABLED=true` with a monitored institutional email address and/or HTTPS webhook.
+- Independent `rikms-monitor.timer` enabled and `php artisan rikms:monitor-check --alert` verified.
+- Grafana Alloy shipping reviewed RIKMS/system logs to an organization-owned central log stack.
 - Retry/backoff policy reviewed for AI/PDF jobs.
 
 Local development worker:
@@ -76,7 +79,10 @@ sudo systemctl restart rikms-queue
 - Private uploads and generated reports remain ignored.
 - `UPLOAD_QUARANTINE_DISK` and `UPLOAD_STORAGE_DISK` point to private disks.
 - `MALWARE_SCANNER=none` means real malware scanning is inactive; only the built-in PDF guard runs.
-- Before wider rollout, configure and test `MALWARE_SCANNER=clamav` with the correct `CLAMAV_HOST` and `CLAMAV_PORT`.
+- Before wider rollout, configure and test `MALWARE_SCANNER=clamav` with the correct private `CLAMAV_HOST` and `CLAMAV_PORT`.
+- Set `CLAMAV_STREAM_MAX_LENGTH_MB` to the same value as clamd `StreamMaxLength`; it must cover the effective application upload limit.
+- Run `php artisan rikms:clamav-check` after every deployment and signature-engine maintenance. It must report all checks as `PASS` and show an engine version.
+- Keep clamd TCP port `3310` on loopback or a private application network only; never expose it to the public internet.
 - Password-protected/encrypted PDFs are rejected during the pilot.
 - PDF parser jobs have a 120-second timeout, one attempt, and bounded stored extraction text.
 

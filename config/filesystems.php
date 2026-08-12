@@ -33,9 +33,28 @@ return [
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app/private'),
-            'serve' => true,
+            'serve' => false,
+            'visibility' => 'private',
             'throw' => false,
             'report' => false,
+        ],
+
+        'private_uploads' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private'),
+            'serve' => false,
+            'visibility' => 'private',
+            'throw' => false,
+            'report' => true,
+        ],
+
+        'upload_quarantine' => [
+            'driver' => 'local',
+            'root' => storage_path('app/quarantine'),
+            'serve' => false,
+            'visibility' => 'private',
+            'throw' => false,
+            'report' => true,
         ],
 
         'public' => [

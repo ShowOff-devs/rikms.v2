@@ -4,6 +4,25 @@ export type AccessPolicy = 'public' | 'request-access' | 'restricted';
 
 export type BackupStatus = 'idle' | 'running' | 'completed' | 'failed';
 
+export type BackupReadiness = {
+    status: string;
+    ready_for_test_backup: boolean;
+    execution_enabled: boolean;
+    destination: {
+        configured: boolean;
+        display: string;
+        connected: boolean;
+        writable: boolean;
+        outside_application: boolean;
+        separate_filesystem: boolean;
+        separate_filesystem_required: boolean;
+        free_space_mb: number | null;
+        minimum_free_space_mb: number;
+    };
+    encryption_key_configured: boolean;
+    checked_at: string;
+};
+
 export type PlatformSettings = {
     general: {
         systemName: string;
@@ -54,6 +73,8 @@ export type PlatformSettings = {
         lastBackupAt: string;
         backupFrequency: string;
         backupStatus: BackupStatus;
+        destinationLabel: string;
+        retentionDays: number;
     };
 };
 

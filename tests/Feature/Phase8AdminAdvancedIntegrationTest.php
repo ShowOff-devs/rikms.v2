@@ -128,6 +128,8 @@ test('queue health is super admin only and exposes safe backlog summaries', func
                 'pending_jobs',
                 'failed_jobs',
                 'oldest_pending_job_age_minutes',
+                'scheduler_heartbeat',
+                'worker_heartbeat',
                 'status',
             ],
         ]);
@@ -140,6 +142,8 @@ test('queue health is super admin only and exposes safe backlog summaries', func
             'pending_jobs',
             'failed_jobs',
             'oldest_pending_job_age_minutes',
+            'scheduler_heartbeat',
+            'worker_heartbeat',
             'status',
         ]);
 });

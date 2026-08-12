@@ -123,6 +123,17 @@ class AppServiceProvider extends ServiceProvider
             $violations[] = 'CSP_PRODUCTION_VALIDATED must be true before production enforcement';
         }
 
+        $cspReportUri = trim((string) config('security_headers.csp.report_uri'));
+
+        if ($cspReportUri === '') {
+            $violations[] = 'CSP_REPORT_URI must be configured';
+        }
+
+        if (str_starts_with($cspReportUri, '/api/security/csp-reports')
+            && config('security_headers.csp.collector.enabled') !== true) {
+            $violations[] = 'CSP_REPORT_COLLECTOR_ENABLED must be true for the internal report URI';
+        }
+
         if (! config('rikms.security.force_super_admin_mfa')) {
             $violations[] = 'RIKMS_FORCE_SUPER_ADMIN_MFA must be true';
         }
@@ -137,6 +148,10 @@ class AppServiceProvider extends ServiceProvider
 
         if (config('queue.default') === 'sync') {
             $violations[] = 'QUEUE_CONNECTION must not be sync';
+        }
+
+        if (config('queue.default') !== 'database') {
+            $violations[] = 'QUEUE_CONNECTION must be database for the pilot runtime';
         }
 
         if (config('rikms.uploads.malware_scanner') !== 'clamav') {
@@ -155,6 +170,44 @@ class AppServiceProvider extends ServiceProvider
 
         if ((float) config('rikms.uploads.clamav_timeout_seconds') <= 0) {
             $violations[] = 'CLAMAV_TIMEOUT_SECONDS must be greater than zero';
+        }
+
+        if ((int) config('rikms.uploads.clamav_stream_max_length_mb') <= 0) {
+            $violations[] = 'CLAMAV_STREAM_MAX_LENGTH_MB must be greater than zero';
+        }
+
+        $quarantineDisk = (string) config('rikms.uploads.quarantine_disk');
+        $storageDisk = (string) config('rikms.uploads.storage_disk');
+
+        if ($quarantineDisk === $storageDisk) {
+            $violations[] = 'UPLOAD_QUARANTINE_DISK and UPLOAD_STORAGE_DISK must be separate';
+        }
+
+        foreach ([$quarantineDisk, $storageDisk] as $uploadDisk) {
+            $diskConfig = config("filesystems.disks.{$uploadDisk}");
+
+            if (! is_array($diskConfig)) {
+                $violations[] = "Upload disk [{$uploadDisk}] must be configured";
+
+                continue;
+            }
+
+            if ($uploadDisk === 'public' || ($diskConfig['visibility'] ?? null) === 'public') {
+                $violations[] = "Upload disk [{$uploadDisk}] must not be public";
+            }
+
+            if (($diskConfig['driver'] ?? null) === 'local' && ($diskConfig['serve'] ?? false) === true) {
+                $violations[] = "Local upload disk [{$uploadDisk}] must disable file serving";
+            }
+
+            if (($diskConfig['driver'] ?? null) === 'local') {
+                $root = str_replace('\\', '/', rtrim((string) ($diskConfig['root'] ?? ''), '\\/'));
+                $publicRoot = str_replace('\\', '/', rtrim(public_path(), '\\/'));
+
+                if ($root === '' || $root === $publicRoot || str_starts_with($root, $publicRoot.'/')) {
+                    $violations[] = "Local upload disk [{$uploadDisk}] must be outside the public directory";
+                }
+            }
         }
 
         $captchaEnabled = config('rikms.public_access_requests.captcha.enabled') === true;
@@ -182,6 +235,44 @@ class AppServiceProvider extends ServiceProvider
 
         if ((float) config('rikms.public_access_requests.captcha.timeout_seconds') <= 0) {
             $violations[] = 'CAPTCHA_VERIFY_TIMEOUT_SECONDS must be greater than zero';
+        }
+
+        $captchaHostnames = config('rikms.public_access_requests.captcha.allowed_hostnames', []);
+
+        if (! is_array($captchaHostnames) || $captchaHostnames === []) {
+            $violations[] = 'CAPTCHA_ALLOWED_HOSTNAMES must contain at least one hostname';
+        } else {
+            foreach ($captchaHostnames as $captchaHostname) {
+                if (! is_string($captchaHostname)
+                    || filter_var($captchaHostname, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) === false) {
+                    $violations[] = 'CAPTCHA_ALLOWED_HOSTNAMES must contain only valid hostnames';
+                    break;
+                }
+            }
+        }
+
+        if (config('monitoring.alerts_enabled')) {
+            $alertEmails = config('monitoring.alert_emails', []);
+            $validAlertEmails = is_array($alertEmails)
+                && $alertEmails !== []
+                && collect($alertEmails)->every(fn (mixed $email): bool => is_string($email)
+                    && filter_var($email, FILTER_VALIDATE_EMAIL) !== false);
+            $alertWebhook = trim((string) config('monitoring.alert_webhook_url'));
+            $validAlertWebhook = $alertWebhook !== ''
+                && filter_var($alertWebhook, FILTER_VALIDATE_URL) !== false
+                && str_starts_with($alertWebhook, 'https://');
+
+            if (! $validAlertEmails && ! $validAlertWebhook) {
+                $violations[] = 'Monitoring alerts require a valid email recipient or HTTPS webhook';
+            }
+
+            if ((float) config('monitoring.alert_timeout_seconds') <= 0) {
+                $violations[] = 'MONITORING_ALERT_TIMEOUT_SECONDS must be greater than zero';
+            }
+
+            if ((int) config('monitoring.alert_cooldown_minutes') <= 0) {
+                $violations[] = 'MONITORING_ALERT_COOLDOWN_MINUTES must be greater than zero';
+            }
         }
 
         if (config('rikms.dev_seed_accounts.allow_outside_safe_environments')) {
@@ -213,6 +304,10 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perMinute($limit)->by('approved-access:token:'.$ip.':'.$token),
             ];
         });
+
+        RateLimiter::for('csp-reports', fn (Request $request): Limit => Limit::perMinute(
+            max(1, (int) config('security_headers.csp.collector.rate_limit_per_minute', 120)),
+        )->by('csp-report:'.hash('sha256', (string) $request->ip())));
 
         RateLimiter::for('public-access-requests', function (Request $request): array {
             $ipKey = hash('sha256', (string) $request->ip());

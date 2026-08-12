@@ -1,5 +1,7 @@
 <?php
 
+use App\Jobs\RecordQueueWorkerHeartbeat;
+use App\Services\RuntimeHeartbeat;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -8,9 +10,24 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Schedule::command('queue:monitor database:default --max=100')
+Schedule::call(fn () => app(RuntimeHeartbeat::class)->recordScheduler())
+    ->name('rikms:scheduler-heartbeat')
     ->everyMinute()
     ->withoutOverlapping();
+
+Schedule::job(new RecordQueueWorkerHeartbeat, 'health', 'database')
+    ->name('rikms:queue-worker-heartbeat')
+    ->everyMinute()
+    ->withoutOverlapping();
+
+Schedule::command('queue:monitor database:health,database:default --max=100')
+    ->everyMinute()
+    ->withoutOverlapping();
+
+Schedule::command('csp:prune-reports')
+    ->dailyAt('02:15')
+    ->withoutOverlapping()
+    ->onOneServer();
 
 if (config('rikms.scheduled_notifications.enabled')) {
     $notificationTimezone = (string) config('rikms.scheduled_notifications.timezone', 'Asia/Manila');

@@ -29,6 +29,7 @@ type TurnstileApi = {
         element: HTMLElement,
         options: {
             sitekey: string;
+            action: string;
             callback: (token: string) => void;
             'expired-callback': () => void;
             'error-callback': () => void;
@@ -156,6 +157,7 @@ export default function ResearchDetailPage({
             if (window.turnstile) {
                 const widgetId = window.turnstile.render(container, {
                     sitekey: captchaSiteKey,
+                    action: 'public_access_request',
                     callback: (token) => {
                         setCaptchaError(null);
                         setCaptchaToken(token);

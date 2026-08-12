@@ -54,11 +54,28 @@ class PublicAccessRequestCaptchaVerifier
             return false;
         }
 
-        $verified = $response->ok() && $response->json('success') === true;
+        $allowedHostnames = config('rikms.public_access_requests.captcha.allowed_hostnames', []);
+        $expectedAction = (string) config(
+            'rikms.public_access_requests.captcha.expected_action',
+            'public_access_request',
+        );
+        $hostname = strtolower(rtrim(trim((string) $response->json('hostname')), '.'));
+        $action = (string) $response->json('action');
+        $providerAccepted = $response->ok() && $response->json('success') === true;
+        $hostnameAccepted = is_array($allowedHostnames)
+            && $allowedHostnames !== []
+            && in_array($hostname, $allowedHostnames, true);
+        $actionAccepted = $expectedAction !== '' && hash_equals($expectedAction, $action);
+        $verified = $providerAccepted && $hostnameAccepted && $actionAccepted;
 
         if (! $verified) {
             Log::notice('Public access request CAPTCHA rejected a submission.', [
-                'reason' => 'captcha_failed',
+                'reason' => match (true) {
+                    ! $providerAccepted => 'captcha_failed',
+                    ! $hostnameAccepted => 'captcha_hostname_mismatch',
+                    ! $actionAccepted => 'captcha_action_mismatch',
+                    default => 'captcha_failed',
+                },
                 'provider_status' => $response->status(),
                 'ip_hash' => hash('sha256', (string) $request->ip()),
             ]);

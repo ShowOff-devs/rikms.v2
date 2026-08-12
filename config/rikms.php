@@ -28,6 +28,11 @@ return [
             'site_key' => env('VITE_CAPTCHA_SITE_KEY'),
             'secret_key' => env('CAPTCHA_SECRET_KEY'),
             'timeout_seconds' => (float) env('CAPTCHA_VERIFY_TIMEOUT_SECONDS', 3),
+            'allowed_hostnames' => array_values(array_filter(array_map(
+                static fn (string $hostname): string => strtolower(rtrim(trim($hostname), '.')),
+                explode(',', (string) env('CAPTCHA_ALLOWED_HOSTNAMES', '')),
+            ))),
+            'expected_action' => 'public_access_request',
         ],
     ],
 
@@ -59,13 +64,20 @@ return [
         ],
     ],
 
+    'runtime' => [
+        'heartbeat_stale_after_seconds' => (int) env('RUNTIME_HEARTBEAT_STALE_AFTER_SECONDS', 300),
+        'scheduler_heartbeat_cache_key' => 'rikms:runtime:scheduler-heartbeat',
+        'worker_heartbeat_cache_key' => 'rikms:runtime:worker-heartbeat',
+    ],
+
     'uploads' => [
-        'quarantine_disk' => env('UPLOAD_QUARANTINE_DISK', 'local'),
-        'storage_disk' => env('UPLOAD_STORAGE_DISK', 'local'),
+        'quarantine_disk' => env('UPLOAD_QUARANTINE_DISK', 'upload_quarantine'),
+        'storage_disk' => env('UPLOAD_STORAGE_DISK', 'private_uploads'),
         'malware_scanner' => env('MALWARE_SCANNER', 'none'),
         'clamav_host' => env('CLAMAV_HOST'),
         'clamav_port' => (int) env('CLAMAV_PORT', 0),
         'clamav_timeout_seconds' => (float) env('CLAMAV_TIMEOUT_SECONDS', 0),
+        'clamav_stream_max_length_mb' => (int) env('CLAMAV_STREAM_MAX_LENGTH_MB', 100),
         'pdf_max_text_chars' => (int) env('AI_PDF_MAX_TEXT_CHARS', 200000),
     ],
 ];

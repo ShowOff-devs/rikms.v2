@@ -1,5 +1,8 @@
 import { fetchApi } from '@/lib/api-client';
-import type { PlatformSettings } from '@/types/platform-settings';
+import type {
+    BackupReadiness,
+    PlatformSettings,
+} from '@/types/platform-settings';
 
 type ApiSetting = {
     key: string;
@@ -65,6 +68,8 @@ const defaultPlatformSettings: PlatformSettings = {
         lastBackupAt: 'Not configured',
         backupFrequency: 'Daily at 03:00 AM',
         backupStatus: 'idle',
+        destinationLabel: 'External drive',
+        retentionDays: 30,
     },
 };
 
@@ -302,6 +307,18 @@ function toPlatformSettings(settings: ApiSetting[]): PlatformSettings {
                 map.get('backup.status'),
                 fallback.backup.backupStatus,
             ) as PlatformSettings['backup']['backupStatus'],
+            destinationLabel: String(
+                parseValue(
+                    map.get('backup.destination_label'),
+                    fallback.backup.destinationLabel,
+                ),
+            ),
+            retentionDays: Number(
+                parseValue(
+                    map.get('backup.retention_days'),
+                    fallback.backup.retentionDays,
+                ),
+            ),
         },
     };
 }
@@ -352,9 +369,9 @@ function toApiSettings(settings: PlatformSettings) {
         'maintenance.enabled': settings.maintenance.maintenanceModeEnabled,
         'maintenance.notice_text': settings.maintenance.maintenanceMessage,
         'ai.processing.enabled': settings.ai.processingEnabled,
-        'backup.last_backup_at': settings.backup.lastBackupAt,
         'backup.frequency': settings.backup.backupFrequency,
-        'backup.status': settings.backup.backupStatus,
+        'backup.destination_label': settings.backup.destinationLabel,
+        'backup.retention_days': settings.backup.retentionDays,
     };
 }
 
@@ -364,6 +381,14 @@ export async function getPlatformSettings(): Promise<PlatformSettings> {
     );
 
     return toPlatformSettings(response.data);
+}
+
+export async function getBackupReadiness(): Promise<BackupReadiness> {
+    const response = await fetchApi<BackupReadiness>(
+        '/api/admin/platform-settings/backup-readiness',
+    );
+
+    return response.data;
 }
 
 export async function updatePlatformSettings(

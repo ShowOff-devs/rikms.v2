@@ -1,6 +1,7 @@
 [Unit]
 Description=Run the RIKMS Laravel scheduler
-After=network.target
+Wants=network-online.target
+After=network-online.target
 
 [Service]
 Type=oneshot
@@ -8,3 +9,8 @@ User=www-data
 Group=www-data
 WorkingDirectory=/var/www/rikms
 ExecStart=/usr/bin/php artisan schedule:run --no-interaction
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/www/rikms/storage /var/www/rikms/bootstrap/cache

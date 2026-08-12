@@ -98,6 +98,14 @@ function validateSettings(settings: PlatformSettings): PlatformSettingsErrors {
         errors.backupFrequency = 'Backup frequency is required.';
     }
 
+    if (!settings.backup.destinationLabel.trim()) {
+        errors.backupDestinationLabel = 'Destination label is required.';
+    }
+
+    if (!isPositiveNumber(settings.backup.retentionDays)) {
+        errors.backupRetentionDays = 'Enter valid retention days.';
+    }
+
     return errors;
 }
 
