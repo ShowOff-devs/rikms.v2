@@ -8,13 +8,20 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AdminAuthLayout from '@/layouts/AdminAuthLayout';
+import {
+    redirectToFreshLogin,
+    SESSION_EXPIRED_MESSAGE,
+    sessionExpiredMessageFromLocation,
+} from '@/lib/api-client';
 
 const usepLogo = '/assets/figma/usep-seal.png';
 const dostLogo = '/assets/figma/dost-xi-logo.png';
 
 export default function AdminLoginPage() {
     const [showPassword, setShowPassword] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(
+        sessionExpiredMessageFromLocation,
+    );
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -53,6 +60,12 @@ export default function AdminLoginPage() {
             };
 
             if (!response.ok) {
+                if (response.status === 419) {
+                    redirectToFreshLogin('/admin/login');
+
+                    throw new Error(SESSION_EXPIRED_MESSAGE);
+                }
+
                 throw new Error(
                     body.message ??
                         body.errors?.email?.[0] ??

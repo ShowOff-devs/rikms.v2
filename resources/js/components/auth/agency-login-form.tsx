@@ -15,6 +15,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import { sessionExpiredMessageFromLocation } from '@/lib/api-client';
 import { signInToAgencyPortal } from '@/lib/auth/agency-auth';
 import type { AgencyOption } from '@/types/auth';
 
@@ -45,7 +46,9 @@ export default function AgencyLoginForm({ agencies }: AgencyLoginFormProps) {
         remember: false,
     });
     const [errors, setErrors] = useState<AgencyLoginFieldErrors>({});
-    const [submissionError, setSubmissionError] = useState<string | null>(null);
+    const [submissionError, setSubmissionError] = useState<string | null>(
+        sessionExpiredMessageFromLocation,
+    );
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const selectedAgency = agencies.find(

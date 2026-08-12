@@ -1,4 +1,8 @@
 import { usePage } from '@inertiajs/react';
+import {
+    redirectToFreshLogin,
+    SESSION_EXPIRED_MESSAGE,
+} from '@/lib/api-client';
 import type {
     AgencyAuthSession,
     AgencyLoginPayload,
@@ -140,6 +144,12 @@ export async function signInToAgencyPortal(payload: AgencyLoginPayload) {
             | undefined;
 
         if (!response.ok) {
+            if (response.status === 419) {
+                redirectToFreshLogin('/agency/login');
+
+                throw new Error(SESSION_EXPIRED_MESSAGE);
+            }
+
             throw new Error(
                 body?.message ??
                     body?.errors?.email?.[0] ??
@@ -199,6 +209,12 @@ export async function requestAgencyPasswordReset(
         | undefined;
 
     if (!response.ok) {
+        if (response.status === 419) {
+            redirectToFreshLogin('/agency/login');
+
+            throw new Error(SESSION_EXPIRED_MESSAGE);
+        }
+
         throw new Error(
             body?.message ??
                 body?.errors?.email?.[0] ??
