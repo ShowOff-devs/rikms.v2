@@ -9,6 +9,12 @@ export type ApiErrorPayload = {
     errors: Record<string, string[] | string>;
 };
 
+export const SESSION_EXPIRED_MESSAGE =
+    'Your session expired. Please sign in again to continue.';
+
+const SESSION_EXPIRED_REASON = 'session-expired';
+let sessionRedirectPending = false;
+
 export class ApiError extends Error {
     status: number;
     errors: ApiErrorPayload['errors'];
@@ -73,7 +79,7 @@ function firstError(errors: ApiErrorPayload['errors'] | undefined) {
 
 function fallbackErrorMessage(status: number) {
     if (status === 419) {
-        return 'Your session expired. Refresh the page and try again.';
+        return SESSION_EXPIRED_MESSAGE;
     }
 
     if (status === 413) {
@@ -87,16 +93,61 @@ function fallbackErrorMessage(status: number) {
     return 'Unable to complete API request.';
 }
 
+function loginPathForUrl(url: string) {
+    if (url.startsWith('/api/admin')) {
+        return '/admin/login';
+    }
+
+    if (url.startsWith('/api/agency')) {
+        return '/agency/login';
+    }
+
+    return null;
+}
+
+type PortalLoginPath = '/admin/login' | '/agency/login';
+
+export function sessionExpiredMessageFromLocation() {
+    if (typeof window === 'undefined') {
+        return null;
+    }
+
+    return new URLSearchParams(window.location.search).get('reason') ===
+        SESSION_EXPIRED_REASON
+        ? SESSION_EXPIRED_MESSAGE
+        : null;
+}
+
+export function redirectToFreshLogin(loginPath: PortalLoginPath) {
+    if (typeof window === 'undefined' || sessionRedirectPending) {
+        return;
+    }
+
+    if (
+        window.location.pathname === loginPath &&
+        sessionExpiredMessageFromLocation()
+    ) {
+        return;
+    }
+
+    sessionRedirectPending = true;
+    window.location.assign(`${loginPath}?reason=${SESSION_EXPIRED_REASON}`);
+}
+
+function redirectForExpiredSession(url: string) {
+    const loginPath = loginPathForUrl(url);
+
+    if (loginPath) {
+        redirectToFreshLogin(loginPath);
+    }
+}
+
 function redirectForUnauthorized(url: string) {
     if (typeof window === 'undefined') {
         return;
     }
 
-    const loginPath = url.startsWith('/api/admin')
-        ? '/admin/login'
-        : url.startsWith('/api/agency')
-          ? '/agency/login'
-          : null;
+    const loginPath = loginPathForUrl(url);
 
     if (!loginPath || window.location.pathname === loginPath) {
         return;
@@ -125,6 +176,10 @@ export async function fetchApi<TData, TMeta = Record<string, unknown>>(
     url: string,
     init: RequestInit = {},
 ): Promise<ApiEnvelope<TData, TMeta>> {
+    if (sessionRedirectPending && loginPathForUrl(url)) {
+        throw new ApiError(SESSION_EXPIRED_MESSAGE, 419);
+    }
+
     const token = csrfToken();
     const headers = new Headers(init.headers);
 
@@ -155,6 +210,16 @@ export async function fetchApi<TData, TMeta = Record<string, unknown>>(
     >;
 
     if (!response.ok) {
+        if (response.status === 419) {
+            redirectForExpiredSession(url);
+
+            throw new ApiError(
+                SESSION_EXPIRED_MESSAGE,
+                response.status,
+                payload.errors ?? {},
+            );
+        }
+
         if (response.status === 401) {
             redirectForUnauthorized(url);
         }
