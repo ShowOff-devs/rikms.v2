@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\PlatformSettingResource;
 use App\Models\PlatformSetting;
+use App\Services\BackupReadinessService;
 use App\Services\PlatformSettingsService;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
@@ -16,6 +17,14 @@ use Illuminate\Validation\ValidationException;
 
 class AdminPlatformSettingController extends Controller
 {
+    public function backupReadiness(BackupReadinessService $readiness): JsonResponse
+    {
+        return ApiResponse::success(
+            'Backup destination readiness checked.',
+            $readiness->inspect(),
+        );
+    }
+
     public function update(Request $request, PlatformSetting $setting, PlatformSettingsService $settings): JsonResponse
     {
         $validated = $request->validate([

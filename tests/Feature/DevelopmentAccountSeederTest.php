@@ -3,9 +3,44 @@
 use App\Models\Agency;
 use App\Models\Role;
 use App\Models\User;
+use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\DevelopmentAccountSeeder;
 use Illuminate\Support\Facades\Hash;
 use PragmaRX\Google2FA\Google2FA;
+
+test('development account seeder is blocked in pilot and production', function (string $environment) {
+    $originalEnvironment = $this->app->environment();
+    $this->app->detectEnvironment(fn (): string => $environment);
+    config()->set('rikms.dev_seed_accounts.enabled', true);
+
+    try {
+        (new DevelopmentAccountSeeder)->run();
+        expect(User::query()->count())->toBe(0);
+    } finally {
+        $this->app->detectEnvironment(fn (): string => $originalEnvironment);
+    }
+})->with(['pilot', 'production']);
+
+test('development account seeder requires the explicit opt in flag locally', function () {
+    config()->set('rikms.dev_seed_accounts.enabled', false);
+
+    $this->seed(DevelopmentAccountSeeder::class);
+
+    expect(User::query()->count())->toBe(0);
+});
+
+test('database seeder does not call development account seeder in pilot', function () {
+    $originalEnvironment = $this->app->environment();
+    $this->app->detectEnvironment(fn (): string => 'pilot');
+    config()->set('rikms.dev_seed_accounts.enabled', true);
+
+    try {
+        $this->seed(DatabaseSeeder::class);
+        expect(User::query()->whereIn('email', ['agency@admin.com', 'super_admin@admin.com'])->count())->toBe(0);
+    } finally {
+        $this->app->detectEnvironment(fn (): string => $originalEnvironment);
+    }
+});
 
 test('development account seeder creates the agency admin account', function () {
     $this->seed(DevelopmentAccountSeeder::class);

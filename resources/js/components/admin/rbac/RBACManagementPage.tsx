@@ -1,6 +1,7 @@
 import { Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { AdminLayout } from '@/components/admin/layout/AdminLayout';
+import { ChangeUserRoleModal } from '@/components/admin/rbac/ChangeUserRoleModal';
 import { CreateRoleModal } from '@/components/admin/rbac/CreateRoleModal';
 import { DeleteRoleConfirmModal } from '@/components/admin/rbac/DeleteRoleConfirmModal';
 import { EditRoleModal } from '@/components/admin/rbac/EditRoleModal';
@@ -54,6 +55,8 @@ export function RBACManagementPage() {
         useState(true);
     const [viewRole, setViewRole] = useState<Role | null>(null);
     const [viewAssignment, setViewAssignment] =
+        useState<UserRoleAssignment | null>(null);
+    const [changeAssignment, setChangeAssignment] =
         useState<UserRoleAssignment | null>(null);
     const [editRole, setEditRole] = useState<Role | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<Role | null>(null);
@@ -293,32 +296,16 @@ export function RBACManagementPage() {
         }
     };
 
-    const handleChangeUserRole = async (assignment: UserRoleAssignment) => {
-        const currentRoleIndex = roles.findIndex(
-            (role) => role.id === assignment.roleId,
-        );
-        const nextRole =
-            roles[(currentRoleIndex + 1) % Math.max(roles.length, 1)];
-
-        if (!nextRole) {
-            return;
-        }
-
-        if (
-            nextRole.isSystemRole &&
-            !window.confirm(
-                `${nextRole.name} grants elevated permissions. Continue with this role change?`,
-            )
-        ) {
-            return;
-        }
-
+    const handleChangeUserRole = async (
+        assignment: UserRoleAssignment,
+        roleId: string,
+    ) => {
         setIsSaving(true);
 
         try {
             const updatedAssignment = await updateUserRole(
                 assignment.id,
-                nextRole.id,
+                roleId,
             );
             setAssignments((currentAssignments) =>
                 currentAssignments.map((currentAssignment) =>
@@ -328,7 +315,11 @@ export function RBACManagementPage() {
                 ),
             );
             await refreshHistory();
-            setFeedback(`${assignment.userName} is now ${nextRole.name}.`);
+            setChangeAssignment(null);
+            const roleName = roles.find((role) => role.id === roleId)?.name;
+            setFeedback(
+                `${assignment.userName} is now ${roleName ?? 'assigned'}.`,
+            );
         } finally {
             setIsSaving(false);
         }
@@ -418,7 +409,7 @@ export function RBACManagementPage() {
                             assignments={filteredAssignments}
                             roles={roles}
                             onView={setViewAssignment}
-                            onChangeRole={handleChangeUserRole}
+                            onChangeRole={setChangeAssignment}
                         />
                     )}
                 </section>
@@ -447,6 +438,18 @@ export function RBACManagementPage() {
                         setViewAssignment(null);
                     }
                 }}
+            />
+            <ChangeUserRoleModal
+                key={changeAssignment?.id ?? 'change-role-closed'}
+                assignment={changeAssignment}
+                roles={roles}
+                isSaving={isSaving}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setChangeAssignment(null);
+                    }
+                }}
+                onSubmit={handleChangeUserRole}
             />
             <EditRoleModal
                 role={editRole}

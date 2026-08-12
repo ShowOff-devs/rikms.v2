@@ -11,6 +11,9 @@ class ResearchPerformanceItem extends Model
         'project_name',
         'target_value',
         'actual_value',
+        'target_numeric_value',
+        'actual_numeric_value',
+        'unit',
         'accomplishment_percentage',
         'project_status',
         'remarks',
@@ -19,6 +22,8 @@ class ResearchPerformanceItem extends Model
 
     protected $casts = [
         'accomplishment_percentage' => 'decimal:2',
+        'target_numeric_value' => 'decimal:4',
+        'actual_numeric_value' => 'decimal:4',
         'sort_order' => 'integer',
     ];
 

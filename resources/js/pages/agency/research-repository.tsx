@@ -92,6 +92,7 @@ const sortOptions: Array<{ label: string; value: RepositorySortKey }> = [
 
 const statusStyles: Record<RepositoryStatus, string> = {
     draft: 'border-[#fee685] bg-[#fffbeb] text-[#bb4d00]',
+    'revision-required': 'border-[#fdba74] bg-[#fff7ed] text-[#c2410c]',
     published: 'border-[#b9f8cf] bg-[#dcfce7] text-[#008236]',
     pending: 'border-[#bedbff] bg-[#eff6ff] text-[#1447e6]',
     restricted: 'border-[#ffc9c9] bg-[#fef2f2] text-[#e7000b]',
@@ -748,6 +749,14 @@ function RepositoryCard({
                 <p className="mt-3 line-clamp-2 min-h-10 text-xs leading-5 text-[#6a7282]">
                     {item.abstract}
                 </p>
+                {item.status === 'revision-required' && item.moderationNote ? (
+                    <p className="mt-3 line-clamp-2 rounded-[10px] border border-[#fed7aa] bg-[#fff7ed] px-3 py-2 text-xs leading-5 text-[#9a3412]">
+                        <span className="font-semibold">
+                            Revision instructions:
+                        </span>{' '}
+                        {item.moderationNote}
+                    </p>
+                ) : null}
 
                 <AccessPanel item={item} />
                 <QualityPanel item={item} />
@@ -825,6 +834,15 @@ function RepositoryListItem({
                     <p className="mt-2 text-sm leading-5 text-[#6a7282]">
                         {item.abstract}
                     </p>
+                    {item.status === 'revision-required' &&
+                    item.moderationNote ? (
+                        <p className="mt-3 rounded-[10px] border border-[#fed7aa] bg-[#fff7ed] px-3 py-2 text-sm leading-5 text-[#9a3412]">
+                            <span className="font-semibold">
+                                Revision instructions:
+                            </span>{' '}
+                            {item.moderationNote}
+                        </p>
+                    ) : null}
                     <div className="mt-3 flex flex-wrap gap-1.5">
                         {item.sdgs.map((sdg) => (
                             <span
@@ -990,7 +1008,11 @@ function AccessBadge({ accessType }: { accessType: RepositoryAccessType }) {
 }
 
 function FooterBadge({ item }: { item: RepositoryItem }) {
-    if (item.status === 'draft' || item.status === 'archived') {
+    if (
+        item.status === 'draft' ||
+        item.status === 'revision-required' ||
+        item.status === 'archived'
+    ) {
         return <StatusBadge status={item.status} />;
     }
 

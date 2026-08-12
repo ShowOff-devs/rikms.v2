@@ -36,6 +36,17 @@ class PermissionSeeder extends Seeder
             ['module' => 'security', 'action' => 'view'],
             ['module' => 'platform_settings', 'action' => 'view'],
             ['module' => 'platform_settings', 'action' => 'manage'],
+            ['module' => 'rbac', 'action' => 'view'],
+            ['module' => 'rbac', 'action' => 'manage'],
+            ['module' => 'roles', 'action' => 'manage'],
+            ['module' => 'permissions', 'action' => 'manage'],
+            ['module' => 'research_moderation', 'action' => 'view'],
+            ['module' => 'research_moderation', 'action' => 'manage'],
+            ['module' => 'access_monitoring', 'action' => 'view'],
+            ['module' => 'access_monitoring', 'action' => 'manage'],
+            ['module' => 'archive', 'action' => 'manage'],
+            ['module' => 'security', 'action' => 'manage'],
+            ['module' => 'analytics', 'action' => 'export'],
         ])->map(function (array $permission): Permission {
             $slug = $permission['module'].'.'.$permission['action'];
             $name = str($slug)->replace(['_', '.'], ' ')->title()->toString();
@@ -55,7 +66,7 @@ class PermissionSeeder extends Seeder
         $agencyAdmin = Role::where('slug', 'agency_admin')->first();
         $publicUser = Role::where('slug', 'public_user')->first();
 
-        $superAdmin?->permissions()->syncWithoutDetaching($permissions->pluck('id'));
+        $superAdmin?->permissions()->sync($permissions->pluck('id'));
 
         $agencyAdmin?->permissions()->syncWithoutDetaching(
             $permissions

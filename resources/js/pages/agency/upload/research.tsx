@@ -30,7 +30,7 @@ export default function ResearchUploadPage() {
                 search={search}
                 onSearchChange={setSearch}
             >
-                <UploadResearchWizard />
+                <UploadResearchWizard accountEmail={session.email} />
             </AgencyAdminLayout>
         </>
     );

@@ -5,10 +5,13 @@ use App\Models\Agency;
 use App\Models\AuditLog;
 use App\Models\Notification;
 use App\Models\Research;
+use App\Models\SecurityEvent;
 use App\Models\User;
+use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification as NotificationFacade;
 use Illuminate\Support\Facades\Storage;
 
 function agencyPortalApiAgency(): Agency
@@ -97,17 +100,21 @@ test('agency profile settings and analytics endpoints are database backed', func
         ->assertJsonPath('data.notifyNewResearchUploads', false);
 
     expect($user->fresh()->notification_preferences['notifyNewResearchUploads'])->toBeFalse();
+    $notificationAudit = AuditLog::query()->where('event', 'agency.notification_settings.updated')->first();
+    expect($notificationAudit)->not->toBeNull()
+        ->and($notificationAudit->old_values)->toBeArray()
+        ->and($notificationAudit->new_values['notifyNewResearchUploads'])->toBeFalse()
+        ->and($notificationAudit->metadata['changed_keys'])->toContain('notifyNewResearchUploads');
 
     $this->actingAs($user)
         ->patchJson('/api/agency/settings/account', [
             'fullName' => 'Updated Agency Admin',
-            'emailAddress' => 'updated-agency-admin@example.test',
+            'emailAddress' => $user->email,
         ])
         ->assertOk()
-        ->assertJsonPath('data.fullName', 'Updated Agency Admin')
-        ->assertJsonPath('data.emailAddress', 'updated-agency-admin@example.test');
+        ->assertJsonPath('data.fullName', 'Updated Agency Admin');
 
-    expect($user->fresh()->email)->toBe('updated-agency-admin@example.test');
+    expect($user->fresh()->email_verified_at)->not->toBeNull();
 
     $this->actingAs($user)
         ->postJson('/api/agency/settings/password', [
@@ -239,7 +246,7 @@ test('agency profile photo upload replaces old public file and is audited', func
 
     $agency = agencyPortalApiAgency();
     $user = agencyPortalApiUser($agency);
-    $oldPhotoUrl = Storage::disk('public')->url('profile-photos/old-photo.png');
+    $oldPhotoUrl = 'profile-photos/old-photo.png';
 
     Storage::disk('public')->put('profile-photos/old-photo.png', 'old photo');
     $user->update(['profile_photo_path' => $oldPhotoUrl]);
@@ -254,10 +261,82 @@ test('agency profile photo upload replaces old public file and is audited', func
     $user->refresh();
 
     expect($user->profile_photo_path)->not->toBeNull()
-        ->and($user->profile_photo_path)->toContain('/storage/profile-photos/')
+        ->and($user->profile_photo_path)->toStartWith("profile-photos/{$user->id}/")
         ->and(Storage::disk('public')->exists('profile-photos/old-photo.png'))->toBeFalse()
         ->and(Storage::disk('public')->allFiles('profile-photos'))->toHaveCount(1)
         ->and(AuditLog::query()->where('event', 'agency.profile_photo_uploaded')->exists())->toBeTrue();
+});
+
+test('agency email change requires password clears verification sends notice and is audited', function () {
+    NotificationFacade::fake();
+    $user = agencyPortalApiUser(agencyPortalApiAgency());
+    $originalVerifiedAt = $user->email_verified_at;
+
+    $this->actingAs($user)->patchJson('/api/agency/settings/account', [
+        'fullName' => 'Name Only',
+        'emailAddress' => $user->email,
+    ])->assertOk();
+    expect($user->fresh()->email_verified_at?->equalTo($originalVerifiedAt))->toBeTrue();
+
+    $this->actingAs($user)->patchJson('/api/agency/settings/account', [
+        'fullName' => 'Changed Email',
+        'emailAddress' => 'changed-email@example.test',
+    ])->assertUnprocessable()->assertJsonValidationErrors('currentPassword');
+
+    $this->actingAs($user)->patchJson('/api/agency/settings/account', [
+        'fullName' => 'Changed Email',
+        'emailAddress' => 'changed-email@example.test',
+        'currentPassword' => 'wrong-password',
+    ])->assertUnprocessable()->assertJsonValidationErrors('currentPassword');
+
+    $this->actingAs($user)->patchJson('/api/agency/settings/account', [
+        'fullName' => 'Changed Email',
+        'emailAddress' => 'changed-email@example.test',
+        'currentPassword' => 'password',
+    ])->assertOk()->assertJsonPath('data.email_verification_required', true);
+
+    expect($user->fresh()->email_verified_at)->toBeNull()
+        ->and(AuditLog::where('event', 'agency.account.email_changed')->exists())->toBeTrue();
+    NotificationFacade::assertSentTo($user, VerifyEmail::class);
+    $this->actingAs($user)->getJson('/api/agency/settings')->assertForbidden();
+});
+
+test('agency profile photos reject svg and can be removed safely', function () {
+    Storage::fake('public');
+    $user = agencyPortalApiUser(agencyPortalApiAgency());
+
+    $this->actingAs($user)->post('/api/agency/settings/profile-photo', [
+        'photo' => UploadedFile::fake()->create('unsafe.svg', 2, 'image/svg+xml'),
+    ], ['Accept' => 'application/json'])->assertUnprocessable()->assertJsonValidationErrors('photo');
+    expect(Storage::disk('public')->allFiles('profile-photos'))->toBeEmpty();
+
+    $this->actingAs($user)->post('/api/agency/settings/profile-photo', [
+        'photo' => UploadedFile::fake()->image('safe.png', 100, 100),
+    ])->assertCreated();
+    $path = $user->fresh()->profile_photo_path;
+    Storage::disk('public')->delete($path);
+    $this->actingAs($user)->deleteJson('/api/agency/settings/profile-photo')->assertOk();
+    expect($user->fresh()->profile_photo_path)->toBeNull();
+});
+
+test('password change revokes other sessions and records security activity', function () {
+    config(['session.driver' => 'database']);
+    $user = agencyPortalApiUser(agencyPortalApiAgency());
+    DB::table('sessions')->insert([
+        'id' => 'other-password-session', 'user_id' => $user->id, 'ip_address' => '127.0.0.1',
+        'user_agent' => 'Test', 'payload' => '', 'last_activity' => now()->timestamp,
+    ]);
+
+    $this->actingAs($user)->postJson('/api/agency/settings/password', [
+        'currentPassword' => 'password',
+        'newPassword' => 'NewSecurePassword123!',
+        'newPassword_confirmation' => 'NewSecurePassword123!',
+    ])->assertOk()->assertJsonMissingPath('data.password');
+
+    expect(DB::table('sessions')->where('id', 'other-password-session')->exists())->toBeFalse()
+        ->and(AuditLog::where('event', 'agency.account.password_changed')->exists())->toBeTrue()
+        ->and(SecurityEvent::where('event_type', 'password.changed')->exists())->toBeTrue()
+        ->and(Notification::where('type', 'security.password_changed')->exists())->toBeTrue();
 });
 
 test('agency settings reports confirmed two factor state from fortify fields', function () {

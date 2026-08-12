@@ -26,7 +26,12 @@ export default function UploadValidationSummary({
     }
 
     return (
-        <div className="mb-4 rounded-[10px] border border-[#fecaca] bg-[#fff1f2] p-3 text-sm text-[#b91c1c]">
+        <div
+            role="alert"
+            tabIndex={-1}
+            data-validation-summary
+            className="mb-4 rounded-[10px] border border-[#fecaca] bg-[#fff1f2] p-3 text-sm text-[#b91c1c] outline-none focus:ring-2 focus:ring-[#b91c1c]/20"
+        >
             <p className="font-semibold">Please resolve this step first.</p>
             <ul className="mt-1 list-inside list-disc space-y-0.5 text-xs">
                 {messages.map((message) => (

@@ -28,10 +28,17 @@ export type UploadWizardState = {
     stepData: Partial<Record<UploadStepId, UploadWizardStepData>>;
     draftSavedAt: string | null;
     draftStatus: UploadDraftStatus;
+    draftError: string | null;
     validationErrors: Partial<Record<UploadStepId, FieldErrors>>;
 };
 
-export type UploadDraftStatus = 'idle' | 'saving' | 'saved' | 'error';
+export type UploadDraftStatus =
+    | 'idle'
+    | 'loading'
+    | 'unsaved'
+    | 'saving'
+    | 'saved'
+    | 'error';
 
 export type UploadWizardStepProps = {
     config: UploadWizardConfig;
@@ -48,7 +55,9 @@ export type UploadWizardStepProps = {
     goBack: () => void;
     goNext: () => void;
     goToStep: (stepId: UploadStepId) => void;
-    saveDraft: () => Promise<void>;
+    saveDraft: () => Promise<boolean>;
+    applyBackendErrors: (errors: Record<string, string[] | string>) => void;
+    markSubmissionComplete: () => void;
     errors: FieldErrors;
 };
 

@@ -91,6 +91,18 @@ export default [
                 'error',
                 'prefer-top-level',
             ],
+            'no-restricted-imports': [
+                'error',
+                {
+                    patterns: [
+                        {
+                            group: ['@/lib/**/mock-*', '**/lib/**/mock-*'],
+                            message:
+                                'Production source must not import mock implementations. Put legitimate test data under an explicit test-support or fixture path.',
+                        },
+                    ],
+                },
+            ],
         },
     },
     {

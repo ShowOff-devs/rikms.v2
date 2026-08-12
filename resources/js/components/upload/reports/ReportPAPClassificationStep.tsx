@@ -36,33 +36,41 @@ export default function ReportPAPClassificationStep(
             tone="violet"
         >
             <div className="space-y-5">
-                <div className="rounded-[14px] border border-[#ddd6fe] bg-[#f5f3ff] p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                            <p className="flex items-center gap-2 text-sm font-bold text-[#7c3aed]">
-                                <Sparkles className="size-4" />
-                                AI Suggestion
-                            </p>
-                            <p className="mt-1 text-xs text-[#6a7282]">
-                                Recommended categories from extracted metadata:{' '}
-                                {data.aiSuggestedPAPCategories.join(', ')}
-                            </p>
+                {data.aiSuggestedPAPCategories.length > 0 ? (
+                    <div className="rounded-[14px] border border-[#ddd6fe] bg-[#f5f3ff] p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <p className="flex items-center gap-2 text-sm font-bold text-[#7c3aed]">
+                                    <Sparkles className="size-4" />
+                                    AI Suggestion
+                                </p>
+                                <p className="mt-1 text-xs text-[#6a7282]">
+                                    Recommended categories from extracted
+                                    metadata:{' '}
+                                    {data.aiSuggestedPAPCategories.join(', ')}
+                                </p>
+                            </div>
+                            <Button
+                                type="button"
+                                className="rounded-[14px] bg-[#7c3aed] text-white hover:bg-[#6d28d9]"
+                                onClick={() =>
+                                    updatePAPClassification({
+                                        papCategories:
+                                            data.aiSuggestedPAPCategories,
+                                        aiSuggestionApplied: true,
+                                    })
+                                }
+                            >
+                                Apply AI Suggestion
+                            </Button>
                         </div>
-                        <Button
-                            type="button"
-                            className="rounded-[14px] bg-[#7c3aed] text-white hover:bg-[#6d28d9]"
-                            onClick={() =>
-                                updatePAPClassification({
-                                    papCategories:
-                                        data.aiSuggestedPAPCategories,
-                                    aiSuggestionApplied: true,
-                                })
-                            }
-                        >
-                            Apply AI Suggestion
-                        </Button>
                     </div>
-                </div>
+                ) : (
+                    <div className="rounded-[14px] border border-[#e5e7eb] bg-[#f9fafb] p-4 text-xs text-[#6a7282]">
+                        No AI-generated PAP suggestions are available. Select
+                        the applicable categories manually.
+                    </div>
+                )}
 
                 <section>
                     <h3 className="mb-3 text-sm font-bold text-[#101828]">

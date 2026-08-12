@@ -19,6 +19,7 @@ import {
 } from '@/data/repository-display';
 import { getRepositoryItemById } from '@/lib/repository/repository-service';
 import type { RepositoryItem } from '@/types/repository';
+import { RevisionRequestPanel } from './RevisionRequestPanel';
 
 export function ResearchViewModal({
     item,
@@ -97,6 +98,8 @@ export function ResearchViewModal({
                 </DialogHeader>
 
                 <div className="px-6 py-5">
+                    <RevisionRequestPanel item={displayItem} showEditAction />
+
                     <div className="flex flex-wrap items-center gap-2">
                         <span
                             className="inline-flex h-[24px] items-center gap-1 rounded-full px-2.5 text-[11px] font-bold"

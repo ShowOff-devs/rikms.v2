@@ -12,8 +12,9 @@ export function ModerationHeader({ onExport }: ModerationHeaderProps) {
                     Research Integrity & Moderation
                 </h1>
                 <p className="mt-1 text-sm leading-5 text-[#6a7282]">
-                    Review and moderate research records to ensure metadata
-                    completeness and policy compliance.
+                    Completeness checks title, abstract, authors, publication
+                    year, category, and keywords. Policy violations are assigned
+                    only by a moderator.
                 </p>
             </div>
 

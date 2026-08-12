@@ -16,6 +16,7 @@ import { ResearchClassificationSection } from '@/components/repository/edit/Rese
 import { ResearchStatusPanel } from '@/components/repository/edit/ResearchStatusPanel';
 import { SectionCard } from '@/components/repository/edit/SectionCard';
 import { VersionHistorySection } from '@/components/repository/edit/VersionHistorySection';
+import { RevisionRequestPanel } from '@/components/repository/RevisionRequestPanel';
 import { getAgencyAiResults } from '@/lib/agency/agency-ai-results-service';
 import type { AgencyAiResults } from '@/lib/agency/agency-ai-results-service';
 import { useAgencySession } from '@/lib/auth/agency-auth';
@@ -144,7 +145,10 @@ const hasErrors = (errors: EditDocumentErrors) =>
     );
 
 function canEditRepositoryItem(item: RepositoryItem | null) {
-    return item?.status === 'draft';
+    return Boolean(
+        item?.capabilities.canUpdate &&
+        (item.status === 'draft' || item.status === 'revision-required'),
+    );
 }
 
 function editLockMessage(item: RepositoryItem | null) {
@@ -154,6 +158,10 @@ function editLockMessage(item: RepositoryItem | null) {
 
     if (item.status === 'pending') {
         return 'Submitted research is pending moderation and cannot be edited unless an administrator returns it to draft.';
+    }
+
+    if (item.status === 'revision-required' && !item.capabilities.canUpdate) {
+        return 'A revision was requested, but your account is not authorized to edit this agency record.';
     }
 
     if (item.status === 'published') {
@@ -407,6 +415,7 @@ export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
     };
 
     const canEdit = canEditRepositoryItem(item);
+    const canSubmit = canEdit && item?.capabilities.canSubmit === true;
     const lockedMessage = editLockMessage(item);
     const canCreateRevision = item?.status === 'published';
 
@@ -487,6 +496,9 @@ export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
                                     {message}
                                 </div>
                             ) : null}
+                            <div className="mt-5">
+                                <RevisionRequestPanel item={item} />
+                            </div>
                             {!message && lockedMessage ? (
                                 <div className="mt-5 rounded-[12px] border border-[#fde68a] bg-[#fffbeb] px-4 py-3 text-sm font-medium text-[#92400e]">
                                     {lockedMessage}
@@ -545,6 +557,10 @@ export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
                             <EditDocumentActions
                                 isSaving={isSaving}
                                 canEdit={canEdit}
+                                canSubmit={canSubmit}
+                                isRevisionRequired={
+                                    item.status === 'revision-required'
+                                }
                                 lockedMessage={lockedMessage ?? undefined}
                                 onSave={() => commit('save')}
                                 onSaveDraft={() => commit('draft')}

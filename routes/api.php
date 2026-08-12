@@ -21,21 +21,22 @@ use App\Http\Controllers\Api\AgencyProjectReportAnalyticsController;
 use App\Http\Controllers\Api\AgencyReadController;
 use App\Http\Controllers\Api\AgencyResearchWriteController;
 use App\Http\Controllers\Api\AiResultController;
+use App\Http\Controllers\Api\CspReportController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PublicAccessRequestController;
 use App\Http\Controllers\Api\PublicAgencyController;
 use App\Http\Controllers\Api\PublicResearchController;
 use App\Http\Resources\UserResource;
-use App\Models\Mongo\AiMetadata;
-use App\Models\Mongo\PdfParsingResult;
-use App\Models\Mongo\SdgClassification;
-use App\Models\Research;
 use App\Services\PlatformSettingsService;
 use App\Support\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-Route::prefix('public')->group(function () {
+Route::post('/security/csp-reports', [CspReportController::class, 'store'])
+    ->middleware('throttle:csp-reports')
+    ->name('security.csp-reports.store');
+
+Route::prefix('public')->middleware('throttle:public-api')->group(function () {
     Route::get('/platform-settings', function (PlatformSettingsService $settings) {
         return ApiResponse::success('Public platform settings retrieved.', [
             'access_requests_enabled' => $settings->accessRequestsEnabled(),
@@ -45,7 +46,8 @@ Route::prefix('public')->group(function () {
     Route::get('/research', [PublicResearchController::class, 'index']);
     Route::post('/research/{research}/access-requests', [PublicAccessRequestController::class, 'store'])
         ->middleware('throttle:public-access-requests');
-    Route::get('/research/{identifier}/download', [PublicResearchController::class, 'download']);
+    Route::get('/research/{identifier}/download', [PublicResearchController::class, 'download'])
+        ->middleware('throttle:public-downloads');
     Route::get('/research/{identifier}', [PublicResearchController::class, 'show']);
     Route::get('/agencies', [PublicAgencyController::class, 'index']);
     Route::get('/agencies/types', [PublicAgencyController::class, 'types']);
@@ -83,6 +85,7 @@ Route::prefix('agency')
         Route::patch('/settings/notifications', [AgencyProfileSettingsController::class, 'updateNotifications'])->name('settings.notifications.update');
         Route::patch('/settings/security', [AgencyProfileSettingsController::class, 'updateSecurity'])->name('settings.security.update');
         Route::post('/settings/profile-photo', [AgencyProfileSettingsController::class, 'uploadProfilePhoto'])->name('settings.profile-photo.upload');
+        Route::delete('/settings/profile-photo', [AgencyProfileSettingsController::class, 'removeProfilePhoto'])->name('settings.profile-photo.remove');
         Route::post('/settings/password', [AgencyProfileSettingsController::class, 'changePassword'])->name('settings.password.update');
         Route::post('/settings/deactivation-request', [AgencyProfileSettingsController::class, 'requestDeactivation'])->name('settings.deactivation-request');
         Route::delete('/settings/sessions/{sessionId}', [AgencyProfileSettingsController::class, 'revokeSession'])->name('settings.sessions.revoke');
@@ -104,6 +107,7 @@ Route::prefix('agency')
         Route::delete('/research/{research}/archive', [AgencyArchiveController::class, 'destroyResearch'])->name('research.archive.destroy');
         Route::get('/research/{research}/files', [AgencyResearchWriteController::class, 'files'])->name('research.files.index');
         Route::post('/research/{research}/files', [AgencyResearchWriteController::class, 'storeFile'])->name('research.files.store');
+        Route::post('/research/{research}/highlights/{highlight}/files', [AgencyResearchWriteController::class, 'storeHighlightFile'])->name('research.highlights.files.store');
         Route::get('/research/{research}/files/{file}/download', [AgencyResearchWriteController::class, 'downloadFile'])->name('research.files.download');
         Route::delete('/research/{research}/files/{file}', [AgencyResearchWriteController::class, 'destroyFile'])->name('research.files.destroy');
         Route::get('/archive/research', [AgencyArchiveController::class, 'research'])->name('archive.research');
@@ -119,21 +123,21 @@ Route::prefix('agency')
 
 Route::prefix('admin')
     ->name('api.admin.')
-    ->middleware(['auth:sanctum', 'verified', 'role:super_admin', 'super_admin.2fa'])
+    ->middleware(['auth:sanctum', 'verified', 'admin.portal', 'super_admin.2fa', 'admin.authorize'])
     ->group(function () {
         Route::get('/dashboard', AdminDashboardController::class)->name('dashboard');
-        Route::get('/agency-admin-users', [AdminAgencyAdminUserController::class, 'index'])->name('agency-admin-users.index');
-        Route::post('/agency-admin-users', [AdminAgencyAdminUserController::class, 'store'])->name('agency-admin-users.store');
-        Route::get('/agency-admin-users/{user}', [AdminAgencyAdminUserController::class, 'show'])->name('agency-admin-users.show');
-        Route::patch('/agency-admin-users/{user}', [AdminAgencyAdminUserController::class, 'update'])->name('agency-admin-users.update');
+        Route::get('/agency-admin-users', [AdminAgencyAdminUserController::class, 'index'])->middleware('permission:users.view')->name('agency-admin-users.index');
+        Route::post('/agency-admin-users', [AdminAgencyAdminUserController::class, 'store'])->middleware('permission:users.manage')->name('agency-admin-users.store');
+        Route::get('/agency-admin-users/{user}', [AdminAgencyAdminUserController::class, 'show'])->middleware('permission:users.view')->name('agency-admin-users.show');
+        Route::patch('/agency-admin-users/{user}', [AdminAgencyAdminUserController::class, 'update'])->middleware('permission:users.manage')->name('agency-admin-users.update');
         Route::post('/agency-admin-users/{user}/activate', [AdminAgencyAdminUserController::class, 'activate'])->name('agency-admin-users.activate');
         Route::post('/agency-admin-users/{user}/deactivate', [AdminAgencyAdminUserController::class, 'deactivate'])->name('agency-admin-users.deactivate');
         Route::post('/agency-admin-users/{user}/password-reset', [AdminAgencyAdminUserController::class, 'sendPasswordReset'])->name('agency-admin-users.password-reset');
         Route::delete('/agency-admin-users/{user}', [AdminAgencyAdminUserController::class, 'destroy'])->name('agency-admin-users.destroy');
-        Route::get('/agencies', [AdminReadController::class, 'agencies'])->name('agencies.index');
-        Route::post('/agencies', [AdminAgencyManagementController::class, 'store'])->name('agencies.store');
-        Route::get('/agencies/{agency}', [AdminReadController::class, 'agencyShow'])->name('agencies.show');
-        Route::patch('/agencies/{agency}', [AdminAgencyManagementController::class, 'update'])->name('agencies.update');
+        Route::get('/agencies', [AdminReadController::class, 'agencies'])->middleware('permission:agencies.view')->name('agencies.index');
+        Route::post('/agencies', [AdminAgencyManagementController::class, 'store'])->middleware('permission:agencies.manage')->name('agencies.store');
+        Route::get('/agencies/{agency}', [AdminReadController::class, 'agencyShow'])->middleware('permission:agencies.view')->name('agencies.show');
+        Route::patch('/agencies/{agency}', [AdminAgencyManagementController::class, 'update'])->middleware('permission:agencies.manage')->name('agencies.update');
         Route::post('/agencies/{agency}/activate', [AdminAgencyManagementController::class, 'activate'])->name('agencies.activate');
         Route::post('/agencies/{agency}/deactivate', [AdminAgencyManagementController::class, 'deactivate'])->name('agencies.deactivate');
         Route::post('/agencies/{agency}/assign-admin', [AdminAgencyManagementController::class, 'assignAdmin'])->name('agencies.assign-admin');
@@ -151,6 +155,7 @@ Route::prefix('admin')
         Route::get('/research/{research}/ai-results', [AiResultController::class, 'adminAiResults'])->name('research.ai-results');
         Route::post('/research/{research}/ai-results/{result}/review', [AiResultController::class, 'adminReview'])->name('research.ai-results.review');
         Route::post('/research/{research}/approve', [AdminResearchModerationController::class, 'approve'])->name('research.approve');
+        Route::post('/research/{research}/approve-and-publish', [AdminResearchModerationController::class, 'approveAndPublish'])->name('research.approve-and-publish');
         Route::post('/research/{research}/reject', [AdminResearchModerationController::class, 'reject'])->name('research.reject');
         Route::post('/research/{research}/publish', [AdminResearchModerationController::class, 'publish'])->name('research.publish');
         Route::post('/research/{research}/return', [AdminResearchModerationController::class, 'return'])->name('research.return');
@@ -169,9 +174,9 @@ Route::prefix('admin')
         Route::delete('/agencies/{agency}/archive', [AdminArchiveController::class, 'destroyAgency'])->name('agencies.archive.destroy')->withTrashed();
         Route::post('/users/{user}/restore', [AdminArchiveController::class, 'restoreUser'])->name('users.restore')->withTrashed();
         Route::delete('/users/{user}/archive', [AdminArchiveController::class, 'destroyUser'])->name('users.archive.destroy')->withTrashed();
-        Route::get('/access-monitoring', [AdminAccessMonitoringController::class, 'index'])->name('access-monitoring.index');
-        Route::get('/access-monitoring/events', [AdminAccessMonitoringController::class, 'events'])->name('access-monitoring.events');
-        Route::get('/access-monitoring/export', [AdminAccessMonitoringController::class, 'export'])->name('access-monitoring.export');
+        Route::get('/access-monitoring', [AdminAccessMonitoringController::class, 'index'])->middleware('permission:access_monitoring.view')->name('access-monitoring.index');
+        Route::get('/access-monitoring/events', [AdminAccessMonitoringController::class, 'events'])->middleware('permission:access_monitoring.view')->name('access-monitoring.events');
+        Route::get('/access-monitoring/export', [AdminAccessMonitoringController::class, 'export'])->middleware('permission:access_monitoring.manage')->name('access-monitoring.export');
         Route::get('/access-requests', [AdminReadController::class, 'accessRequests'])->name('access-requests.index');
         Route::get('/access-requests/{accessRequest}', [AdminAccessMonitoringController::class, 'show'])->name('access-requests.show');
         Route::post('/access-requests/{accessRequest}/audit-reviewed', [AdminAccessMonitoringController::class, 'markReviewed'])->name('access-requests.audit-reviewed');
@@ -186,6 +191,7 @@ Route::prefix('admin')
         Route::get('/analytics/project-reports/budget', [AdminProjectReportAnalyticsController::class, 'budget'])->name('analytics.project-reports.budget');
         Route::get('/analytics/project-reports/agencies', [AdminProjectReportAnalyticsController::class, 'agencies'])->name('analytics.project-reports.agencies');
         Route::get('/analytics/project-reports/records', [AdminProjectReportAnalyticsController::class, 'records'])->name('analytics.project-reports.records');
+        Route::get('/analytics/project-reports/export', [AdminProjectReportAnalyticsController::class, 'export'])->name('analytics.project-reports.export');
         Route::get('/analytics/project-reports/{research}', [AdminProjectReportAnalyticsController::class, 'show'])->name('analytics.project-reports.show');
         Route::get('/reports/{report}/export', [AdminAnalyticsController::class, 'export'])->name('reports.export');
         Route::get('/audit-logs', [AdminReadController::class, 'auditLogs'])->name('audit-logs.index');
@@ -196,6 +202,8 @@ Route::prefix('admin')
         Route::post('/security/events/{securityEvent}/resolve', [AdminSecurityController::class, 'resolve'])->name('security.events.resolve');
         Route::post('/security/events/{securityEvent}/reopen', [AdminSecurityController::class, 'reopen'])->name('security.events.reopen');
         Route::get('/security/summary', [AdminSecurityController::class, 'summary'])->name('security.summary');
+        Route::get('/security/queue-health', [AdminSecurityController::class, 'queueHealth'])->middleware('permission:security.view')->name('security.queue-health');
+        Route::get('/security/csp-reports', [CspReportController::class, 'index'])->middleware('permission:security.view')->name('security.csp-reports.index');
         Route::get('/security/sessions', [AdminSecurityController::class, 'sessions'])->name('security.sessions');
         Route::delete('/security/sessions/{sessionId}', [AdminSecurityController::class, 'revokeSession'])->name('security.sessions.revoke');
         Route::get('/system-activity/notifications', [AdminSystemActivityController::class, 'notifications'])->name('system-activity.notifications');
@@ -203,138 +211,23 @@ Route::prefix('admin')
         Route::get('/system-activity/logs', [AdminSystemActivityController::class, 'activityLogs'])->name('system-activity.logs');
         Route::get('/system-activity/timeline', [AdminSystemActivityController::class, 'timeline'])->name('system-activity.timeline');
         Route::get('/system-activity/export', [AdminSystemActivityController::class, 'export'])->name('system-activity.export');
-        Route::get('/platform-settings', [AdminReadController::class, 'platformSettings'])->name('platform-settings.index');
-        Route::patch('/platform-settings/{setting}', [AdminPlatformSettingController::class, 'update'])->name('platform-settings.update');
-        Route::post('/platform-settings/bulk-update', [AdminPlatformSettingController::class, 'bulkUpdate'])->name('platform-settings.bulk-update');
-        Route::post('/platform-settings/logo', [AdminPlatformSettingController::class, 'uploadLogo'])->name('platform-settings.logo.upload');
-        Route::get('/rbac/roles', [AdminRbacController::class, 'roles'])->name('rbac.roles.index');
-        Route::post('/rbac/roles', [AdminRbacController::class, 'createRole'])->name('rbac.roles.store');
-        Route::patch('/rbac/roles/{role}', [AdminRbacController::class, 'updateRole'])->name('rbac.roles.update');
-        Route::delete('/rbac/roles/{role}', [AdminRbacController::class, 'deleteRole'])->name('rbac.roles.destroy');
-        Route::match(['put', 'patch'], '/rbac/roles/{role}/permissions', [AdminRbacController::class, 'updateRolePermissions'])->name('rbac.roles.permissions.update');
-        Route::get('/rbac/permissions', [AdminRbacController::class, 'permissions'])->name('rbac.permissions.index');
-        Route::get('/rbac/history', [AdminRbacController::class, 'history'])->name('rbac.history.index');
-        Route::get('/rbac/users', [AdminRbacController::class, 'users'])->name('rbac.users.index');
+        Route::get('/platform-settings', [AdminReadController::class, 'platformSettings'])->middleware('permission:platform_settings.view')->name('platform-settings.index');
+        Route::get('/platform-settings/backup-readiness', [AdminPlatformSettingController::class, 'backupReadiness'])->middleware('permission:platform_settings.view')->name('platform-settings.backup-readiness');
+        Route::patch('/platform-settings/{setting}', [AdminPlatformSettingController::class, 'update'])->middleware('permission:platform_settings.manage')->name('platform-settings.update');
+        Route::post('/platform-settings/bulk-update', [AdminPlatformSettingController::class, 'bulkUpdate'])->middleware('permission:platform_settings.manage')->name('platform-settings.bulk-update');
+        Route::post('/platform-settings/logo', [AdminPlatformSettingController::class, 'uploadLogo'])->middleware('permission:platform_settings.manage')->name('platform-settings.logo.upload');
+        Route::get('/rbac/roles', [AdminRbacController::class, 'roles'])->middleware('permission:rbac.view')->name('rbac.roles.index');
+        Route::post('/rbac/roles', [AdminRbacController::class, 'createRole'])->middleware('permission:roles.manage')->name('rbac.roles.store');
+        Route::patch('/rbac/roles/{role}', [AdminRbacController::class, 'updateRole'])->middleware('permission:roles.manage')->name('rbac.roles.update');
+        Route::delete('/rbac/roles/{role}', [AdminRbacController::class, 'deleteRole'])->middleware('permission:roles.manage')->name('rbac.roles.destroy');
+        Route::match(['put', 'patch'], '/rbac/roles/{role}/permissions', [AdminRbacController::class, 'updateRolePermissions'])->middleware('permission:permissions.manage')->name('rbac.roles.permissions.update');
+        Route::get('/rbac/permissions', [AdminRbacController::class, 'permissions'])->middleware('permission:rbac.view')->name('rbac.permissions.index');
+        Route::get('/rbac/history', [AdminRbacController::class, 'history'])->middleware('permission:rbac.view')->name('rbac.history.index');
+        Route::get('/rbac/users', [AdminRbacController::class, 'users'])->middleware('permission:rbac.view')->name('rbac.users.index');
+        Route::put('/rbac/users/{user}/role', [AdminRbacController::class, 'replaceUserRole'])->middleware('permission:rbac.manage')->name('rbac.users.role.update');
         Route::get('/rbac/users/{user}/roles', [AdminRbacController::class, 'userRoles'])->name('rbac.users.roles.index');
-        Route::post('/rbac/users/{user}/roles', [AdminRbacController::class, 'assignUserRole'])->name('rbac.users.roles.store');
-        Route::delete('/rbac/users/{user}/roles/{role}', [AdminRbacController::class, 'removeUserRole'])->name('rbac.users.roles.destroy');
+        Route::post('/rbac/users/{user}/roles', [AdminRbacController::class, 'assignUserRole'])->middleware('permission:rbac.manage')->name('rbac.users.roles.store');
+        Route::delete('/rbac/users/{user}/roles/{role}', [AdminRbacController::class, 'removeUserRole'])->middleware('permission:rbac.manage')->name('rbac.users.roles.destroy');
         Route::post('/notifications/{notification}/read', [NotificationController::class, 'adminRead'])->name('notifications.read');
         Route::post('/notifications/read-all', [NotificationController::class, 'adminReadAll'])->name('notifications.read-all');
     });
-
-if (app()->isLocal()) {
-
-    Route::get('/test-mongodb-ai-records', function () {
-        $research = Research::first();
-
-        if (! $research) {
-            return response()->json([
-                'message' => 'No research record found in SQLite. Create a research record first.',
-            ], 404);
-        }
-
-        try {
-            $aiMetadata = AiMetadata::create([
-                'research_id' => $research->id,
-                'agency_id' => $research->agency_id,
-                'title' => $research->title,
-                'abstract' => $research->abstract,
-                'authors' => [
-                    'Juan Dela Cruz',
-                    'Maria Santos',
-                ],
-                'keywords' => [
-                    'RIKMS',
-                    'AI Metadata',
-                    'MongoDB',
-                ],
-                'detected_language' => 'English',
-                'confidence_score' => 0.94,
-                'extraction_source' => 'test_route',
-                'raw_ai_response' => [
-                    'source' => 'manual_test',
-                    'message' => 'AI metadata test successful.',
-                ],
-                'review_status' => 'pending_review',
-            ]);
-
-            $sdgClassification = SdgClassification::create([
-                'research_id' => $research->id,
-                'agency_id' => $research->agency_id,
-                'primary_sdg' => 'SDG 4',
-                'primary_sdg_label' => 'Quality Education',
-                'sdg_results' => [
-                    [
-                        'sdg' => 'SDG 4',
-                        'label' => 'Quality Education',
-                        'confidence' => 0.92,
-                    ],
-                    [
-                        'sdg' => 'SDG 9',
-                        'label' => 'Industry, Innovation and Infrastructure',
-                        'confidence' => 0.81,
-                    ],
-                ],
-                'confidence_score' => 0.92,
-                'classification_source' => 'test_route',
-                'raw_ai_response' => [
-                    'source' => 'manual_test',
-                    'message' => 'SDG classification test successful.',
-                ],
-                'review_status' => 'pending_review',
-            ]);
-
-            $pdfParsingResult = PdfParsingResult::create([
-                'research_id' => $research->id,
-                'agency_id' => $research->agency_id,
-                'file_name' => 'sample-research.pdf',
-                'file_path' => 'uploads/research/sample-research.pdf',
-                'file_mime_type' => 'application/pdf',
-                'file_size' => 102400,
-                'page_count' => 12,
-                'extracted_text' => 'This is a sample extracted text from the uploaded PDF.',
-                'sections' => [
-                    [
-                        'title' => 'Abstract',
-                        'content' => 'This is a sample abstract section.',
-                    ],
-                    [
-                        'title' => 'Introduction',
-                        'content' => 'This is a sample introduction section.',
-                    ],
-                ],
-                'tables' => [],
-                'figures' => [],
-                'parser_version' => 'v1',
-                'processing_status' => 'completed',
-                'processing_errors' => [],
-                'processed_at' => now(),
-            ]);
-        } catch (Throwable $exception) {
-            return response()->json([
-                'message' => 'Unable to create MongoDB AI records.',
-                'sqlite_research_reference' => [
-                    'id' => $research->id,
-                    'title' => $research->title,
-                    'agency_id' => $research->agency_id,
-                ],
-                'mongodb_connection' => config('database.connections.mongodb.database'),
-                'error' => $exception->getMessage(),
-            ], 503);
-        }
-
-        return response()->json([
-            'message' => 'MongoDB AI records created successfully.',
-            'sqlite_research_reference' => [
-                'id' => $research->id,
-                'title' => $research->title,
-                'agency_id' => $research->agency_id,
-            ],
-            'mongodb' => [
-                'ai_metadata' => $aiMetadata,
-                'sdg_classification' => $sdgClassification,
-                'pdf_parsing_result' => $pdfParsingResult,
-            ],
-        ]);
-    });
-}

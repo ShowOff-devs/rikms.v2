@@ -3,6 +3,7 @@ import { AdminLayout } from '@/components/admin/layout/AdminLayout';
 import { ActiveAdminSessions } from '@/components/admin/security-center/ActiveAdminSessions';
 import { ExportSecurityReportModal } from '@/components/admin/security-center/ExportSecurityReportModal';
 import { LoginActivityTable } from '@/components/admin/security-center/LoginActivityTable';
+import { QueueHealthPanel } from '@/components/admin/security-center/QueueHealthPanel';
 import { RevokeSessionModal } from '@/components/admin/security-center/RevokeSessionModal';
 import { SecurityAlertDetailsModal } from '@/components/admin/security-center/SecurityAlertDetailsModal';
 import { SecurityAlertsPanel } from '@/components/admin/security-center/SecurityAlertsPanel';
@@ -14,6 +15,7 @@ import {
     exportSecurityReport,
     getActiveAdminSessions,
     getLoginActivity,
+    getQueueHealth,
     getSecurityAlerts,
     getSecurityEvents,
     getSecuritySummary,
@@ -24,6 +26,7 @@ import {
 import type {
     AdminSession,
     LoginActivity,
+    QueueHealth,
     SecurityAlert,
     SecurityEvent,
     SecurityReportExportOptions,
@@ -41,6 +44,7 @@ function matchesSearch(values: Array<string | undefined>, query: string) {
 export function SecurityCenterPage() {
     const [topbarSearch, setTopbarSearch] = useState('');
     const [summary, setSummary] = useState<SecuritySummary | null>(null);
+    const [queueHealth, setQueueHealth] = useState<QueueHealth | null>(null);
     const [alerts, setAlerts] = useState<SecurityAlert[]>([]);
     const [loginActivity, setLoginActivity] = useState<LoginActivity[]>([]);
     const [activeSessions, setActiveSessions] = useState<AdminSession[]>([]);
@@ -65,6 +69,7 @@ export function SecurityCenterPage() {
 
         Promise.all([
             getSecuritySummary(),
+            getQueueHealth(),
             getSecurityAlerts(),
             getLoginActivity(),
             getActiveAdminSessions(),
@@ -73,6 +78,7 @@ export function SecurityCenterPage() {
             .then(
                 ([
                     loadedSummary,
+                    loadedQueueHealth,
                     loadedAlerts,
                     loadedLogins,
                     loadedSessions,
@@ -83,6 +89,7 @@ export function SecurityCenterPage() {
                     }
 
                     setSummary(loadedSummary);
+                    setQueueHealth(loadedQueueHealth);
                     setAlerts(loadedAlerts);
                     setLoginActivity(loadedLogins);
                     setActiveSessions(loadedSessions);
@@ -321,6 +328,8 @@ export function SecurityCenterPage() {
                     summary={displayedSummary}
                     isLoading={isLoading}
                 />
+
+                <QueueHealthPanel health={queueHealth} isLoading={isLoading} />
 
                 <SecurityAlertsPanel
                     alerts={filteredAlerts}

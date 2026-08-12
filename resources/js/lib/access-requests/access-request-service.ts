@@ -133,25 +133,25 @@ export function getAccessRequestDecisionMessage(
 ) {
     if (decision === 'approved') {
         if (emailNotification === 'skipped') {
-            return 'Access request approved, but no email was queued because the requester does not have a valid email address.';
+            return 'Access request saved, but no email was queued because the requester does not have a valid email address.';
         }
 
         if (emailNotification === 'failed_to_queue') {
-            return 'Access request approved, but the email notification could not be queued. The decision was saved successfully.';
+            return 'Access request saved, but the email notification could not be queued. Please check the mail and queue configuration.';
         }
 
-        return 'Access request approved. The requester will be notified by email.';
+        return 'Access request approved. The requester’s email notification has been queued for delivery.';
     }
 
     if (emailNotification === 'skipped') {
-        return 'Access request denied, but no email was queued because the requester does not have a valid email address.';
+        return 'Access request saved, but no email was queued because the requester does not have a valid email address.';
     }
 
     if (emailNotification === 'failed_to_queue') {
-        return 'Access request denied, but the email notification could not be queued. The decision was saved successfully.';
+        return 'Access request saved, but the email notification could not be queued. Please check the mail and queue configuration.';
     }
 
-    return 'Access request denied. The requester will be notified by email.';
+    return 'Access request denied. The requester’s email notification has been queued for delivery.';
 }
 
 export async function getAccessRequestById(id: string) {

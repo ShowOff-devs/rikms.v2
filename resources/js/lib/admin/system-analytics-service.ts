@@ -131,7 +131,8 @@ export async function exportSystemAnalyticsReport(
         {
             credentials: 'same-origin',
             headers: {
-                Accept: 'text/csv',
+                Accept:
+                    options.format === 'pdf' ? 'application/pdf' : 'text/csv',
                 'X-Requested-With': 'XMLHttpRequest',
             },
         },
@@ -144,7 +145,7 @@ export async function exportSystemAnalyticsReport(
     const generatedAt = new Date().toISOString();
     const { fileName } = await downloadResponseFile(
         response,
-        `rikms-research-report-${generatedAt.slice(0, 10)}.csv`,
+        `rikms-research-report-${generatedAt.slice(0, 10)}.${options.format === 'pdf' ? 'pdf' : 'csv'}`,
     );
 
     return {

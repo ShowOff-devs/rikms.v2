@@ -9,12 +9,17 @@ type NotificationApiRecord = {
     status: string;
     read_at?: string | null;
     action_url?: string | null;
+    data?: {
+        concern_type?: string | null;
+        issue_type?: string | null;
+        instructions?: string | null;
+    } | null;
     created_at?: string | null;
 };
 
-export async function getAgencyNotifications() {
+export async function getAgencyNotifications(perPage = 50) {
     const { data } = await fetchApi<NotificationApiRecord[]>(
-        '/api/agency/notifications?per_page=50',
+        `/api/agency/notifications?per_page=${perPage}`,
     );
 
     return data.map((notification) => ({
@@ -25,7 +30,15 @@ export async function getAgencyNotifications() {
         createdAt: notification.created_at ?? new Date().toISOString(),
         isRead: Boolean(notification.read_at) || notification.status === 'read',
         actionHref: notification.action_url ?? undefined,
-        actionLabel: notification.action_url ? 'Open' : undefined,
+        actionLabel: notification.action_url
+            ? notification.type === 'research.revision_requested'
+                ? 'Review Revision'
+                : 'Open'
+            : undefined,
+        concernType:
+            notification.data?.concern_type ??
+            notification.data?.issue_type ??
+            undefined,
     }));
 }
 
@@ -66,6 +79,14 @@ export async function markAllAgencyNotificationsRead() {
 }
 
 function mapNotificationType(type: string): AgencyNotification['type'] {
+    if (
+        type === 'research.revision_requested' ||
+        type === 'research.rejected' ||
+        type === 'research.returned'
+    ) {
+        return 'revision-request';
+    }
+
     if (
         type === 'upload' ||
         type === 'access-request' ||

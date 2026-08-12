@@ -28,8 +28,6 @@ class StoreResearchFileRequest extends FormRequest
         $maxKb = $uploadLimit->effectiveUploadLimitKb();
 
         return [
-            // TODO Phase 9: Add production upload hardening: malware scan/quarantine, MIME sniffing beyond extension,
-            // checksum verification, and audited rejection/failure events.
             'file' => [
                 'required',
                 'file',

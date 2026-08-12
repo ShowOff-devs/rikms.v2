@@ -29,6 +29,7 @@ type TurnstileApi = {
         element: HTMLElement,
         options: {
             sitekey: string;
+            action: string;
             callback: (token: string) => void;
             'expired-callback': () => void;
             'error-callback': () => void;
@@ -98,6 +99,7 @@ export default function ResearchDetailPage({
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
     const [accessRequestsEnabled, setAccessRequestsEnabled] = useState(true);
     const [captchaToken, setCaptchaToken] = useState('');
+    const [captchaError, setCaptchaError] = useState<string | null>(null);
     const [captchaWidgetId, setCaptchaWidgetId] = useState<string | null>(null);
     const [form, setForm] = useState({
         name: '',
@@ -136,6 +138,13 @@ export default function ResearchDetailPage({
             return;
         }
 
+        const reportCaptchaUnavailable = () => {
+            setCaptchaToken('');
+            setCaptchaError(
+                'Verification is temporarily unavailable. Please try again later.',
+            );
+        };
+
         const renderCaptcha = () => {
             const container = document.getElementById(
                 'public-access-request-captcha',
@@ -148,9 +157,13 @@ export default function ResearchDetailPage({
             if (window.turnstile) {
                 const widgetId = window.turnstile.render(container, {
                     sitekey: captchaSiteKey,
-                    callback: setCaptchaToken,
+                    action: 'public_access_request',
+                    callback: (token) => {
+                        setCaptchaError(null);
+                        setCaptchaToken(token);
+                    },
                     'expired-callback': () => setCaptchaToken(''),
-                    'error-callback': () => setCaptchaToken(''),
+                    'error-callback': reportCaptchaUnavailable,
                 });
 
                 setCaptchaWidgetId(widgetId);
@@ -171,9 +184,16 @@ export default function ResearchDetailPage({
             existingScript.addEventListener('load', renderCaptcha, {
                 once: true,
             });
+            existingScript.addEventListener('error', reportCaptchaUnavailable, {
+                once: true,
+            });
 
             return () => {
                 existingScript.removeEventListener('load', renderCaptcha);
+                existingScript.removeEventListener(
+                    'error',
+                    reportCaptchaUnavailable,
+                );
             };
         }
 
@@ -185,10 +205,14 @@ export default function ResearchDetailPage({
         script.defer = true;
         script.dataset.publicAccessRequestCaptcha = 'true';
         script.addEventListener('load', renderCaptcha, { once: true });
+        script.addEventListener('error', reportCaptchaUnavailable, {
+            once: true,
+        });
         document.head.appendChild(script);
 
         return () => {
             script.removeEventListener('load', renderCaptcha);
+            script.removeEventListener('error', reportCaptchaUnavailable);
         };
     }, [requestOpen]);
 
@@ -642,7 +666,18 @@ export default function ResearchDetailPage({
                                                 {fieldErrors.captcha_token}
                                             </span>
                                         ) : null}
+                                        {captchaError ? (
+                                            <span className="mt-1 block text-xs leading-4 text-[#b91c1c]">
+                                                {captchaError}
+                                            </span>
+                                        ) : null}
                                     </div>
+                                ) : null}
+                                {captchaEnabled && !captchaSiteKey ? (
+                                    <p className="text-sm text-[#b91c1c]">
+                                        Verification is temporarily unavailable.
+                                        Please try again later.
+                                    </p>
                                 ) : null}
                                 <div className="flex flex-wrap justify-end gap-3 pt-2">
                                     <button
@@ -656,9 +691,7 @@ export default function ResearchDetailPage({
                                         type="submit"
                                         disabled={
                                             isSubmitting ||
-                                            (captchaEnabled &&
-                                                Boolean(captchaSiteKey) &&
-                                                !captchaToken)
+                                            (captchaEnabled && !captchaToken)
                                         }
                                         className="inline-flex h-10 items-center rounded-[10px] bg-[#1e3a8a] px-4 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
                                     >

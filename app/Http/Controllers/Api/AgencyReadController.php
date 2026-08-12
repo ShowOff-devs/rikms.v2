@@ -70,7 +70,7 @@ class AgencyReadController extends Controller
                     'count' => (int) $record->aggregate,
                 ]),
             'recent_research' => ResearchResource::collection(
-                (clone $researchQuery)->with(['agency', 'reportDetail', 'performanceItems'])->latest()->limit(5)->get(),
+                (clone $researchQuery)->with(['agency', 'latestModerationDecision.reviewer', 'reportDetail', 'performanceItems', 'reportHighlights.files'])->latest()->limit(5)->get(),
             )->resolve($request),
             'recent_activity' => AuditLogResource::collection(
                 $this->agencyAuditLogQuery($request)->with(['user', 'agency'])->latest('created_at')->limit(5)->get(),
@@ -81,7 +81,7 @@ class AgencyReadController extends Controller
     public function research(Request $request): JsonResponse
     {
         $query = $this->agencyResearchQuery($request)
-            ->with(['agency', 'uploader', 'files', 'reportDetail', 'performanceItems'])
+            ->with(['agency', 'uploader', 'latestModerationDecision.reviewer', 'files', 'reportDetail', 'performanceItems', 'reportHighlights.files'])
             ->when($request->filled('status'), fn (Builder $query) => $query->where('status', $request->string('status')))
             ->when($request->filled('publication_year'), fn (Builder $query) => $query->where('publication_year', $request->integer('publication_year')))
             ->when($request->filled('access_level'), fn (Builder $query) => $query->where('access_level', $request->string('access_level')))
@@ -116,7 +116,7 @@ class AgencyReadController extends Controller
 
         return ApiResponse::success(
             'Agency research detail retrieved.',
-            (new ResearchResource($research->load(['agency', 'uploader', 'files', 'reportDetail', 'performanceItems'])))->resolve($request),
+            (new ResearchResource($research->load(['agency', 'uploader', 'latestModerationDecision.reviewer', 'files', 'reportDetail', 'performanceItems', 'reportHighlights.files'])))->resolve($request),
         );
     }
 

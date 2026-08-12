@@ -17,6 +17,14 @@ export type SecuritySummary = {
     securityAlerts: number;
 };
 
+export type QueueHealth = {
+    queueConnection: string;
+    pendingJobs: number;
+    failedJobs: number;
+    oldestPendingJobAgeMinutes: number | null;
+    status: 'healthy' | 'warning' | 'critical';
+};
+
 export type SecurityAlert = {
     id: string;
     title: string;

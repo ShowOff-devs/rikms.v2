@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\SecurityEventResource;
 use App\Models\SecurityEvent;
 use App\Models\User;
+use App\Services\RuntimeHeartbeat;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use App\Support\SecurityEventLogger;
@@ -39,6 +40,34 @@ class AdminSecurityController extends Controller
             'security_alerts' => SecurityEvent::query()
                 ->whereNull('resolved_at')
                 ->count(),
+        ]);
+    }
+
+    public function queueHealth(Request $request, RuntimeHeartbeat $heartbeat): JsonResponse
+    {
+        $pendingJobs = Schema::hasTable('jobs') ? DB::table('jobs')->count() : 0;
+        $failedJobs = Schema::hasTable('failed_jobs') ? DB::table('failed_jobs')->count() : 0;
+        $oldestCreatedAt = $pendingJobs > 0 ? DB::table('jobs')->min('created_at') : null;
+        $oldestPendingAgeMinutes = is_numeric($oldestCreatedAt)
+            ? max(0, (int) floor((now()->timestamp - (int) $oldestCreatedAt) / 60))
+            : null;
+
+        $runtime = $heartbeat->status();
+        $status = match (true) {
+            ! $runtime['scheduler']['healthy'] || ! $runtime['worker']['healthy'] => 'critical',
+            $failedJobs > 0 || ($oldestPendingAgeMinutes !== null && $oldestPendingAgeMinutes >= 60) => 'critical',
+            $oldestPendingAgeMinutes !== null && $oldestPendingAgeMinutes >= 5 => 'warning',
+            default => 'healthy',
+        };
+
+        return ApiResponse::success('Queue health retrieved.', [
+            'queue_connection' => config('queue.default'),
+            'pending_jobs' => $pendingJobs,
+            'failed_jobs' => $failedJobs,
+            'oldest_pending_job_age_minutes' => $oldestPendingAgeMinutes,
+            'scheduler_heartbeat' => $runtime['scheduler'],
+            'worker_heartbeat' => $runtime['worker'],
+            'status' => $status,
         ]);
     }
 

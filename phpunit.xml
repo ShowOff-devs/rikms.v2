@@ -16,6 +16,9 @@
         <include>
             <directory>app</directory>
         </include>
+        <exclude>
+            <file>app/Http/Controllers/Controller.php</file>
+        </exclude>
     </source>
     <php>
         <env name="APP_ENV" value="testing"/>
@@ -27,10 +30,17 @@
         <env name="DB_DATABASE" value=":memory:"/>
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
+        <env name="MALWARE_SCANNER" value="fake"/>
+        <!-- Preserve the single-disk test harness; focused tests cover cross-disk promotion. -->
+        <env name="UPLOAD_QUARANTINE_DISK" value="local"/>
+        <env name="UPLOAD_STORAGE_DISK" value="local"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="PUBLIC_ACCESS_REQUESTS_ENABLED" value="true"/>
+        <env name="PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED" value="false"/>
+        <env name="VITE_PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED" value="false"/>
+        <env name="RIKMS_ALLOW_DEV_SEED_ACCOUNTS" value="true"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
     </php>

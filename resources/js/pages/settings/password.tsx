@@ -1,10 +1,11 @@
 import { Transition } from '@headlessui/react';
 import { Form, Head } from '@inertiajs/react';
+import { CheckCircle2, KeyRound } from 'lucide-react';
 import { useRef } from 'react';
 import PasswordController from '@/actions/App/Http/Controllers/Settings/PasswordController';
-import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
+import SettingsSection from '@/components/settings/settings-section';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -30,13 +31,11 @@ export default function Password() {
             <h1 className="sr-only">Password settings</h1>
 
             <SettingsLayout>
-                <div className="space-y-6">
-                    <Heading
-                        variant="small"
-                        title="Update password"
-                        description="Ensure your account is using a long, random password to stay secure"
-                    />
-
+                <SettingsSection
+                    icon={<KeyRound className="size-5" />}
+                    title="Update password"
+                    description="Use a strong password that is unique to this account."
+                >
                     <Form
                         {...PasswordController.update.form()}
                         options={{
@@ -120,7 +119,7 @@ export default function Password() {
                                         disabled={processing}
                                         data-test="update-password-button"
                                     >
-                                        Save password
+                                        Update Password
                                     </Button>
 
                                     <Transition
@@ -130,15 +129,19 @@ export default function Password() {
                                         leave="transition ease-in-out"
                                         leaveTo="opacity-0"
                                     >
-                                        <p className="text-sm text-neutral-600">
-                                            Saved
+                                        <p
+                                            role="status"
+                                            className="flex items-center gap-1.5 text-sm font-medium text-emerald-700"
+                                        >
+                                            <CheckCircle2 className="size-4" />{' '}
+                                            Password updated
                                         </p>
                                     </Transition>
                                 </div>
                             </>
                         )}
                     </Form>
-                </div>
+                </SettingsSection>
             </SettingsLayout>
         </AppLayout>
     );

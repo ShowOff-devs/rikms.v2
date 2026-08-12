@@ -12,7 +12,12 @@ export type PermissionModule =
     | 'security'
     | 'archive'
     | 'audit-logs'
-    | 'platform-settings';
+    | 'platform-settings'
+    | 'rbac'
+    | 'roles'
+    | 'permissions'
+    | 'research-moderation'
+    | 'access-monitoring';
 
 export type Permission = {
     id: string;
@@ -27,6 +32,7 @@ export type Role = {
     name: string;
     description: string;
     isSystemRole: boolean;
+    isActive: boolean;
     userCount: number;
     permissionIds: string[];
     createdAt: string;

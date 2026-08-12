@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
+import { AgencyNotificationDropdown } from '@/components/agency/AgencyNotificationDropdown';
 import AppLogoIcon from '@/components/app-logo-icon';
 import { useCurrentUrl } from '@/hooks/use-current-url';
 import { clearAgencySession } from '@/lib/auth/agency-auth';
@@ -143,10 +144,6 @@ export default function AgencyAdminLayout({
         );
     };
 
-    const openNotifications = () => {
-        router.visit('/agency/notifications');
-    };
-
     const openAgencyProfile = () => {
         router.visit('/agency/profile');
     };
@@ -214,15 +211,7 @@ export default function AgencyAdminLayout({
                 </div>
 
                 <div className="flex items-center gap-1 sm:gap-2">
-                    <button
-                        type="button"
-                        onClick={openNotifications}
-                        className="relative flex size-9 items-center justify-center rounded-[10px] text-[#4a5565] hover:bg-[#f3f4f6]"
-                        aria-label="Notifications"
-                    >
-                        <Bell className="size-5" />
-                        <span className="absolute top-1.5 right-2 size-2 rounded-full bg-[#fb2c36]" />
-                    </button>
+                    <AgencyNotificationDropdown />
                     <button
                         type="button"
                         onClick={openAgencyProfile}

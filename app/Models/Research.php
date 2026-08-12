@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\PublicResponseCache;
 use App\Support\Statuses;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -35,6 +36,11 @@ class Research extends Model
         'downloads',
         'embargo_until',
         'external_url',
+        'research_owner_name',
+        'research_owner_email',
+        'notify_owner_access_requests',
+        'notify_owner_research_inquiries',
+        'send_owner_copy_to_admin',
         'submitted_at',
         'approved_at',
         'published_at',
@@ -55,12 +61,24 @@ class Research extends Model
         'downloads' => 'integer',
         'revision_number' => 'integer',
         'embargo_until' => 'date',
+        'notify_owner_access_requests' => 'boolean',
+        'notify_owner_research_inquiries' => 'boolean',
+        'send_owner_copy_to_admin' => 'boolean',
         'submitted_at' => 'datetime',
         'approved_at' => 'datetime',
         'published_at' => 'datetime',
         'archived_at' => 'datetime',
         'restored_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        $invalidate = fn (): mixed => app(PublicResponseCache::class)->invalidateResearch();
+
+        static::saved($invalidate);
+        static::deleted($invalidate);
+        static::restored($invalidate);
+    }
 
     public function agency()
     {
@@ -87,6 +105,11 @@ class Research extends Model
         return $this->hasMany(ResearchApproval::class);
     }
 
+    public function latestModerationDecision()
+    {
+        return $this->hasOne(ResearchApproval::class)->latestOfMany();
+    }
+
     public function files()
     {
         return $this->hasMany(ResearchFile::class);
@@ -102,6 +125,11 @@ class Research extends Model
         return $this->hasMany(ResearchPerformanceItem::class)->orderBy('sort_order');
     }
 
+    public function reportHighlights()
+    {
+        return $this->hasMany(ResearchReportHighlight::class)->orderBy('sort_order');
+    }
+
     public function analyticsEvents()
     {
         return $this->hasMany(ResearchAnalyticsEvent::class);
@@ -110,12 +138,13 @@ class Research extends Model
     public function scopePubliclyVisible(Builder $query): Builder
     {
         return $query
-            ->where('status', Statuses::RESEARCH_PUBLISHED)
-            ->whereNull('archived_at')
+            ->where('research.status', Statuses::RESEARCH_PUBLISHED)
+            ->whereNull('research.archived_at')
+            ->whereNull('research.superseded_by_id')
             ->where(function (Builder $query): void {
                 $query
-                    ->whereNull('access_level')
-                    ->orWhere('access_level', '!=', 'private');
+                    ->whereNull('research.access_level')
+                    ->orWhere('research.access_level', '!=', 'private');
             });
     }
 

@@ -16,11 +16,14 @@ import type {
     AgencyResearchRecord,
     AgencyResearchPerformanceItem,
     AgencyResearchReportDetail,
+    AgencyResearchHighlight,
+    AgencyResearchFile,
     PublicMetadataField,
 } from '@/lib/agency/agency-research-service';
 import { fetchApi } from '@/lib/api-client';
 import {
     calculateFinancials,
+    createInitialReportWorkflowData,
     getReportTypeLabel,
     metadataFieldLabels,
 } from '@/lib/upload/report-workflow';
@@ -73,6 +76,40 @@ const reportMetadataKeys = Object.keys(
 const aiResultsPollIntervalMs = 3000;
 const aiResultsPollTimeoutMs = 30000;
 const successfulAiStatuses = ['completed', 'pending_review'];
+export const reportHighlightFileLimit = 5;
+export const reportHighlightFileMaxBytes = 20 * 1024 * 1024;
+
+export function reportHighlightFileError(
+    file: Pick<File, 'name' | 'size' | 'type'>,
+    existingCount: number,
+    maxBytes = reportHighlightFileMaxBytes,
+) {
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    const allowedMimeByExtension: Record<string, string[]> = {
+        pdf: ['application/pdf'],
+        png: ['image/png'],
+        jpg: ['image/jpeg'],
+        jpeg: ['image/jpeg'],
+    };
+
+    if (
+        !extension ||
+        !allowedMimeByExtension[extension] ||
+        !allowedMimeByExtension[extension].includes(file.type)
+    ) {
+        return 'Supporting files must be valid PDF, PNG, or JPEG files.';
+    }
+
+    if (file.size <= 0 || file.size > maxBytes) {
+        return `Supporting files must be non-empty and may not exceed ${Math.floor(maxBytes / 1024 / 1024)} MB.`;
+    }
+
+    if (existingCount >= reportHighlightFileLimit) {
+        return `A highlight may have at most ${reportHighlightFileLimit} supporting files.`;
+    }
+
+    return null;
+}
 
 const reportKeyToApiKey: Record<ReportMetadataKey, MetadataKey> = {
     title: 'title',
@@ -84,6 +121,13 @@ const reportKeyToApiKey: Record<ReportMetadataKey, MetadataKey> = {
     keywords: 'keywords',
     authors: 'authors',
 };
+
+const apiKeyToReportKey = Object.fromEntries(
+    Object.entries(reportKeyToApiKey).map(([reportKey, apiKey]) => [
+        apiKey,
+        reportKey,
+    ]),
+) as Record<MetadataKey, ReportMetadataKey>;
 
 function sleep(ms: number) {
     return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -280,6 +324,13 @@ function mapReportDetails(
         physical_accomplishment_percent:
             data.performance.physicalAccomplishmentPercent,
         financial_as_of_date: nullableString(data.financials.financialAsOfDate),
+        pap_categories: data.papClassification.papCategories,
+        pap_description: nullableString(data.papClassification.papDescription),
+        beneficiary_sectors: data.papClassification.beneficiarySectors,
+        performance_remarks: nullableString(
+            data.performance.performanceRemarks,
+        ),
+        last_wizard_step: nullableString(data.details.lastWizardStep),
     };
 }
 
@@ -292,6 +343,9 @@ function mapPerformanceItems(
             project_name: nullableString(project.projectName),
             target_value: project.targetValue,
             actual_value: project.actualValue,
+            target_numeric_value: project.targetNumericValue,
+            actual_numeric_value: project.actualNumericValue,
+            unit: nullableString(project.unit),
             accomplishment_percentage: project.accomplishmentPercentage,
             project_status: project.projectStatus,
             remarks: nullableString(project.remarks),
@@ -303,6 +357,9 @@ function hasMeaningfulPerformanceProject(project: {
     projectName: string;
     targetValue: string | null;
     actualValue: string | null;
+    targetNumericValue: number | null;
+    actualNumericValue: number | null;
+    unit: string;
     accomplishmentPercentage: number | null;
     remarks?: string;
 }) {
@@ -310,9 +367,36 @@ function hasMeaningfulPerformanceProject(project: {
         nullableString(project.projectName) ||
         nullableString(project.targetValue ?? '') ||
         nullableString(project.actualValue ?? '') ||
+        project.targetNumericValue !== null ||
+        project.actualNumericValue !== null ||
         project.accomplishmentPercentage !== null ||
         nullableString(project.remarks),
     );
+}
+
+function mapReportHighlights(
+    data: ReportWorkflowData,
+): AgencyResearchHighlight[] {
+    const highlight = data.highlights;
+
+    if (
+        !nullableString(highlight.highlightTitle) &&
+        !nullableString(highlight.highlightDescription)
+    ) {
+        return [];
+    }
+
+    return [
+        {
+            id: highlight.highlightId
+                ? Number.parseInt(highlight.highlightId, 10)
+                : undefined,
+            title: nullableString(highlight.highlightTitle),
+            description: nullableString(highlight.highlightDescription),
+            is_featured: highlight.featuredHighlight,
+            sort_order: 0,
+        },
+    ];
 }
 
 export function mapReportWorkflowToResearchPayload(
@@ -344,6 +428,9 @@ export function mapReportWorkflowToResearchPayload(
         external_url: null,
         report_details: mapReportDetails(data),
         performance_items: mapPerformanceItems(data),
+        report_highlights: mapReportHighlights(data),
+        expected_updated_at: data.details.serverUpdatedAt ?? null,
+        expected_draft_version: data.details.serverDraftVersion ?? null,
     };
 }
 
@@ -467,6 +554,9 @@ export function reportPerformanceFromRecord(
                 projectName: item.project_name ?? '',
                 targetValue: nullableText(item.target_value),
                 actualValue: nullableText(item.actual_value),
+                targetNumericValue: nullableNumber(item.target_numeric_value),
+                actualNumericValue: nullableNumber(item.actual_numeric_value),
+                unit: item.unit ?? '',
                 accomplishmentPercentage: nullableNumber(
                     item.accomplishment_percentage,
                 ),
@@ -475,4 +565,155 @@ export function reportPerformanceFromRecord(
             };
         }),
     };
+}
+
+export function hydrateReportWorkflowFromRecord(
+    record: AgencyResearchRecord,
+    agencyName?: string,
+): ReportWorkflowData {
+    const defaults = createInitialReportWorkflowData('terminal-report');
+    const mainFile = record.files?.find(
+        (file) =>
+            file.file_type === 'terminal-report' &&
+            file.status === 'active' &&
+            !file.archived_at,
+    );
+    const publicEntries = new Map(
+        (record.public_metadata ?? []).map((entry) => [entry.key, entry.value]),
+    );
+    const selectedPublicMetadata = (record.public_metadata_fields ?? [])
+        .map((key) => apiKeyToReportKey[key])
+        .filter((key): key is ReportMetadataKey => Boolean(key));
+    const detail = record.report_detail;
+    const highlight = record.report_highlights?.[0];
+    const selectedSDGs = (record.sdgs ?? [])
+        .map((value) => Number.parseInt(value.replace(/\D+/gu, ''), 10))
+        .filter(
+            (value) => Number.isInteger(value) && value >= 1 && value <= 17,
+        );
+
+    return {
+        ...defaults,
+        details: {
+            ...defaults.details,
+            researchId: String(record.id),
+            uploadedFile: null,
+            uploadedFileId: mainFile ? String(mainFile.id) : undefined,
+            uploadedFileName: mainFile?.original_name,
+            uploadedFileType: mainFile?.mime_type ?? undefined,
+            uploadedFileSize: mainFile?.size_bytes,
+            uploadStatus: mainFile ? 'uploaded' : 'idle',
+            reportTitle: record.title ?? '',
+            reportDescription: record.abstract ?? '',
+            projectStartDate: detail?.project_start_date ?? '',
+            projectEndDate: detail?.project_end_date ?? '',
+            reportingPeriod: detail?.reporting_period ?? '',
+            reportingYear: record.publication_year
+                ? String(record.publication_year)
+                : defaults.details.reportingYear,
+            agency:
+                agencyName ??
+                record.agency?.short_name ??
+                record.agency?.name ??
+                '',
+            lastWizardStep: detail?.last_wizard_step ?? null,
+            serverUpdatedAt: record.updated_at ?? null,
+            serverDraftVersion: detail?.draft_version ?? null,
+        },
+        aiMetadata: {
+            ...defaults.aiMetadata,
+            aiAnalysisStarted: selectedPublicMetadata.length > 0,
+            aiAnalysisCompleted:
+                selectedPublicMetadata.length > 0 &&
+                Boolean(record.title?.trim()) &&
+                Boolean(record.abstract?.trim()),
+            extractionStatus:
+                selectedPublicMetadata.length > 0 ? 'success' : 'idle',
+            extractedMetadata: {
+                title: record.title ?? '',
+                abstract: record.abstract ?? '',
+                methodology: publicEntries.get('methodology') ?? '',
+                reviewOfRelatedLiterature:
+                    publicEntries.get('review_of_related_literature') ?? '',
+                theoreticalFramework:
+                    publicEntries.get('theoretical_framework') ?? '',
+                resultsAndDiscussion:
+                    publicEntries.get('results_and_discussion') ?? '',
+                keywords: record.keywords ?? [],
+                authors: Array.isArray(record.authors) ? record.authors : [],
+            },
+            selectedPublicMetadata,
+            metadataValidated: selectedPublicMetadata.length > 0,
+        },
+        performance: {
+            ...defaults.performance,
+            ...reportPerformanceFromRecord(record),
+            performanceRemarks: detail?.performance_remarks ?? '',
+        },
+        papClassification: {
+            ...defaults.papClassification,
+            papCategories: detail?.pap_categories ?? [],
+            papDescription: detail?.pap_description ?? '',
+            beneficiarySectors: (detail?.beneficiary_sectors ??
+                []) as ReportWorkflowData['papClassification']['beneficiarySectors'],
+        },
+        financials: {
+            ...defaults.financials,
+            ...reportFinancialsFromRecord(record),
+        },
+        highlights: {
+            ...defaults.highlights,
+            highlightId: highlight?.id ? String(highlight.id) : undefined,
+            highlightTitle: highlight?.title ?? '',
+            highlightDescription: highlight?.description ?? '',
+            featuredHighlight: highlight?.is_featured ?? false,
+            supportingFiles: (highlight?.files ?? []).map((file) => ({
+                id: String(file.id),
+                name: file.original_name,
+                size: file.size_bytes,
+                type: file.mime_type ?? 'application/octet-stream',
+            })),
+        },
+        sdgTagging: {
+            ...defaults.sdgTagging,
+            selectedSDGs,
+            sdgSelectionValidated: selectedSDGs.length > 0,
+        },
+        review: {
+            ...defaults.review,
+            draftStatus: 'saved',
+            submissionStatus: record.status === 'draft' ? 'draft' : 'submitted',
+            submittedAt: record.submitted_at ?? undefined,
+        },
+    };
+}
+
+export async function uploadReportHighlightFile(
+    researchId: string | number,
+    highlightId: string | number,
+    file: File,
+) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const { data } = await fetchApi<AgencyResearchFile>(
+        `/api/agency/research/${researchId}/highlights/${highlightId}/files`,
+        { method: 'POST', body: formData },
+    );
+
+    return {
+        id: String(data.id),
+        name: data.original_name,
+        size: data.size_bytes,
+        type: data.mime_type ?? 'application/octet-stream',
+    };
+}
+
+export async function removeReportFile(
+    researchId: string | number,
+    fileId: string | number,
+) {
+    await fetchApi(`/api/agency/research/${researchId}/files/${fileId}`, {
+        method: 'DELETE',
+    });
 }

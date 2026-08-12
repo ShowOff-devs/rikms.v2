@@ -99,6 +99,8 @@ export default function ReportDetailsStep(props: UploadWizardStepProps) {
             setStepData({
                 ...nextDetails,
                 researchId: String(draft.id),
+                serverUpdatedAt: draft.updated_at ?? null,
+                serverDraftVersion: draft.report_detail?.draft_version ?? null,
                 uploadedFileId: uploadedFile.id,
                 uploadedFileName: uploadedFile.name,
                 uploadedFileType: uploadedFile.type,
@@ -247,6 +249,9 @@ export default function ReportDetailsStep(props: UploadWizardStepProps) {
                             <span className="text-[#fb2c36]">*</span>
                         </span>
                         <input
+                            type="number"
+                            min={1900}
+                            max={new Date().getFullYear() + 1}
                             value={data.reportingYear}
                             onChange={(event) =>
                                 updateDetails({

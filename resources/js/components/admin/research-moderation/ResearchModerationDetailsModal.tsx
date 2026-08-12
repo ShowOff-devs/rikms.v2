@@ -79,7 +79,7 @@ export function ResearchModerationDetailsModal({
                             />
                             <DetailRow label="Year" value={record.year} />
                             <DetailRow
-                                label="Issue Type"
+                                label="Concern Type"
                                 value={
                                     moderationIssueTypeLabels[record.issueType]
                                 }
@@ -104,6 +104,29 @@ export function ResearchModerationDetailsModal({
                                 {record.abstract ??
                                     'No abstract was provided with this flagged record.'}
                             </p>
+                            {record.missingMetadataFields?.length ? (
+                                <div className="mt-3">
+                                    <p className="text-xs font-semibold text-[#6a7282]">
+                                        Missing required metadata
+                                    </p>
+                                    <ul className="mt-2 flex flex-wrap gap-2">
+                                        {record.missingMetadataFields.map(
+                                            (field) => (
+                                                <li
+                                                    key={field}
+                                                    className="rounded-full border border-[#bfdbfe] bg-[#eff6ff] px-2.5 py-1 text-xs font-medium text-[#1d4ed8]"
+                                                >
+                                                    {field}
+                                                </li>
+                                            ),
+                                        )}
+                                    </ul>
+                                </div>
+                            ) : (
+                                <p className="mt-3 text-xs font-medium text-[#15803d]">
+                                    Required metadata is complete.
+                                </p>
+                            )}
                         </section>
 
                         <section className="rounded-[12px] border border-[#ffd6a8] bg-[#fff7ed] p-4">

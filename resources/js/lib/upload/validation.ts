@@ -155,15 +155,34 @@ const reportDetailsSchema = z
         uploadError: z.string().nullable().optional(),
         reportTitle: z.string(),
         reportDescription: z.string(),
-        projectStartDate: reportDateSchema,
-        projectEndDate: reportDateSchema,
+        projectStartDate: reportDateSchema.refine(
+            (value) => value.trim() !== '',
+            'Project start date is required.',
+        ),
+        projectEndDate: reportDateSchema.refine(
+            (value) => value.trim() !== '',
+            'Project end date is required.',
+        ),
         reportingPeriod: z
             .string()
             .trim()
             .refine((value) => reportingPeriodOptions.includes(value), {
                 message: 'Choose a valid reporting period.',
             }),
-        reportingYear: z.string().trim().min(1, 'Year is required.'),
+        reportingYear: z
+            .string()
+            .trim()
+            .regex(/^\d{4}$/u, 'Enter a four-digit reporting year.')
+            .refine(
+                (value) => {
+                    const year = Number(value);
+
+                    return year >= 1900 && year <= new Date().getFullYear() + 1;
+                },
+                {
+                    message: `Year must be between 1900 and ${new Date().getFullYear() + 1}.`,
+                },
+            ),
         agency: z.string().trim().min(1),
         uploadStatus: z.enum(['idle', 'uploading', 'uploaded', 'error']),
     })
@@ -171,7 +190,7 @@ const reportDetailsSchema = z
         if (!value.uploadedFileName || value.uploadStatus !== 'uploaded') {
             context.addIssue({
                 code: z.ZodIssueCode.custom,
-                message: 'Upload a PDF, DOCX, or DOC report before continuing.',
+                message: 'Upload a PDF report before continuing.',
                 path: ['uploadedFile'],
             });
         }
@@ -181,21 +200,10 @@ const reportDetailsSchema = z
             .pop()
             ?.toLowerCase();
 
-        if (extension && !['pdf', 'docx', 'doc'].includes(extension)) {
+        if (extension && extension !== 'pdf') {
             context.addIssue({
                 code: z.ZodIssueCode.custom,
-                message: 'Supported formats are PDF, DOCX, and DOC.',
-                path: ['uploadedFile'],
-            });
-        }
-
-        if (
-            value.uploadedFileSize &&
-            value.uploadedFileSize > 10 * 1024 * 1024
-        ) {
-            context.addIssue({
-                code: z.ZodIssueCode.custom,
-                message: 'Maximum file size is 10 MB.',
+                message: 'The main report must be a PDF.',
                 path: ['uploadedFile'],
             });
         }
@@ -281,27 +289,60 @@ export const reportStepSchemas = {
                 });
             }
         }),
-    performance: z.object({
-        performanceProjects: z
-            .array(
-                z.object({
-                    id: z.string().min(1),
-                    projectName: z.string().trim().min(1),
-                    targetValue: z.string().max(120).nullable(),
-                    actualValue: z.string().max(120).nullable(),
-                    accomplishmentPercentage: z
-                        .number()
-                        .min(0)
-                        .max(100)
-                        .nullable(),
-                    projectStatus: reportProjectStatusSchema,
-                    remarks: z.string().optional(),
-                }),
-            )
-            .min(1, 'Add at least one project performance row.'),
-        physicalAccomplishmentPercent: z.number().min(0).max(100).nullable(),
-        performanceRemarks: z.string().optional(),
-    }),
+    performance: z
+        .object({
+            performanceProjects: z
+                .array(
+                    z.object({
+                        id: z.string().min(1),
+                        projectName: z.string().trim().min(1),
+                        targetValue: z.string().max(120).nullable(),
+                        actualValue: z.string().max(120).nullable(),
+                        targetNumericValue: z
+                            .number()
+                            .positive('Target must be greater than zero.'),
+                        actualNumericValue: z
+                            .number()
+                            .min(0, 'Actual value cannot be negative.'),
+                        unit: z.string().trim().max(80),
+                        accomplishmentPercentage: z.number().min(0).nullable(),
+                        projectStatus: reportProjectStatusSchema,
+                        remarks: z.string().optional(),
+                    }),
+                )
+                .min(1, 'Add at least one project performance row.'),
+            physicalAccomplishmentPercent: z
+                .number({ message: 'Official accomplishment is required.' })
+                .min(0)
+                .max(100),
+            performanceRemarks: z.string().optional(),
+        })
+        .superRefine((value, context) => {
+            const percentages = value.performanceProjects
+                .map((project) => project.accomplishmentPercentage)
+                .filter(
+                    (percentage): percentage is number => percentage !== null,
+                );
+            const calculated =
+                percentages.length > 0
+                    ? percentages.reduce((total, item) => total + item, 0) /
+                      percentages.length
+                    : null;
+
+            if (
+                calculated !== null &&
+                Math.abs(value.physicalAccomplishmentPercent - calculated) >
+                    5 &&
+                !value.performanceRemarks?.trim()
+            ) {
+                context.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message:
+                        'Explain the difference between official and calculated accomplishment.',
+                    path: ['performanceRemarks'],
+                });
+            }
+        }),
     papClassification: z.object({
         papCategories: z
             .array(z.string())
@@ -316,28 +357,59 @@ export const reportStepSchemas = {
             .min(1, 'Select at least one beneficiary sector.'),
         aiSuggestionApplied: z.boolean(),
     }),
-    financials: z.object({
-        allocatedBudget: z
-            .number()
-            .min(0, 'Allocated budget must be zero or greater.')
-            .nullable(),
-        releasedAmount: z
-            .number()
-            .min(0, 'Released amount must be zero or greater.')
-            .nullable(),
-        obligatedAmount: z
-            .number()
-            .min(0, 'Obligated amount must be zero or greater.')
-            .nullable(),
-        usedBudget: z
-            .number()
-            .min(0, 'Used budget must be zero or greater.')
-            .nullable(),
-        financialAsOfDate: reportDateSchema,
-        remainingBalance: z.number().nullable(),
-        utilizationRate: z.number().nullable(),
-        financialValidated: z.boolean(),
-    }),
+    financials: z
+        .object({
+            allocatedBudget: z
+                .number({ message: 'Allocated budget is required.' })
+                .min(0, 'Allocated budget must be zero or greater.'),
+            releasedAmount: z
+                .number({ message: 'Released amount is required.' })
+                .min(0, 'Released amount must be zero or greater.'),
+            obligatedAmount: z
+                .number({ message: 'Obligated amount is required.' })
+                .min(0, 'Obligated amount must be zero or greater.'),
+            usedBudget: z
+                .number({ message: 'Used budget is required.' })
+                .min(0, 'Used budget must be zero or greater.'),
+            financialAsOfDate: reportDateSchema.refine(
+                (value) => value.trim() !== '',
+                'Financial as-of date is required.',
+            ),
+            remainingBalance: z.number().nullable(),
+            utilizationRate: z.number().nullable(),
+            financialValidated: z.literal(true, {
+                message: 'Enter the required financial amounts.',
+            }),
+        })
+        .superRefine((value, context) => {
+            if (value.releasedAmount > value.allocatedBudget) {
+                context.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: 'Released amount cannot exceed allotted budget.',
+                    path: ['releasedAmount'],
+                });
+            }
+
+            if (value.obligatedAmount > value.allocatedBudget) {
+                context.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: 'Obligated amount cannot exceed allotted budget.',
+                    path: ['obligatedAmount'],
+                });
+            }
+
+            if (
+                value.usedBudget > value.allocatedBudget ||
+                value.usedBudget > value.releasedAmount
+            ) {
+                context.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message:
+                        'Used budget cannot exceed allotted or released amounts.',
+                    path: ['usedBudget'],
+                });
+            }
+        }),
     highlights: z.object({
         highlightTitle: z
             .string()
@@ -347,8 +419,18 @@ export const reportStepSchemas = {
             .string()
             .trim()
             .min(40, 'Description must be at least 40 characters.'),
-        supportingFiles: z.array(z.custom<File>()),
+        supportingFiles: z
+            .array(
+                z.object({
+                    id: z.string().min(1),
+                    name: z.string().min(1),
+                    size: z.number().nonnegative(),
+                    type: z.string().min(1),
+                }),
+            )
+            .max(5),
         featuredHighlight: z.boolean(),
+        uploadError: z.string().nullable().optional(),
     }),
     sdgTagging: z.object({
         selectedSDGs: z

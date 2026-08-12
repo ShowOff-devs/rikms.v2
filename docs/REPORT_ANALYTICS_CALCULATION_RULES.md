@@ -1,6 +1,6 @@
 # RIKMS Report Analytics Calculation Rules
 
-This document defines backend-only calculation rules for Terminal Reports and Project Accomplishment Reports. These rules do not create analytics endpoints, dashboards, charts, exports, or database columns.
+This document defines the canonical calculation rules for Terminal Reports and Project Accomplishment Reports. The backend is authoritative; upload previews mirror the same precedence and averaging behavior.
 
 ## Status Concepts
 
@@ -95,9 +95,15 @@ The persisted `physical_accomplishment_percent` on `research_report_details` is 
 
 When the official value exists, it is returned with `official_value_source = report_detail` and takes precedence over row averages.
 
-When the official value is missing, the service may derive an unweighted average from performance rows that already have explicit `accomplishment_percentage` values. Rows without explicit percentages are ignored.
+When the official value is missing, the service derives an unweighted average from performance rows that have a canonical `accomplishment_percentage`. Rows without percentages are ignored. Both the backend and upload preview round the result to two decimal places.
 
-Textual `target_value` and `actual_value` values are not used to infer accomplishment percentages. They may include business labels such as beneficiaries, sessions, publications, deliverables, or prototypes, and are not reliable numerical sources.
+New performance rows persist `target_numeric_value`, `actual_numeric_value`, and a normalized shared `unit`. The server calculates:
+
+`accomplishment_percentage = actual_numeric_value / target_numeric_value * 100`
+
+The result is rounded to two decimal places and is not capped at 100%. A target must be greater than zero and an actual value must be zero or greater. Client-submitted percentage and status values are ignored and replaced by canonical values.
+
+Legacy textual `target_value` and `actual_value` values are parsed only when each complete string matches a strict number-plus-optional-unit format. Thousands separators are normalized. Both units must match after normalization. Ambiguous text, mismatched units, missing values, negative values, and zero targets remain uncalculable; stale derived values are cleared.
 
 ## Accomplishment Classifications
 
@@ -105,9 +111,9 @@ Textual `target_value` and `actual_value` values are not used to infer accomplis
 - `not_started`: exactly `0%`.
 - `in_progress`: greater than `0%` and below `80%`.
 - `substantially_complete`: `80%` to below `100%`.
-- `complete`: exactly `100%`.
+- `complete`: `100%` or greater.
 
-Backend validation currently permits `0..100`, so values above `100%` are not classified.
+The official report-level value remains constrained to `0..100`; row-derived values preserve legitimate overachievement above `100%`.
 
 ## Legacy Reports
 

@@ -69,8 +69,10 @@ export function NotificationSettingsPanel({
                     <ToggleRow
                         icon={Monitor}
                         label="Browser notifications"
-                        description="Show timely notifications while you are using RIKMS."
+                        description="Browser notifications are not available during the pilot release."
                         checked={notifications.browserNotifications}
+                        disabled
+                        disabledReason="Not available during pilot"
                         onCheckedChange={(checked) =>
                             onNotificationChange(
                                 'browserNotifications',
@@ -80,10 +82,8 @@ export function NotificationSettingsPanel({
                     />
                     <ToggleRow
                         label="Weekly digest"
-                        description="Scheduled delivery is not configured yet."
+                        description="Receive a summary of your agency's research and access-request activity every Monday."
                         checked={notifications.weeklyDigest}
-                        disabled
-                        disabledReason="Not configured"
                         onCheckedChange={(checked) =>
                             onNotificationChange('weeklyDigest', checked)
                         }
@@ -91,10 +91,8 @@ export function NotificationSettingsPanel({
                     <ToggleRow
                         icon={FileBarChart}
                         label="Monthly analytics report"
-                        description="Scheduled analytics email delivery is not configured yet."
+                        description="Receive the previous month's research engagement and access-request metrics on the first day of each month."
                         checked={notifications.monthlyAnalyticsReport}
-                        disabled
-                        disabledReason="Not configured"
                         onCheckedChange={(checked) =>
                             onNotificationChange(
                                 'monthlyAnalyticsReport',

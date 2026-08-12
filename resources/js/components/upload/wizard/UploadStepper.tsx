@@ -1,4 +1,4 @@
-import { Check } from 'lucide-react';
+import { Check, CircleAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { UploadStepId, UploadWizardStep } from '@/types/uploadWizard';
 
@@ -7,6 +7,7 @@ type UploadStepperProps = {
     activeStepId: UploadStepId;
     completedStepIds?: UploadStepId[];
     lockedStepIds?: UploadStepId[];
+    invalidStepIds?: UploadStepId[];
     onStepSelect: (stepId: UploadStepId) => void;
 };
 
@@ -15,6 +16,7 @@ export default function UploadStepper({
     activeStepId,
     completedStepIds = [],
     lockedStepIds = [],
+    invalidStepIds = [],
     onStepSelect,
 }: UploadStepperProps) {
     return (
@@ -27,7 +29,9 @@ export default function UploadStepper({
                     const isComplete = completedStepIds.includes(step.id);
                     const isActive = step.id === activeStepId;
                     const isLocked = lockedStepIds.includes(step.id);
-                    const canSelect = !isLocked && (isActive || isComplete);
+                    const isInvalid = invalidStepIds.includes(step.id);
+                    const canSelect =
+                        !isLocked && (isActive || isComplete || isInvalid);
 
                     return (
                         <div
@@ -40,6 +44,7 @@ export default function UploadStepper({
                                 disabled={!canSelect}
                                 className="group flex min-w-[72px] flex-col items-center gap-1.5 text-center"
                                 aria-current={isActive ? 'step' : undefined}
+                                aria-invalid={isInvalid || undefined}
                             >
                                 <span
                                     className={cn(
@@ -48,12 +53,18 @@ export default function UploadStepper({
                                             'border-[#00a63e] bg-[#00a63e] text-white',
                                         isActive &&
                                             'border-[#1e3a8a] bg-[#1e3a8a] text-white',
+                                        isInvalid &&
+                                            !isActive &&
+                                            'border-[#dc2626] bg-[#fff1f2] text-[#b91c1c]',
                                         !isComplete &&
                                             !isActive &&
+                                            !isInvalid &&
                                             'border-[#d1d5dc] bg-white text-[#99a1af]',
                                     )}
                                 >
-                                    {isComplete ? (
+                                    {isInvalid && !isActive ? (
+                                        <CircleAlert className="size-4" />
+                                    ) : isComplete ? (
                                         <Check className="size-4" />
                                     ) : (
                                         index + 1

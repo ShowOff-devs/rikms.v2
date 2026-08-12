@@ -4,7 +4,9 @@ use App\Models\Agency;
 use App\Models\Research;
 use App\Models\SecurityEvent;
 use App\Models\User;
+use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Inertia\Testing\AssertableInertia as Assert;
 use PragmaRX\Google2FA\Google2FA;
 
@@ -274,6 +276,25 @@ test('portal login endpoints redirect by role and reject wrong portal users', fu
     ])->assertSessionHasErrors('email');
 
     $this->assertGuest();
+});
+
+test('agency login sends verification email for an unverified account', function () {
+    Notification::fake();
+
+    $agency = portalAuditAgency('unverified-login-email');
+    $agencyAdmin = User::factory()->unverified()->create([
+        'agency_id' => $agency->id,
+        'role' => 'agency_admin',
+        'status' => 'active',
+    ]);
+
+    $this->post('/agency/login', [
+        'agency' => $agency->slug,
+        'email' => $agencyAdmin->email,
+        'password' => 'password',
+    ])->assertRedirect('/agency/dashboard');
+
+    Notification::assertSentTo($agencyAdmin, VerifyEmail::class);
 });
 
 test('login failures successes and logout are recorded as security events once', function () {

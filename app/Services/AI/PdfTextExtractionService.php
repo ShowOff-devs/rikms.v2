@@ -20,7 +20,11 @@ class PdfTextExtractionService
             }
 
             $pdf = (new Parser)->parseFile($path);
-            $text = $this->normalizeWhitespace($pdf->getText() ?? '');
+            $text = mb_substr(
+                $this->normalizeWhitespace($pdf->getText() ?? ''),
+                0,
+                max(1000, (int) config('rikms.uploads.pdf_max_text_chars', 200000)),
+            );
 
             if ($text === '') {
                 return $this->failed($method, 'No extractable text was found. The PDF may be scanned or image-only.');

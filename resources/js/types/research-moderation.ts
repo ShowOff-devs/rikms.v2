@@ -1,10 +1,12 @@
 export type ModerationIssueType =
-    | 'duplicate-research'
-    | 'incomplete-metadata'
-    | 'policy-violation'
-    | 'missing-abstract'
-    | 'missing-keywords'
-    | 'incomplete-author-affiliation';
+    | 'incomplete_metadata'
+    | 'metadata_inconsistency'
+    | 'document_file_issue'
+    | 'possible_duplicate'
+    | 'authorship_attribution_concern'
+    | 'privacy_restricted_data_concern'
+    | 'policy_noncompliance'
+    | 'other_manual_review';
 
 export type ModerationStatus =
     | 'pending-review'
@@ -20,13 +22,14 @@ export type FlaggedResearchRecord = {
     uploaderRole?: string;
     officialStatus?: string;
     issueType: ModerationIssueType;
-    year: number;
+    year?: number;
     status: ModerationStatus;
     dateFlagged: string;
     abstract?: string;
     issueDescription?: string;
     recommendedAction?: string;
     authors?: string[];
+    missingMetadataFields?: string[];
 };
 
 export type DuplicateResearchMatch = {
@@ -109,4 +112,5 @@ export type ModerationSummary = {
 export type ModerationActionPayload = {
     note?: string;
     actor?: string;
+    issueType?: ModerationIssueType;
 };

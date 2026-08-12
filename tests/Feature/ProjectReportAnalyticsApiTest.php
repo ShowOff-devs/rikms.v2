@@ -309,6 +309,26 @@ test('AdminAnalytics project reports see regional totals and can filter by agenc
         ->assertJsonPath('data.total_allotted_budget', '100.00');
 });
 
+test('AdminAnalytics project report exports support filtered PDF and CSV downloads', function () {
+    $agency = phase4ReportAgency('export-agency');
+    $agencyAdmin = phase4ReportUser('agency_admin', $agency);
+    $superAdmin = phase4ReportUser('super_admin', null, true);
+    phase4ReportRecord($agency, $agencyAdmin, 'terminal-report', [
+        'title' => 'Exported Terminal Report',
+    ]);
+
+    $pdf = $this->actingAs($superAdmin)
+        ->get('/api/admin/analytics/project-reports/export?format=pdf&report_type=terminal-report');
+    $pdf->assertOk()
+        ->assertHeader('content-type', 'application/pdf');
+    expect($pdf->getContent())->toStartWith('%PDF-');
+
+    $csv = $this->actingAs($superAdmin)
+        ->get('/api/admin/analytics/project-reports/export?format=csv&report_type=terminal-report');
+    $csv->assertOk()->assertHeader('content-type', 'text/csv; charset=UTF-8');
+    expect($csv->streamedContent())->toContain('Exported Terminal Report');
+});
+
 test('AdminAnalytics project report agency comparison aggregates by agency', function () {
     $agency = phase4ReportAgency('phase-four-comparison-a');
     $otherAgency = phase4ReportAgency('phase-four-comparison-b');
@@ -441,7 +461,8 @@ test('ReportAnalytics records endpoint keeps query count bounded after paginatio
         ->assertOk()
         ->assertJsonPath('meta.pagination.per_page', 2);
 
-    expect(count(DB::getQueryLog()))->toBeLessThanOrEqual(8);
+    // Canonical RBAC adds one bounded role lookup to the request middleware.
+    expect(count(DB::getQueryLog()))->toBeLessThanOrEqual(9);
 });
 
 test('ReportAnalytics public resources remain unchanged', function () {

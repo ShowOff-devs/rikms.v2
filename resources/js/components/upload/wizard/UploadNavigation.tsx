@@ -7,7 +7,8 @@ type UploadNavigationProps = {
     canGoBack: boolean;
     canGoNext: boolean;
     draftSavedAt: string | null;
-    draftStatus: 'idle' | 'saving' | 'saved' | 'error';
+    draftStatus: 'idle' | 'loading' | 'unsaved' | 'saving' | 'saved' | 'error';
+    draftError: string | null;
     nextLabel?: string;
     onBack: () => void;
     onNext: () => void;
@@ -21,19 +22,24 @@ export default function UploadNavigation({
     canGoNext,
     draftSavedAt,
     draftStatus,
+    draftError,
     nextLabel = 'Continue',
     onBack,
     onNext,
     onSaveDraft,
 }: UploadNavigationProps) {
     const draftLabel =
-        draftStatus === 'saving'
-            ? 'Saving draft...'
-            : draftStatus === 'error'
-              ? 'Draft save failed'
-              : draftSavedAt
-                ? `Draft saved ${draftSavedAt}`
-                : '';
+        draftStatus === 'loading'
+            ? 'Loading draft...'
+            : draftStatus === 'saving'
+              ? 'Saving draft...'
+              : draftStatus === 'unsaved'
+                ? 'Unsaved changes'
+                : draftStatus === 'error'
+                  ? draftError || 'Draft save failed'
+                  : draftSavedAt
+                    ? `Draft saved ${draftSavedAt}`
+                    : '';
 
     return (
         <div className="mt-4 flex flex-col gap-3 rounded-[14px] border border-[#e5e7eb] bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
@@ -49,7 +55,10 @@ export default function UploadNavigation({
             </Button>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <span className="text-xs font-medium text-[#6a7282]">
+                <span
+                    role={draftStatus === 'error' ? 'alert' : 'status'}
+                    className={`text-xs font-medium ${draftStatus === 'error' ? 'text-[#b91c1c]' : 'text-[#6a7282]'}`}
+                >
                     {currentStepNumber} / {totalSteps}
                     {draftLabel ? ` - ${draftLabel}` : ''}
                 </span>
@@ -57,7 +66,9 @@ export default function UploadNavigation({
                     type="button"
                     variant="outline"
                     className="h-10 rounded-[10px] border-[#d1d5dc]"
-                    disabled={draftStatus === 'saving'}
+                    disabled={
+                        draftStatus === 'saving' || draftStatus === 'loading'
+                    }
                     onClick={onSaveDraft}
                 >
                     <Save className="size-4" />

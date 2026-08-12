@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\MalwareScanException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Agency\DeleteResearchFileRequest;
 use App\Http\Requests\Agency\StoreAgencyResearchRequest;
+use App\Http\Requests\Agency\StoreReportHighlightFileRequest;
 use App\Http\Requests\Agency\StoreResearchFileRequest;
 use App\Http\Requests\Agency\SubmitAgencyResearchRequest;
 use App\Http\Requests\Agency\UpdateAgencyResearchRequest;
@@ -16,25 +18,40 @@ use App\Jobs\ParsePdfDocumentJob;
 use App\Models\Notification;
 use App\Models\Research;
 use App\Models\ResearchFile;
+use App\Models\ResearchReportHighlight;
 use App\Services\AiPipelineResultWriter;
 use App\Services\PlatformSettingsService;
+use App\Services\QuarantinedUploadStorage;
+use App\Services\Reports\PerformanceCalculationService;
+use App\Services\Reports\TerminalReportSubmissionValidator;
+use App\Services\UploadSecurityScanner;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use App\Support\PublicMetadata;
 use App\Support\ResearchSlugger;
+use App\Support\SecurityEventLogger;
 use App\Support\Statuses;
 use App\Support\UserNotificationPreferences;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Throwable;
 
 class AgencyResearchWriteController extends Controller
 {
-    public function __construct(private readonly PlatformSettingsService $settings) {}
+    public function __construct(
+        private readonly PlatformSettingsService $settings,
+        private readonly UploadSecurityScanner $uploadSecurityScanner,
+        private readonly QuarantinedUploadStorage $quarantinedUploadStorage,
+        private readonly PerformanceCalculationService $performanceCalculation,
+        private readonly TerminalReportSubmissionValidator $terminalReportSubmissionValidator,
+    ) {}
 
     public function store(StoreAgencyResearchRequest $request): JsonResponse
     {
@@ -42,6 +59,11 @@ class AgencyResearchWriteController extends Controller
 
         $research = DB::transaction(function () use ($request, $user): Research {
             $validated = $request->validated();
+            $validated['research_owner_name'] = trim((string) ($validated['research_owner_name'] ?? '')) ?: $user->name;
+            $validated['research_owner_email'] = mb_strtolower(trim((string) ($validated['research_owner_email'] ?? ''))) ?: $user->email;
+            $validated['notify_owner_access_requests'] ??= true;
+            $validated['notify_owner_research_inquiries'] ??= false;
+            $validated['send_owner_copy_to_admin'] ??= false;
             $research = Research::create(array_merge(
                 $this->researchPayload($validated),
                 [
@@ -53,7 +75,7 @@ class AgencyResearchWriteController extends Controller
                 ],
             ));
 
-            $this->syncReportData($research, $validated);
+            $this->syncReportData($research, $validated, (int) $user->id);
 
             AuditLogger::record($request, 'research.created', $research, null, $research->only([
                 'id',
@@ -79,6 +101,29 @@ class AgencyResearchWriteController extends Controller
 
     public function update(UpdateAgencyResearchRequest $request, Research $research): JsonResponse
     {
+        $expectedDraftVersion = $request->validated('expected_draft_version');
+        $currentDraftVersion = (int) ($research->reportDetail?->draft_version ?? 0);
+
+        if ($expectedDraftVersion !== null
+            && (int) $expectedDraftVersion !== $currentDraftVersion) {
+            return ApiResponse::error(
+                'This draft was updated in another session. Reload it before saving again.',
+                ['expected_draft_version' => ['The draft has changed since it was loaded.']],
+                409,
+            );
+        }
+
+        $expectedUpdatedAt = $request->validated('expected_updated_at');
+
+        if ($expectedDraftVersion === null && $expectedUpdatedAt
+            && $research->updated_at?->toISOString() !== $expectedUpdatedAt) {
+            return ApiResponse::error(
+                'This draft was updated in another session. Reload it before saving again.',
+                ['expected_updated_at' => ['The draft has changed since it was loaded.']],
+                409,
+            );
+        }
+
         $oldValues = $research->only([
             'title',
             'abstract',
@@ -92,6 +137,11 @@ class AgencyResearchWriteController extends Controller
             'access_level',
             'embargo_until',
             'external_url',
+            'research_owner_name',
+            'research_owner_email',
+            'notify_owner_access_requests',
+            'notify_owner_research_inquiries',
+            'send_owner_copy_to_admin',
         ]);
 
         DB::transaction(function () use ($request, $research, $oldValues): void {
@@ -103,7 +153,7 @@ class AgencyResearchWriteController extends Controller
             }
 
             $research->update($payload);
-            $this->syncReportData($research->refresh(), $validated);
+            $this->syncReportData($research->refresh(), $validated, (int) $request->user()->id);
 
             AuditLogger::record(
                 $request,
@@ -122,6 +172,7 @@ class AgencyResearchWriteController extends Controller
 
     public function submit(SubmitAgencyResearchRequest $request, Research $research): JsonResponse
     {
+        $this->terminalReportSubmissionValidator->validate($research);
         $oldValues = $research->only(['status', 'submitted_at']);
 
         DB::transaction(function () use ($request, $research, $oldValues): void {
@@ -193,6 +244,11 @@ class AgencyResearchWriteController extends Controller
                 'downloads' => 0,
                 'embargo_until' => $research->embargo_until,
                 'external_url' => $research->external_url,
+                'research_owner_name' => $research->research_owner_name,
+                'research_owner_email' => $research->research_owner_email,
+                'notify_owner_access_requests' => $research->notify_owner_access_requests,
+                'notify_owner_research_inquiries' => $research->notify_owner_research_inquiries,
+                'send_owner_copy_to_admin' => $research->send_owner_copy_to_admin,
             ]);
 
             $this->copyReportDataToRevision($research, $revision);
@@ -247,19 +303,91 @@ class AgencyResearchWriteController extends Controller
         }
 
         $storedName = (string) Str::uuid().'.'.$uploadedFile->getClientOriginalExtension();
-        // TODO Phase 9: Move production uploads through quarantine/scanning storage before final private storage.
-        $path = $uploadedFile->storeAs('research/'.$research->id, $storedName, 'local');
+        $quarantineDisk = (string) config('rikms.uploads.quarantine_disk', 'upload_quarantine');
+        $storageDisk = (string) config('rikms.uploads.storage_disk', 'private_uploads');
+        $quarantinePath = $uploadedFile->storeAs('research/quarantine', $storedName, $quarantineDisk);
+
+        try {
+            $scan = $this->uploadSecurityScanner->scanStoredFile($quarantineDisk, $quarantinePath);
+        } catch (Throwable $exception) {
+            $reason = $exception instanceof MalwareScanException ? $exception->reason : 'scan_failed';
+            $this->logScannerFailure($request, $research, $quarantinePath, $reason);
+            $this->cleanupQuarantine($research, $quarantineDisk, $quarantinePath, 'scanner_error');
+            $this->auditRejectedUpload($request, $research, $uploadedFile->getClientOriginalName(), $uploadedFile->getSize(), $checksum, [
+                'status' => 'scanner_error',
+                'engine' => (string) config('rikms.uploads.malware_scanner', 'none'),
+            ]);
+
+            return ApiResponse::error(
+                'The uploaded file could not be accepted because it failed the document safety check.',
+                ['file' => ['The uploaded file could not be accepted because it failed the document safety check.']],
+                422,
+            );
+        }
+
+        if (! $scan['clean']) {
+            Log::warning('Upload rejected after malware detection.', [
+                'event' => 'upload.infected_file',
+                'research_id' => $research->id,
+                'agency_id' => $research->agency_id,
+                'engine' => $scan['engine'],
+                'signature_count' => count($scan['signatures']),
+                'quarantine_path_hash' => hash('sha256', $quarantinePath),
+            ]);
+            $this->cleanupQuarantine($research, $quarantineDisk, $quarantinePath, 'infected');
+            $this->auditRejectedUpload($request, $research, $uploadedFile->getClientOriginalName(), $uploadedFile->getSize(), $checksum, $scan);
+
+            $encrypted = in_array('encrypted-pdf', $scan['signatures'], true);
+
+            return ApiResponse::error(
+                $encrypted
+                    ? 'Password-protected or encrypted PDFs are not supported during the pilot release.'
+                    : 'The uploaded file could not be accepted because it failed the document safety check.',
+                ['file' => [$encrypted
+                    ? 'Password-protected or encrypted PDFs are not supported during the pilot release.'
+                    : 'The uploaded file could not be accepted because it failed the document safety check.']],
+                422,
+            );
+        }
+
+        $path = 'research/'.$research->id.'/'.$storedName;
+
+        if (! $this->quarantinedUploadStorage->promote($quarantineDisk, $quarantinePath, $storageDisk, $path)) {
+            Log::error('Clean upload could not be promoted from quarantine.', [
+                'event' => 'upload.promotion_failed',
+                'research_id' => $research->id,
+                'agency_id' => $research->agency_id,
+                'quarantine_disk' => $quarantineDisk,
+                'storage_disk' => $storageDisk,
+                'quarantine_path_hash' => hash('sha256', $quarantinePath),
+                'destination_path_hash' => hash('sha256', $path),
+            ]);
+            $this->cleanupQuarantine($research, $quarantineDisk, $quarantinePath, 'promotion_failed');
+
+            AuditLogger::record($request, 'research_file.storage_failed', null, null, null, [
+                'research_id' => $research->id,
+                'agency_id' => $research->agency_id,
+                'original_name' => $uploadedFile->getClientOriginalName(),
+                'checksum' => $checksum,
+            ]);
+
+            return ApiResponse::error(
+                'The uploaded PDF could not be stored safely. Please try again.',
+                ['file' => ['The uploaded PDF could not be stored safely. Please try again.']],
+                500,
+            );
+        }
 
         $aiEnabled = $this->settings->aiProcessingEnabled();
 
-        $researchFile = DB::transaction(function () use ($request, $research, $uploadedFile, $checksum, $storedName, $path, $aiEnabled): ResearchFile {
+        $researchFile = DB::transaction(function () use ($request, $research, $uploadedFile, $checksum, $storedName, $storageDisk, $path, $scan, $aiEnabled): ResearchFile {
             $researchFile = ResearchFile::create([
                 'research_id' => $research->id,
                 'agency_id' => $research->agency_id,
                 'uploaded_by' => $request->user()->id,
                 'original_name' => $uploadedFile->getClientOriginalName(),
                 'stored_name' => $storedName,
-                'disk' => 'local',
+                'disk' => $storageDisk,
                 'path' => $path,
                 'mime_type' => $uploadedFile->getMimeType(),
                 'extension' => $uploadedFile->getClientOriginalExtension(),
@@ -270,6 +398,13 @@ class AgencyResearchWriteController extends Controller
                 'access_level' => $request->validated('access_level', 'restricted'),
                 'status' => 'active',
                 'metadata' => [
+                    'security_scan' => [
+                        'status' => 'passed',
+                        'engine' => $scan['engine'],
+                        'signatures' => $scan['signatures'],
+                        'scanned_at' => $scan['scanned_at'],
+                        'malware_scanner' => $scan['malware_scanner'],
+                    ],
                     'ai_processing' => $aiEnabled
                         ? [
                             'pdf_parsing' => ['status' => 'queued'],
@@ -330,7 +465,7 @@ class AgencyResearchWriteController extends Controller
             return ApiResponse::error('This research record is outside your agency scope.', [], 403);
         }
 
-        if ($file->archived_at !== null || $file->status === 'deleted') {
+        if ($file->archived_at !== null || $file->status !== 'active') {
             return ApiResponse::error('This research file is not available for download.', [], 404);
         }
 
@@ -339,6 +474,127 @@ class AgencyResearchWriteController extends Controller
         }
 
         return Storage::disk($file->disk)->download($file->path, $file->original_name);
+    }
+
+    public function storeHighlightFile(
+        StoreReportHighlightFileRequest $request,
+        Research $research,
+        ResearchReportHighlight $highlight,
+    ): JsonResponse {
+        if ((int) $highlight->research_id !== (int) $research->id) {
+            return ApiResponse::error('The highlight does not belong to this report.', [], 404);
+        }
+
+        if ($highlight->files()->count() >= StoreReportHighlightFileRequest::MAX_FILES) {
+            return ApiResponse::error(
+                'A highlight may have at most '.StoreReportHighlightFileRequest::MAX_FILES.' supporting files.',
+                ['file' => ['Remove a supporting file before uploading another.']],
+                422,
+            );
+        }
+
+        $uploadedFile = $request->file('file');
+        $checksum = hash_file('sha256', $uploadedFile->getRealPath());
+
+        if ($highlight->files()->where('checksum', $checksum)->exists()) {
+            return ApiResponse::error(
+                'This supporting file has already been uploaded.',
+                ['file' => ['This supporting file has already been uploaded.']],
+                422,
+            );
+        }
+
+        $extension = mb_strtolower($uploadedFile->getClientOriginalExtension());
+        $storedName = (string) Str::uuid().'.'.$extension;
+        $quarantineDisk = (string) config('rikms.uploads.quarantine_disk', 'upload_quarantine');
+        $storageDisk = (string) config('rikms.uploads.storage_disk', 'private_uploads');
+        $quarantinePath = $uploadedFile->storeAs('research/quarantine', $storedName, $quarantineDisk);
+
+        try {
+            $scan = $this->uploadSecurityScanner->scanStoredFile($quarantineDisk, $quarantinePath);
+        } catch (Throwable $exception) {
+            $reason = $exception instanceof MalwareScanException ? $exception->reason : 'scan_failed';
+            $this->logScannerFailure($request, $research, $quarantinePath, $reason);
+            $this->cleanupQuarantine($research, $quarantineDisk, $quarantinePath, 'scanner_error');
+
+            return ApiResponse::error(
+                'The supporting file failed the document safety check.',
+                ['file' => ['The supporting file failed the document safety check.']],
+                422,
+            );
+        }
+
+        if (! $scan['clean']) {
+            $this->cleanupQuarantine($research, $quarantineDisk, $quarantinePath, 'infected');
+            $this->auditRejectedUpload($request, $research, $uploadedFile->getClientOriginalName(), $uploadedFile->getSize(), $checksum, $scan);
+
+            return ApiResponse::error(
+                'The supporting file failed the document safety check.',
+                ['file' => ['The supporting file failed the document safety check.']],
+                422,
+            );
+        }
+
+        $path = 'research/'.$research->id.'/highlights/'.$highlight->id.'/'.$storedName;
+
+        if (! $this->quarantinedUploadStorage->promote($quarantineDisk, $quarantinePath, $storageDisk, $path)) {
+            $this->cleanupQuarantine($research, $quarantineDisk, $quarantinePath, 'promotion_failed');
+
+            return ApiResponse::error(
+                'The supporting file could not be stored safely.',
+                ['file' => ['The supporting file could not be stored safely.']],
+                500,
+            );
+        }
+
+        try {
+            $researchFile = DB::transaction(function () use ($request, $research, $highlight, $uploadedFile, $checksum, $storedName, $extension, $storageDisk, $path, $scan): ResearchFile {
+                $file = ResearchFile::create([
+                    'research_id' => $research->id,
+                    'report_highlight_id' => $highlight->id,
+                    'agency_id' => $research->agency_id,
+                    'uploaded_by' => $request->user()->id,
+                    'original_name' => $uploadedFile->getClientOriginalName(),
+                    'stored_name' => $storedName,
+                    'disk' => $storageDisk,
+                    'path' => $path,
+                    'mime_type' => $uploadedFile->getMimeType(),
+                    'extension' => $extension,
+                    'size_bytes' => $uploadedFile->getSize(),
+                    'checksum' => $checksum,
+                    'file_type' => 'report-highlight-supporting',
+                    'visibility' => 'private',
+                    'access_level' => 'restricted',
+                    'status' => 'active',
+                    'metadata' => [
+                        'security_scan' => [
+                            'status' => 'passed',
+                            'engine' => $scan['engine'],
+                            'signatures' => $scan['signatures'],
+                            'scanned_at' => $scan['scanned_at'],
+                            'malware_scanner' => $scan['malware_scanner'],
+                        ],
+                    ],
+                    'uploaded_at' => now(),
+                ]);
+
+                AuditLogger::record($request, 'report_highlight_file.uploaded', $file, null, $file->only([
+                    'id', 'research_id', 'report_highlight_id', 'agency_id', 'original_name', 'checksum', 'status',
+                ]));
+
+                return $file;
+            });
+        } catch (Throwable $exception) {
+            Storage::disk($storageDisk)->delete($path);
+            throw $exception;
+        }
+
+        return ApiResponse::success(
+            'Highlight supporting file uploaded.',
+            (new ResearchFileResource($researchFile))->resolve($request),
+            [],
+            201,
+        );
     }
 
     public function destroyFile(DeleteResearchFileRequest $request, Research $research, ResearchFile $file): JsonResponse
@@ -407,13 +663,18 @@ class AgencyResearchWriteController extends Controller
             'access_level',
             'embargo_until',
             'external_url',
+            'research_owner_name',
+            'research_owner_email',
+            'notify_owner_access_requests',
+            'notify_owner_research_inquiries',
+            'send_owner_copy_to_admin',
         ])->all();
     }
 
     /**
      * @param  array<string, mixed>  $validated
      */
-    private function syncReportData(Research $research, array $validated): void
+    private function syncReportData(Research $research, array $validated, ?int $actorId = null): void
     {
         if (! $this->isReportResearch($research)) {
             return;
@@ -431,10 +692,16 @@ class AgencyResearchWriteController extends Controller
                     'utilized_amount',
                     'physical_accomplishment_percent',
                     'financial_as_of_date',
+                    'pap_categories',
+                    'pap_description',
+                    'beneficiary_sectors',
+                    'performance_remarks',
+                    'last_wizard_step',
                 ])
                 ->all();
 
             if ($detailPayload !== []) {
+                $detailPayload['draft_version'] = (int) ($research->reportDetail?->draft_version ?? 0) + 1;
                 $research->reportDetail()->updateOrCreate([], $detailPayload);
             }
         }
@@ -451,11 +718,15 @@ class AgencyResearchWriteController extends Controller
                     continue;
                 }
 
-                $payload = collect($item)
+                $canonical = $this->performanceCalculation->canonicalize($item);
+                $payload = collect($canonical)
                     ->only([
                         'project_name',
                         'target_value',
                         'actual_value',
+                        'target_numeric_value',
+                        'actual_numeric_value',
+                        'unit',
                         'accomplishment_percentage',
                         'project_status',
                         'remarks',
@@ -467,17 +738,120 @@ class AgencyResearchWriteController extends Controller
                 ]));
             }
         }
+
+        if (array_key_exists('report_highlights', $validated) && is_array($validated['report_highlights'])) {
+            $retainedIds = [];
+
+            foreach (array_values($validated['report_highlights']) as $index => $highlight) {
+                if (! is_array($highlight) || $this->isBlankHighlight($highlight)) {
+                    continue;
+                }
+
+                $payload = collect($highlight)->only([
+                    'title',
+                    'description',
+                    'is_featured',
+                    'sort_order',
+                ])->all();
+                $payload['sort_order'] = (int) ($highlight['sort_order'] ?? $index);
+                $highlightId = $highlight['id'] ?? null;
+
+                if ($highlightId !== null) {
+                    $record = $research->reportHighlights()->whereKey($highlightId)->first();
+
+                    if (! $record) {
+                        throw ValidationException::withMessages([
+                            'report_highlights' => ['A highlight does not belong to this report.'],
+                        ]);
+                    }
+
+                    $record->update($payload);
+                } else {
+                    $record = $research->reportHighlights()->create($payload);
+                }
+
+                $retainedIds[] = (int) $record->id;
+            }
+
+            $research->reportHighlights()
+                ->when($retainedIds !== [], fn ($query) => $query->whereNotIn('id', $retainedIds))
+                ->get()
+                ->each(function (ResearchReportHighlight $highlight) use ($actorId): void {
+                    $highlight->files()->update([
+                        'status' => 'archived',
+                        'archived_at' => now(),
+                        'archived_by' => $actorId,
+                        'archive_reason' => 'Highlight removed from report draft.',
+                    ]);
+                    $highlight->delete();
+                });
+        }
     }
 
-    /**
-     * @param  array<string, mixed>  $item
-     */
+    private function auditRejectedUpload(
+        Request $request,
+        Research $research,
+        string $originalName,
+        int $size,
+        string $checksum,
+        array $scan,
+    ): void {
+        $metadata = [
+            'research_id' => $research->id,
+            'agency_id' => $research->agency_id,
+            'original_name' => $originalName,
+            'size_bytes' => $size,
+            'checksum' => $checksum,
+            'security_scan' => $scan,
+        ];
+
+        AuditLogger::record($request, 'research_file.security_rejected', null, null, null, $metadata);
+        SecurityEventLogger::record($request, 'upload.security_rejected', $request->user(), 'high', $metadata);
+    }
+
+    private function cleanupQuarantine(Research $research, string $disk, string $path, string $reason): void
+    {
+        if ($this->quarantinedUploadStorage->cleanup($disk, $path)) {
+            return;
+        }
+
+        Log::warning('Quarantined upload cleanup failed.', [
+            'event' => 'upload.quarantine_cleanup_failed',
+            'research_id' => $research->id,
+            'agency_id' => $research->agency_id,
+            'disk' => $disk,
+            'reason' => $reason,
+            'quarantine_path_hash' => hash('sha256', $path),
+        ]);
+    }
+
+    private function logScannerFailure(Request $request, Research $research, string $path, string $reason): void
+    {
+        $context = [
+            'event' => $reason === 'unavailable' ? 'upload.scanner_unavailable' : 'upload.scan_failed',
+            'research_id' => $research->id,
+            'agency_id' => $research->agency_id,
+            'user_id' => $request->user()?->id,
+            'scanner' => (string) config('rikms.uploads.malware_scanner', 'unknown'),
+            'reason' => $reason,
+            'quarantine_path_hash' => hash('sha256', $path),
+        ];
+
+        Log::warning(
+            $reason === 'unavailable' ? 'Malware scanner unavailable.' : 'Malware scan failed.',
+            $context,
+        );
+    }
+
     private function isBlankPerformanceItem(array $item): bool
     {
         foreach ([
             'project_name',
             'target_value',
             'actual_value',
+            'target_numeric_value',
+            'actual_numeric_value',
+            'unit',
             'accomplishment_percentage',
             'remarks',
         ] as $key) {
@@ -495,6 +869,18 @@ class AgencyResearchWriteController extends Controller
         return true;
     }
 
+    /**
+     * @param  array<string, mixed>  $highlight
+     */
+    private function isBlankHighlight(array $highlight): bool
+    {
+        return collect(['title', 'description'])->every(function (string $key) use ($highlight): bool {
+            $value = $highlight[$key] ?? null;
+
+            return $value === null || (is_string($value) && trim($value) === '');
+        });
+    }
+
     private function isReportResearch(Research $research): bool
     {
         $category = str((string) $research->category)->lower()->toString();
@@ -510,7 +896,7 @@ class AgencyResearchWriteController extends Controller
 
     private function copyReportDataToRevision(Research $source, Research $revision): void
     {
-        $source->loadMissing(['reportDetail', 'performanceItems']);
+        $source->loadMissing(['reportDetail', 'performanceItems', 'reportHighlights.files']);
 
         if ($source->reportDetail) {
             $revision->reportDetail()->create($source->reportDetail->only([
@@ -523,6 +909,11 @@ class AgencyResearchWriteController extends Controller
                 'utilized_amount',
                 'physical_accomplishment_percent',
                 'financial_as_of_date',
+                'pap_categories',
+                'pap_description',
+                'beneficiary_sectors',
+                'performance_remarks',
+                'last_wizard_step',
             ]));
         }
 
@@ -531,18 +922,53 @@ class AgencyResearchWriteController extends Controller
                 'project_name',
                 'target_value',
                 'actual_value',
+                'target_numeric_value',
+                'actual_numeric_value',
+                'unit',
                 'accomplishment_percentage',
                 'project_status',
                 'remarks',
                 'sort_order',
             ]));
         });
+
+        $source->reportHighlights->each(function (ResearchReportHighlight $highlight) use ($revision): void {
+            $revisionHighlight = $revision->reportHighlights()->create($highlight->only([
+                'title',
+                'description',
+                'is_featured',
+                'sort_order',
+            ]));
+
+            $highlight->files->each(function (ResearchFile $file) use ($revision, $revisionHighlight): void {
+                $revision->files()->create(array_merge($file->only([
+                    'agency_id',
+                    'uploaded_by',
+                    'original_name',
+                    'stored_name',
+                    'disk',
+                    'path',
+                    'mime_type',
+                    'extension',
+                    'size_bytes',
+                    'checksum',
+                    'file_type',
+                    'visibility',
+                    'access_level',
+                    'status',
+                    'metadata',
+                    'uploaded_at',
+                ]), [
+                    'report_highlight_id' => $revisionHighlight->id,
+                ]));
+            });
+        });
     }
 
     private function loadResearchResponseRelations(Research $research): Research
     {
         return Research::query()
-            ->with(['agency', 'uploader', 'reportDetail', 'performanceItems'])
+            ->with(['agency', 'uploader', 'latestModerationDecision.reviewer', 'files', 'reportDetail', 'performanceItems', 'reportHighlights.files'])
             ->findOrFail($research->id);
     }
 

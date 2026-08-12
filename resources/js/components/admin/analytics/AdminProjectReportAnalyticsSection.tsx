@@ -3,6 +3,7 @@ import {
     BarChart3,
     Building2,
     ClipboardCheck,
+    Download,
     FileCheck2,
     FileText,
     FolderOpen,
@@ -29,6 +30,7 @@ import {
     getAdminProjectReportRecords,
     getAdminProjectReportStatusAnalytics,
     getAdminProjectReportSummary,
+    exportAdminProjectReportAnalytics,
 } from '@/lib/analytics/project-report-analytics-service';
 import type {
     AccomplishmentClassification,
@@ -145,6 +147,10 @@ export function AdminProjectReportAnalyticsSection() {
     const [agencyFilterOptions, setAgencyFilterOptions] = useState<
         ProjectReportAgencyComparison[]
     >([]);
+    const [exportingFormat, setExportingFormat] = useState<
+        'pdf' | 'csv' | null
+    >(null);
+    const [exportMessage, setExportMessage] = useState('');
 
     useEffect(() => {
         const controller = new AbortController();
@@ -372,30 +378,81 @@ export function AdminProjectReportAnalyticsSection() {
         setPage(nextPage);
     };
 
+    const exportReport = async (format: 'pdf' | 'csv') => {
+        setExportingFormat(format);
+        setExportMessage('');
+
+        try {
+            const result = await exportAdminProjectReportAnalytics(
+                filters,
+                format,
+            );
+            setExportMessage(`${result.fileName} is ready.`);
+        } catch {
+            setExportMessage(
+                'Project report analytics could not be exported. Please try again.',
+            );
+        } finally {
+            setExportingFormat(null);
+        }
+    };
+
     return (
         <section
             className="space-y-5"
             aria-labelledby="admin-project-report-heading"
         >
-            <div>
-                <div className="flex items-center gap-2 text-xs font-medium text-[#6a7282]">
-                    <span>Super Admin</span>
-                    <span className="text-[#99a1af]">/</span>
-                    <span className="text-[#1e3a8a]">
-                        Terminal and Accomplishment Reports
-                    </span>
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                    <div className="flex items-center gap-2 text-xs font-medium text-[#6a7282]">
+                        <span>Super Admin</span>
+                        <span className="text-[#99a1af]">/</span>
+                        <span className="text-[#1e3a8a]">
+                            Terminal and Accomplishment Reports
+                        </span>
+                    </div>
+                    <h2
+                        id="admin-project-report-heading"
+                        className="mt-2 text-[22px] leading-8 font-bold text-[#1e3a8a]"
+                    >
+                        Project Report Analytics
+                    </h2>
+                    <p className="mt-1 max-w-[780px] text-sm leading-5 text-[#6a7282]">
+                        Regional read-only metrics for Terminal Reports and
+                        Project Accomplishment Reports across agencies.
+                    </p>
                 </div>
-                <h2
-                    id="admin-project-report-heading"
-                    className="mt-2 text-[22px] leading-8 font-bold text-[#1e3a8a]"
-                >
-                    Project Report Analytics
-                </h2>
-                <p className="mt-1 max-w-[780px] text-sm leading-5 text-[#6a7282]">
-                    Regional read-only metrics for Terminal Reports and Project
-                    Accomplishment Reports across agencies.
-                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                        type="button"
+                        onClick={() => exportReport('pdf')}
+                        disabled={exportingFormat !== null}
+                        className="bg-[#1e3a8a] text-white hover:bg-[#172554]"
+                    >
+                        <Download className="size-4" aria-hidden="true" />
+                        {exportingFormat === 'pdf'
+                            ? 'Exporting PDF...'
+                            : 'Export PDF'}
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => exportReport('csv')}
+                        disabled={exportingFormat !== null}
+                    >
+                        <Download className="size-4" aria-hidden="true" />
+                        {exportingFormat === 'csv'
+                            ? 'Exporting CSV...'
+                            : 'Export CSV'}
+                    </Button>
+                </div>
             </div>
+
+            {exportMessage ? (
+                <p className="text-sm text-[#4a5565]" role="status">
+                    {exportMessage}
+                </p>
+            ) : null}
 
             <ProjectReportFilters
                 filters={filters}

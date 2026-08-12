@@ -124,6 +124,7 @@ export const createInitialUploadState = (): AgencyUploadState => ({
     metadata: [],
     aiSuggestedSdgs: [],
     aiSdgResultAvailable: false,
+    researchCategory: '',
     selectedSdgs: [],
     accessType: 'public',
     embargoDate: '',

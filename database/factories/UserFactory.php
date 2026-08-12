@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -16,6 +17,27 @@ class UserFactory extends Factory
      * The current password being used by the factory.
      */
     protected static ?string $password;
+
+    public function configure(): static
+    {
+        return $this->afterCreating(function (User $user): void {
+            if (! $user->role || $user->roles()->exists()) {
+                return;
+            }
+
+            $role = Role::query()->firstOrCreate(
+                ['slug' => $user->role],
+                [
+                    'name' => str($user->role)->replace('_', ' ')->title(),
+                    'display_name' => str($user->role)->replace('_', ' ')->title(),
+                    'is_system' => in_array($user->role, ['super_admin', 'agency_admin', 'public_user'], true),
+                    'is_active' => true,
+                ],
+            );
+
+            $user->roles()->attach($role, ['assigned_at' => now()]);
+        });
+    }
 
     /**
      * Define the model's default state.

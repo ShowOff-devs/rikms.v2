@@ -6,6 +6,7 @@ import {
     CheckCircle2,
     ChevronRight,
     FileText,
+    FileWarning,
     Home,
     Search,
     Settings,
@@ -14,6 +15,10 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import AgencyAdminLayout from '@/components/agency/AgencyAdminLayout';
+import {
+    moderationIssueTypeLabels,
+    normalizeModerationIssueType,
+} from '@/data/research-moderation-options';
 import { useAgencySession } from '@/lib/auth/agency-auth';
 import {
     getAgencyNotifications,
@@ -33,6 +38,7 @@ const filterOptions: Array<{ label: string; value: NotificationFilter }> = [
     { label: 'Unread', value: 'unread' },
     { label: 'Uploads', value: 'upload' },
     { label: 'Access Requests', value: 'access-request' },
+    { label: 'Revisions', value: 'revision-request' },
     { label: 'Archive', value: 'archive' },
     { label: 'Analytics', value: 'analytics' },
     { label: 'Settings', value: 'settings' },
@@ -51,6 +57,11 @@ const notificationTypeDisplay: Record<
         label: 'Access Request',
         icon: ShieldCheck,
         className: 'bg-[#f0fdf4] text-[#008236]',
+    },
+    'revision-request': {
+        label: 'Revision Request',
+        icon: FileWarning,
+        className: 'bg-[#fff7ed] text-[#c2410c]',
     },
     archive: {
         label: 'Archive',
@@ -342,6 +353,18 @@ function NotificationItem({
                     <p className="mt-1 text-sm leading-6 text-[#6a7282]">
                         {notification.message}
                     </p>
+                    {notification.concernType ? (
+                        <p className="mt-2 text-xs font-semibold text-[#9a3412]">
+                            Concern Type:{' '}
+                            {
+                                moderationIssueTypeLabels[
+                                    normalizeModerationIssueType(
+                                        notification.concernType,
+                                    )
+                                ]
+                            }
+                        </p>
+                    ) : null}
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2 md:justify-end">
                     <button

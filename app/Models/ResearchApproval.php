@@ -10,6 +10,7 @@ class ResearchApproval extends Model
         'research_id',
         'reviewed_by',
         'status',
+        'issue_type',
         'remarks',
         'reviewed_at',
     ];

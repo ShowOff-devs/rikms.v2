@@ -258,9 +258,9 @@ Future backend API mapping:
 - `resources/js/lib/analytics/analytics-service.ts` -> `/api/agency/analytics`
 - `resources/js/lib/agency-profile/agency-profile-service.ts` -> `/api/agency/profile`
 - `resources/js/lib/settings/settings-service.ts` -> `/api/agency/settings`
-- `resources/js/lib/upload/services/mock-research-upload-service.ts` -> `/api/agency/uploads/research`
-- `resources/js/lib/upload/services/mock-report-upload-service.ts` -> `/api/agency/uploads/reports`
-- `resources/js/lib/upload/services/mock-ai-metadata-service.ts` -> future async AI metadata job endpoints backed by relational file IDs and MongoDB AI payloads
+- `resources/js/lib/agency/agency-upload-service.ts` and `resources/js/components/agency/UploadResearchWizard.tsx` -> agency research/file APIs
+- `resources/js/lib/upload/services/report-upload-service.ts` -> agency report research/file APIs
+- `resources/js/lib/agency/agency-ai-results-service.ts` -> async AI metadata/SDG result APIs backed by relational file IDs and MongoDB AI payloads
 - `resources/js/lib/admin/agencies-service.ts` -> `/api/admin/agencies`
 - `resources/js/lib/admin/agency-admin-users-service.ts` -> `/api/admin/agency-admin-users`
 - `resources/js/lib/admin/rbac-service.ts` -> `/api/admin/rbac`

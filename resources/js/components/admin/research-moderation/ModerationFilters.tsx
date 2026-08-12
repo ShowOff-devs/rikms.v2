@@ -88,10 +88,10 @@ export function ModerationFilters({
                 }
             >
                 <SelectTrigger className="h-10 rounded-[10px] border-[#e5e7eb] text-[#4a5565]">
-                    <SelectValue placeholder="Issue Type" />
+                    <SelectValue placeholder="Concern Type" />
                 </SelectTrigger>
                 <SelectContent>
-                    <SelectItem value="all">All Issues</SelectItem>
+                    <SelectItem value="all">All Concerns</SelectItem>
                     {issueTypes.map(([value, label]) => (
                         <SelectItem key={value} value={value}>
                             {label}

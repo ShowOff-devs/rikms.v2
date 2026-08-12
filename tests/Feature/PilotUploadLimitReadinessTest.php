@@ -1,5 +1,7 @@
 <?php
 
+use App\Contracts\MalwareScanner;
+use App\Exceptions\MalwareScanException;
 use App\Jobs\ClassifyResearchSdgJob;
 use App\Jobs\ExtractResearchMetadataJob;
 use App\Jobs\ParsePdfDocumentJob;
@@ -10,9 +12,11 @@ use App\Models\ResearchFile;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\PlatformSettingsService;
+use App\Services\QuarantinedUploadStorage;
 use App\Services\UploadLimitService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -210,6 +214,29 @@ test('invalid PDFs are rejected without records or AI jobs', function (UploadedF
     'corrupt PDF' => fn () => UploadedFile::fake()->createWithContent('corrupt.pdf', "%PDF-1.4\nnot a complete pdf"),
 ]);
 
+test('PDF with a known malware test signature is rejected and quarantine is cleared', function () {
+    Bus::fake();
+    Storage::fake('local');
+    pilotUploadSet(PlatformSettingsService::AI_PROCESSING_ENABLED, true);
+    [$agency, $user, $research] = pilotUploadContext('pilot-upload-malware');
+    $content = "%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n"
+        .'X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'
+        .str_repeat("\n", 2048)
+        ."\ntrailer\n<<>>\n%%EOF\n";
+
+    $this->actingAs($user)
+        ->postJson("/api/agency/research/{$research->id}/files", [
+            'file' => UploadedFile::fake()->createWithContent('infected.pdf', $content),
+        ])
+        ->assertUnprocessable()
+        ->assertJsonPath('message', 'The uploaded file could not be accepted because it failed the document safety check.')
+        ->assertJsonValidationErrors(['file']);
+
+    expect(ResearchFile::query()->where('agency_id', $agency->id)->count())->toBe(0)
+        ->and(Storage::disk('local')->allFiles('research/quarantine'))->toBe([]);
+    pilotUploadAssertNoAiJobs();
+});
+
 test('filename with spaces and unicode is stored exactly', function () {
     Bus::fake();
     Storage::fake('local');
@@ -272,4 +299,196 @@ test('upload during disabled AI processing stores skipped AI status and dispatch
         ->and($file->metadata['ai_processing']['sdg_classification']['status'])->toBe('skipped');
 
     pilotUploadAssertNoAiJobs();
+});
+
+test('fake malware scanner mode is explicitly recorded during testing', function () {
+    Bus::fake();
+    Storage::fake('local');
+    pilotUploadSet(PlatformSettingsService::AI_PROCESSING_ENABLED, false);
+    [, $user, $research] = pilotUploadContext('pilot-upload-none-scanner');
+
+    $this->actingAs($user)->postJson("/api/agency/research/{$research->id}/files", [
+        'file' => testPdfUpload('none-scanner.pdf', 64),
+    ])->assertCreated();
+
+    $file = ResearchFile::query()->where('research_id', $research->id)->firstOrFail();
+    expect($file->metadata['security_scan']['malware_scanner'])
+        ->toBe(['active' => true, 'engine' => 'fake']);
+});
+
+test('encrypted PDFs are rejected and audited without permanent promotion', function () {
+    Bus::fake();
+    Storage::fake('local');
+    [$agency, $user, $research] = pilotUploadContext('pilot-upload-encrypted');
+    $content = "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Encrypt 2 0 R >>\nendobj\n"
+        .str_repeat("\n", 2048)
+        ."trailer\n<<>>\n%%EOF\n";
+
+    $this->actingAs($user)->postJson("/api/agency/research/{$research->id}/files", [
+        'file' => UploadedFile::fake()->createWithContent('encrypted.pdf', $content),
+    ])->assertUnprocessable()
+        ->assertJsonPath('message', 'Password-protected or encrypted PDFs are not supported during the pilot release.');
+
+    expect(ResearchFile::query()->where('agency_id', $agency->id)->count())->toBe(0)
+        ->and(Storage::disk('local')->allFiles('research/quarantine'))->toBe([])
+        ->and(Storage::disk('local')->allFiles("research/{$research->id}"))->toBe([]);
+    $this->assertDatabaseHas('audit_logs', ['event' => 'research_file.security_rejected']);
+    $this->assertDatabaseHas('security_events', ['event_type' => 'upload.security_rejected']);
+});
+
+test('malware scanner failures fail closed and do not promote the upload', function () {
+    Bus::fake();
+    Log::spy();
+    Storage::fake('local');
+    $this->app->instance(MalwareScanner::class, new class implements MalwareScanner
+    {
+        public function scan(string $absolutePath): array
+        {
+            throw new MalwareScanException('unavailable');
+        }
+    });
+    [$agency, $user, $research] = pilotUploadContext('pilot-upload-scanner-failure');
+
+    $this->actingAs($user)->postJson("/api/agency/research/{$research->id}/files", [
+        'file' => testPdfUpload('scanner-failure.pdf', 64),
+    ])->assertUnprocessable()
+        ->assertJsonPath('message', 'The uploaded file could not be accepted because it failed the document safety check.');
+
+    expect(ResearchFile::query()->where('agency_id', $agency->id)->count())->toBe(0)
+        ->and(Storage::disk('local')->allFiles())->toBe([]);
+    Log::shouldHaveReceived('warning')->withArgs(fn (string $message, array $context): bool => $message === 'Malware scanner unavailable.'
+        && $context['event'] === 'upload.scanner_unavailable'
+        && $context['reason'] === 'unavailable'
+        && ! array_key_exists('exception', $context));
+});
+
+test('scanner timeout fails closed with a safe response and sanitized log', function () {
+    Bus::fake();
+    Log::spy();
+    Storage::fake('local');
+    $this->app->instance(MalwareScanner::class, new class implements MalwareScanner
+    {
+        public function scan(string $absolutePath): array
+        {
+            throw new MalwareScanException('timeout');
+        }
+    });
+    [$agency, $user, $research] = pilotUploadContext('pilot-upload-scanner-timeout');
+
+    $this->actingAs($user)->postJson("/api/agency/research/{$research->id}/files", [
+        'file' => testPdfUpload('scanner-timeout.pdf', 64),
+    ])->assertUnprocessable()
+        ->assertJsonPath('message', 'The uploaded file could not be accepted because it failed the document safety check.');
+
+    expect(ResearchFile::query()->where('agency_id', $agency->id)->count())->toBe(0)
+        ->and(Storage::disk('local')->allFiles())->toBe([]);
+    Log::shouldHaveReceived('warning')->withArgs(fn (string $message, array $context): bool => $message === 'Malware scan failed.'
+        && $context['event'] === 'upload.scan_failed'
+        && $context['reason'] === 'timeout'
+        && ! array_key_exists('exception', $context));
+});
+
+test('malformed scanner response fails closed', function () {
+    Bus::fake();
+    Storage::fake('local');
+    $this->app->instance(MalwareScanner::class, new class implements MalwareScanner
+    {
+        public function scan(string $absolutePath): array
+        {
+            return ['clean' => 'yes', 'active' => true, 'engine' => '', 'signatures' => 'none'];
+        }
+    });
+    [$agency, $user, $research] = pilotUploadContext('pilot-upload-malformed-scanner');
+
+    $this->actingAs($user)->postJson("/api/agency/research/{$research->id}/files", [
+        'file' => testPdfUpload('malformed-response.pdf', 64),
+    ])->assertUnprocessable()
+        ->assertJsonPath('message', 'The uploaded file could not be accepted because it failed the document safety check.');
+
+    expect(ResearchFile::query()->where('agency_id', $agency->id)->count())->toBe(0)
+        ->and(Storage::disk('local')->allFiles())->toBe([]);
+});
+
+test('infected scanner result is rejected and never promoted', function () {
+    Bus::fake();
+    Storage::fake('local');
+    $this->app->instance(MalwareScanner::class, new class implements MalwareScanner
+    {
+        public function scan(string $absolutePath): array
+        {
+            return ['clean' => false, 'active' => true, 'engine' => 'fake', 'signatures' => ['Test.Signature']];
+        }
+    });
+    [$agency, $user, $research] = pilotUploadContext('pilot-upload-infected-scanner');
+
+    $this->actingAs($user)->postJson("/api/agency/research/{$research->id}/files", [
+        'file' => testPdfUpload('infected-scanner.pdf', 64),
+    ])->assertUnprocessable();
+
+    expect(ResearchFile::query()->where('agency_id', $agency->id)->count())->toBe(0)
+        ->and(Storage::disk('local')->allFiles('research/quarantine'))->toBe([])
+        ->and(Storage::disk('local')->allFiles("research/{$research->id}"))->toBe([]);
+});
+
+test('quarantine cleanup failure is logged without exposing the path', function () {
+    Bus::fake();
+    Log::spy();
+    Storage::fake('local');
+    $storage = Mockery::mock(QuarantinedUploadStorage::class);
+    $storage->shouldReceive('cleanup')->once()->andReturnFalse();
+    $this->app->instance(QuarantinedUploadStorage::class, $storage);
+    $this->app->instance(MalwareScanner::class, new class implements MalwareScanner
+    {
+        public function scan(string $absolutePath): array
+        {
+            return ['clean' => false, 'active' => true, 'engine' => 'fake', 'signatures' => ['Test.Signature']];
+        }
+    });
+    [, $user, $research] = pilotUploadContext('pilot-upload-cleanup-failure');
+
+    $this->actingAs($user)->postJson("/api/agency/research/{$research->id}/files", [
+        'file' => testPdfUpload('cleanup-failure.pdf', 64),
+    ])->assertUnprocessable();
+
+    Log::shouldHaveReceived('warning')->withArgs(fn (string $message, array $context): bool => $message === 'Quarantined upload cleanup failed.'
+        && $context['event'] === 'upload.quarantine_cleanup_failed'
+        && isset($context['quarantine_path_hash'])
+        && ! array_key_exists('path', $context));
+});
+
+test('failed promotion returns a safe error and cleans quarantine', function () {
+    Bus::fake();
+    Storage::fake('local');
+    $storage = Mockery::mock(QuarantinedUploadStorage::class);
+    $storage->shouldReceive('promote')->once()->andReturnFalse();
+    $storage->shouldReceive('cleanup')->once()->andReturnTrue();
+    $this->app->instance(QuarantinedUploadStorage::class, $storage);
+    [$agency, $user, $research] = pilotUploadContext('pilot-upload-promotion-failure');
+
+    $this->actingAs($user)->postJson("/api/agency/research/{$research->id}/files", [
+        'file' => testPdfUpload('promotion-failure.pdf', 64),
+    ])->assertStatus(500)
+        ->assertJsonPath('message', 'The uploaded PDF could not be stored safely. Please try again.');
+
+    expect(ResearchFile::query()->where('agency_id', $agency->id)->count())->toBe(0);
+});
+
+test('quarantined research file records cannot be downloaded', function () {
+    Storage::fake('local');
+    [$agency, $user, $research] = pilotUploadContext('pilot-upload-quarantined-download');
+    Storage::disk('local')->put('research/quarantine/pending.pdf', testPdfContent(4096));
+    $file = ResearchFile::create([
+        'research_id' => $research->id,
+        'agency_id' => $agency->id,
+        'uploaded_by' => $user->id,
+        'original_name' => 'pending.pdf',
+        'stored_name' => 'pending.pdf',
+        'disk' => 'local',
+        'path' => 'research/quarantine/pending.pdf',
+        'status' => 'quarantined',
+    ]);
+
+    $this->actingAs($user)
+        ->get("/api/agency/research/{$research->id}/files/{$file->id}/download")
+        ->assertNotFound();
 });

@@ -5,6 +5,7 @@ export type RepositoryDocumentType =
 
 export type RepositoryStatus =
     | 'draft'
+    | 'revision-required'
     | 'published'
     | 'pending'
     | 'restricted'
@@ -52,6 +53,14 @@ export type RepositoryItem = {
     documentType: RepositoryDocumentType;
     year: number;
     status: RepositoryStatus;
+    capabilities: {
+        canUpdate: boolean;
+        canSubmit: boolean;
+    };
+    moderationNote?: string;
+    moderationConcernType?: string;
+    moderationRequestedAt?: string;
+    moderationReviewerName?: string;
     accessType: RepositoryAccessType;
     sdgs: string[];
     category: string;
@@ -78,6 +87,11 @@ export type RepositoryUpdatePayload = Omit<
     | 'revisionParentId'
     | 'supersededById'
     | 'revisionNumber'
+    | 'capabilities'
+    | 'moderationNote'
+    | 'moderationConcernType'
+    | 'moderationRequestedAt'
+    | 'moderationReviewerName'
 >;
 
 export type RepositoryFileReplacement = {

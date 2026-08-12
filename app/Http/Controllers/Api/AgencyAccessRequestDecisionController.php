@@ -17,6 +17,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class AgencyAccessRequestDecisionController extends Controller
 {
@@ -66,6 +67,7 @@ class AgencyAccessRequestDecisionController extends Controller
             $accessExpiresAt = $status === Statuses::ACCESS_REQUEST_APPROVED
                 ? $request->date('expires_at')
                 : null;
+            $accessToken = $status === Statuses::ACCESS_REQUEST_APPROVED ? Str::random(64) : null;
 
             $lockedAccessRequest->update([
                 'status' => $status,
@@ -78,6 +80,10 @@ class AgencyAccessRequestDecisionController extends Controller
                     ? $this->publicDenialReason($request)
                     : null,
                 'access_expires_at' => $accessExpiresAt,
+                'access_token_hash' => $accessToken ? hash('sha256', $accessToken) : null,
+                'access_token_generated_at' => $accessToken ? now() : null,
+                'access_token_last_used_at' => null,
+                'access_revoked_at' => null,
             ]);
 
             Notification::create([
@@ -124,6 +130,7 @@ class AgencyAccessRequestDecisionController extends Controller
             $emailNotification = $this->emailNotifications->queueDecisionNotificationAfterCommit(
                 $lockedAccessRequest->fresh(),
                 $status,
+                $accessToken,
             );
 
             AuditLogger::record(

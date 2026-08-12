@@ -15,6 +15,7 @@ export const repositoryDocumentTypeLabels: Record<
 
 export const repositoryStatusLabels: Record<RepositoryStatus, string> = {
     draft: 'Draft',
+    'revision-required': 'Revision Requested',
     published: 'Published',
     pending: 'Pending',
     restricted: 'Restricted',

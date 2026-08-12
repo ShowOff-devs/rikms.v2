@@ -15,6 +15,7 @@ class ResearchFileResource extends JsonResource
         return [
             'id' => $this->id,
             'research_id' => $this->research_id,
+            'report_highlight_id' => $this->report_highlight_id,
             'agency_id' => $this->agency_id,
             'uploaded_by' => $this->uploaded_by,
             'original_name' => $this->original_name,

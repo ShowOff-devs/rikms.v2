@@ -112,10 +112,10 @@ export function AgencyAnalyticsPage() {
         setFeedback('');
     };
 
-    const handleExportConfirm = async () => {
+    const handleExportConfirm = async (format: 'pdf' | 'csv') => {
         setIsExporting(true);
 
-        const result = await exportAgencyAnalyticsReport(filters);
+        const result = await exportAgencyAnalyticsReport(filters, format);
 
         setIsExporting(false);
         setIsExportOpen(false);

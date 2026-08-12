@@ -2,7 +2,7 @@
 
 namespace App\Http\Middleware;
 
-use App\Services\PlatformSettingsService;
+use App\Services\SessionTimeoutResolver;
 use App\Support\ApiResponse;
 use App\Support\SecurityEventLogger;
 use Closure;
@@ -14,7 +14,7 @@ class EnforceUserSessionTimeout
 {
     private const LAST_ACTIVITY_KEY = 'rikms_last_activity_at';
 
-    public function __construct(private readonly PlatformSettingsService $settings) {}
+    public function __construct(private readonly SessionTimeoutResolver $timeoutResolver) {}
 
     public function handle(Request $request, Closure $next): Response
     {
@@ -24,7 +24,7 @@ class EnforceUserSessionTimeout
             return $next($request);
         }
 
-        $timeoutMinutes = $this->timeoutMinutes($user->security_preferences ?? []);
+        $timeoutMinutes = $this->timeoutResolver->resolve($user->security_preferences ?? []);
         $lastActivityAt = $request->session()->get(self::LAST_ACTIVITY_KEY);
 
         if ($timeoutMinutes && is_numeric($lastActivityAt) && now()->timestamp - (int) $lastActivityAt > $timeoutMinutes * 60) {
@@ -52,21 +52,5 @@ class EnforceUserSessionTimeout
         $request->session()->put(self::LAST_ACTIVITY_KEY, now()->timestamp);
 
         return $next($request);
-    }
-
-    /**
-     * @param  array<string, mixed>  $preferences
-     */
-    private function timeoutMinutes(array $preferences): ?int
-    {
-        $timeout = (int) ($preferences['sessionTimeout'] ?? 0);
-
-        if ($timeout >= 5 && $timeout <= 240) {
-            return $timeout;
-        }
-
-        $platformTimeout = $this->settings->integer(PlatformSettingsService::SESSION_TIMEOUT_MINUTES, 60);
-
-        return $platformTimeout >= 5 && $platformTimeout <= 240 ? $platformTimeout : null;
     }
 }

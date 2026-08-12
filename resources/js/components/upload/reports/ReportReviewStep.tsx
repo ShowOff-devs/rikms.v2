@@ -12,7 +12,7 @@ import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import ConfirmationModal from '@/components/upload/shared/ConfirmationModal';
 import ReportPreviewCard from '@/components/upload/shared/ReportPreviewCard';
-import { apiMessage } from '@/lib/api-client';
+import { ApiError, apiMessage } from '@/lib/api-client';
 import {
     REPORT_STEP_IDS,
     buildReportWorkflowData,
@@ -21,12 +21,8 @@ import {
     metadataFieldLabels,
     sdgOptions,
 } from '@/lib/upload/report-workflow';
-import {
-    saveReportDraft,
-    submitReport,
-} from '@/lib/upload/services/report-upload-service';
+import { submitReport } from '@/lib/upload/services/report-upload-service';
 import type {
-    ReportDetailsData,
     ReportDocumentType,
     ReportReviewData,
     ReportWorkflowData,
@@ -39,6 +35,34 @@ type ReviewSectionProps = {
     children: ReactNode;
     onEdit: (stepId: UploadStepId) => void;
 };
+
+type DraftFeedback = {
+    tone: 'success' | 'error';
+    message: string;
+};
+
+export function DraftSaveFeedback({
+    feedback,
+}: {
+    feedback: DraftFeedback | null;
+}) {
+    if (!feedback) {
+        return null;
+    }
+
+    return (
+        <div
+            role={feedback.tone === 'error' ? 'alert' : 'status'}
+            className={`mb-5 rounded-[12px] border px-4 py-3 text-sm font-medium ${
+                feedback.tone === 'error'
+                    ? 'border-[#fecaca] bg-[#fef2f2] text-[#b91c1c]'
+                    : 'border-[#bbf7d0] bg-[#f0fdf4] text-[#008236]'
+            }`}
+        >
+            {feedback.message}
+        </div>
+    );
+}
 
 function ReviewSection({
     title,
@@ -86,8 +110,10 @@ function SuccessState({ data }: { data: ReportWorkflowData }) {
                     Report Submitted Successfully
                 </h1>
                 <p className="mt-2 text-sm leading-6 text-[#6a7282]">
-                    {data.details.reportTitle || 'Your report'} has been queued
-                    for repository processing and moderation.
+                    {data.details.reportTitle ||
+                        data.aiMetadata.extractedMetadata.title ||
+                        'Your report'}{' '}
+                    has been queued for repository processing and moderation.
                 </p>
                 <Button
                     type="button"
@@ -108,14 +134,19 @@ export default function ReportReviewStep(props: UploadWizardStepProps) {
         state,
         stepData,
         setStepData,
-        setWorkflowStepData,
         goBack,
         goToStep,
+        saveDraft: saveWizardDraft,
+        applyBackendErrors,
+        markSubmissionComplete,
     } = props;
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [savingDraft, setSavingDraft] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
+    const [draftFeedback, setDraftFeedback] = useState<DraftFeedback | null>(
+        null,
+    );
     const data = buildReportWorkflowData(
         config.type as ReportDocumentType,
         state.stepData,
@@ -148,20 +179,28 @@ export default function ReportReviewStep(props: UploadWizardStepProps) {
 
         setSavingDraft(true);
         setSubmitError(null);
+        setDraftFeedback(null);
 
         try {
-            const result = await saveReportDraft(data);
+            const saved = await saveWizardDraft();
 
-            setWorkflowStepData(REPORT_STEP_IDS.details, {
-                ...data.details,
-                researchId: String(result.id),
-            } satisfies ReportDetailsData);
-            updateReview({
-                draftStatus: 'saved',
-                submissionStatus: 'draft',
+            if (!saved) {
+                throw new Error('Unable to save report draft.');
+            }
+
+            const savedAt = new Intl.DateTimeFormat(undefined, {
+                hour: 'numeric',
+                minute: '2-digit',
+            }).format(new Date());
+            setDraftFeedback({
+                tone: 'success',
+                message: `Draft saved successfully at ${savedAt}.`,
             });
         } catch (error) {
-            setSubmitError(apiMessage(error, 'Unable to save report draft.'));
+            setDraftFeedback({
+                tone: 'error',
+                message: apiMessage(error, 'Unable to save report draft.'),
+            });
         } finally {
             setSavingDraft(false);
         }
@@ -176,6 +215,7 @@ export default function ReportReviewStep(props: UploadWizardStepProps) {
         });
 
         try {
+            data.details.lastWizardStep = REPORT_STEP_IDS.review;
             const result = await submitReport(data);
 
             setStepData({
@@ -185,9 +225,15 @@ export default function ReportReviewStep(props: UploadWizardStepProps) {
                 submissionStatus: 'submitted',
                 submittedAt: result.submitted_at ?? new Date().toISOString(),
             } satisfies ReportReviewData);
+            markSubmissionComplete();
             setConfirmOpen(false);
         } catch (error) {
             setSubmitError(apiMessage(error, 'Unable to submit report.'));
+
+            if (error instanceof ApiError) {
+                applyBackendErrors(error.errors);
+            }
+
             updateReview({
                 reviewStatus: 'not-reviewed',
                 submissionStatus: 'draft',
@@ -239,6 +285,8 @@ export default function ReportReviewStep(props: UploadWizardStepProps) {
                     </div>
                 ) : null}
 
+                <DraftSaveFeedback feedback={draftFeedback} />
+
                 <div className="space-y-4">
                     <ReviewSection
                         title="Document Information"
@@ -259,7 +307,10 @@ export default function ReportReviewStep(props: UploadWizardStepProps) {
                             />
                             <ReviewItem
                                 label="Title"
-                                value={data.details.reportTitle}
+                                value={
+                                    data.details.reportTitle ||
+                                    data.aiMetadata.extractedMetadata.title
+                                }
                             />
                             <ReviewItem
                                 label="Period"
@@ -282,11 +333,11 @@ export default function ReportReviewStep(props: UploadWizardStepProps) {
                     </ReviewSection>
 
                     <ReviewSection
-                        title="Performance and Financials"
+                        title="Performance"
                         stepId={REPORT_STEP_IDS.performance}
                         onEdit={goToStep}
                     >
-                        <div className="grid gap-4 md:grid-cols-3">
+                        <div className="grid gap-4 md:grid-cols-2">
                             <ReviewItem
                                 label="Project rows"
                                 value={
@@ -294,58 +345,83 @@ export default function ReportReviewStep(props: UploadWizardStepProps) {
                                 }
                             />
                             <ReviewItem
+                                label="Official accomplishment"
+                                value={`${data.performance.physicalAccomplishmentPercent ?? 0}%`}
+                            />
+                        </div>
+                    </ReviewSection>
+
+                    <ReviewSection
+                        title="Financials"
+                        stepId={REPORT_STEP_IDS.financials}
+                        onEdit={goToStep}
+                    >
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <ReviewItem
                                 label="Allocated"
                                 value={formatPeso(
                                     data.financials.allocatedBudget,
                                 )}
                             />
                             <ReviewItem
-                                label="Used"
+                                label="Utilized"
                                 value={formatPeso(data.financials.usedBudget)}
                             />
                         </div>
                     </ReviewSection>
 
                     <ReviewSection
-                        title="PAP, Highlights, and SDGs"
+                        title="PAP Classification"
                         stepId={REPORT_STEP_IDS.papClassification}
                         onEdit={goToStep}
                     >
-                        <div className="space-y-4">
-                            <ReviewItem
-                                label="PAP Categories"
-                                value={data.papClassification.papCategories.join(
-                                    ', ',
-                                )}
-                            />
-                            <ReviewItem
-                                label="Featured Highlight"
-                                value={
-                                    data.highlights.featuredHighlight
-                                        ? data.highlights.highlightTitle
-                                        : 'Not featured'
-                                }
-                            />
-                            <div className="flex flex-wrap gap-2">
-                                {data.sdgTagging.selectedSDGs.map((id) => {
-                                    const sdg = sdgOptions.find(
-                                        (option) => option.id === id,
-                                    );
+                        <ReviewItem
+                            label="PAP Categories"
+                            value={data.papClassification.papCategories.join(
+                                ', ',
+                            )}
+                        />
+                    </ReviewSection>
 
-                                    return (
-                                        <span
-                                            key={id}
-                                            className="rounded-[10px] px-3 py-2 text-xs font-bold text-white"
-                                            style={{
-                                                backgroundColor:
-                                                    sdg?.color ?? '#1e3a8a',
-                                            }}
-                                        >
-                                            SDG {id} - {sdg?.name}
-                                        </span>
-                                    );
-                                })}
-                            </div>
+                    <ReviewSection
+                        title="Highlights"
+                        stepId={REPORT_STEP_IDS.highlights}
+                        onEdit={goToStep}
+                    >
+                        <ReviewItem
+                            label={
+                                data.highlights.featuredHighlight
+                                    ? 'Featured Highlight'
+                                    : 'Highlight'
+                            }
+                            value={data.highlights.highlightTitle}
+                        />
+                    </ReviewSection>
+
+                    <ReviewSection
+                        title="SDG Tagging"
+                        stepId={REPORT_STEP_IDS.sdgTagging}
+                        onEdit={goToStep}
+                    >
+                        <div className="flex flex-wrap gap-2">
+                            {data.sdgTagging.selectedSDGs.map((id) => {
+                                const sdg = sdgOptions.find(
+                                    (option) => option.id === id,
+                                );
+
+                                return (
+                                    <span
+                                        key={id}
+                                        className="rounded-[10px] px-3 py-2 text-xs font-bold text-white"
+                                        style={{
+                                            backgroundColor:
+                                                sdg?.color ?? '#1e3a8a',
+                                        }}
+                                    >
+                                        SDG {id} - {sdg?.name}
+                                    </span>
+                                );
+                            })}
                         </div>
                     </ReviewSection>
                 </div>

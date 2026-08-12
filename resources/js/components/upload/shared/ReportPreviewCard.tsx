@@ -1,6 +1,7 @@
 import { Check, Eye, FileText } from 'lucide-react';
 import {
     getReportTypeLabel,
+    reportAccomplishmentSummary,
     reportReadinessCount,
 } from '@/lib/upload/report-workflow';
 import { cn } from '@/lib/utils';
@@ -21,16 +22,8 @@ export default function ReportPreviewCard({
     const currentStepNumber =
         steps.findIndex((step) => step.id === activeStepId) + 1;
     const readiness = reportReadinessCount(data);
-    const completion =
-        data.performance.performanceProjects.length > 0
-            ? Math.round(
-                  data.performance.performanceProjects.reduce(
-                      (total, project) =>
-                          total + (project.accomplishmentPercentage ?? 0),
-                      0,
-                  ) / data.performance.performanceProjects.length,
-              )
-            : 0;
+    const accomplishment = reportAccomplishmentSummary(data.performance);
+    const completion = accomplishment.displayPercentage;
 
     return (
         <aside className="hidden w-[270px] shrink-0 space-y-3 xl:block">
@@ -72,10 +65,14 @@ export default function ReportPreviewCard({
                         </div>
                         <div className="rounded-[10px] bg-[#f0fdf4] px-3 py-3 text-center">
                             <p className="text-base font-bold text-[#00a63e]">
-                                {completion}%
+                                {completion === null
+                                    ? '—'
+                                    : `${completion.toFixed(2)}%`}
                             </p>
                             <p className="text-[9px] text-[#99a1af]">
-                                Completion
+                                {accomplishment.source === 'official'
+                                    ? 'Official'
+                                    : 'Calculated'}
                             </p>
                         </div>
                     </div>

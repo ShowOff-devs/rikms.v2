@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\AiPipelineResultWriter;
 use App\Services\PlatformSettingsService;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Fortify\Features;
 
@@ -95,6 +96,14 @@ test('public registration is disabled', function () {
 
     $this->assertGuest();
     $this->assertDatabaseMissing('users', ['email' => 'public-user@example.test']);
+});
+
+test('local MongoDB AI record test route is not registered', function () {
+    $registered = collect(Route::getRoutes())->contains(
+        fn ($route): bool => $route->uri() === 'api/test-mongodb-ai-records'
+    );
+
+    expect($registered)->toBeFalse();
 });
 
 test('public access request submission remains available without registration', function () {

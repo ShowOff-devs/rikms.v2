@@ -52,7 +52,9 @@ Deployment security floors override database settings where configured:
 | `maintenance.enabled` | boolean | false | Active | Blocks normal web/API traffic with recovery allowlist | `EnforcePlatformMaintenanceMode` | No |
 | `maintenance.notice_text` | string | RIKMS is temporarily unavailable... | Informational | Maintenance response text | `EnforcePlatformMaintenanceMode` | No |
 | `backup.last_backup_at` | string | Not configured | Informational | Display only | Admin UI | No |
-| `backup.frequency` | string | Daily at 03:00 AM | Informational | Actual backups are deployment-managed | Admin UI | Deployment |
+| `backup.frequency` | string | Daily at 03:00 AM | Preparation | Saves the intended future schedule; does not execute backups | Admin UI | No |
+| `backup.destination_label` | string | External drive | Preparation | Administrative label only; mount path remains server-managed | Admin UI | No |
+| `backup.retention_days` | integer | 30 | Preparation | Saves intended retention; does not delete backup files | Admin UI | No |
 | `backup.status` | string | idle | Informational | Display only | Admin UI | No |
 | `ai.processing.enabled` | boolean | false | Active | Prevents new AI dispatch, manual reruns, and queued processing | Upload controller, AI rerun endpoint, AI jobs | No |
 

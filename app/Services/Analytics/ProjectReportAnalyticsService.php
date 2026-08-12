@@ -209,6 +209,17 @@ class ProjectReportAnalyticsService
     /**
      * @param  array<string, mixed>  $filters
      */
+    public function exportRecords(array $filters, ?int $agencyScope = null, bool $allowAgencyFilter = false): Collection
+    {
+        $query = $this->filteredQuery($filters, $agencyScope, $allowAgencyFilter);
+        $this->applySorting($query, $filters);
+
+        return $this->withAnalyticsRelations($query)->get();
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
     public function filteredQuery(array $filters, ?int $agencyScope = null, bool $allowAgencyFilter = false): Builder
     {
         $query = $this->baseQuery($filters, $agencyScope, $allowAgencyFilter);

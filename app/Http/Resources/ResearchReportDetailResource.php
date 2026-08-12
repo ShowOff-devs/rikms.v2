@@ -24,6 +24,12 @@ class ResearchReportDetailResource extends JsonResource
             'utilized_amount' => $this->utilized_amount,
             'physical_accomplishment_percent' => $this->physical_accomplishment_percent,
             'financial_as_of_date' => $this->financial_as_of_date?->toDateString(),
+            'pap_categories' => $this->pap_categories ?? [],
+            'pap_description' => $this->pap_description,
+            'beneficiary_sectors' => $this->beneficiary_sectors ?? [],
+            'performance_remarks' => $this->performance_remarks,
+            'last_wizard_step' => $this->last_wizard_step,
+            'draft_version' => (int) $this->draft_version,
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
         ];

@@ -14,10 +14,12 @@ use App\Models\User;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use App\Support\CsvExport;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 class AdminAnalyticsController extends Controller
 {
@@ -70,9 +72,12 @@ class AdminAnalyticsController extends Controller
         ]);
     }
 
-    public function export(Request $request, string $report): StreamedResponse
+    public function export(Request $request, string $report): Response
     {
         abort_unless(in_array($report, ['research', 'access-requests', 'moderation', 'security'], true), 404);
+
+        $format = $request->string('format', 'csv')->lower()->toString();
+        abort_unless(in_array($format, ['csv', 'pdf'], true), 422, 'Unsupported report format.');
 
         AuditLogger::record(
             $request,
@@ -80,8 +85,12 @@ class AdminAnalyticsController extends Controller
             null,
             null,
             null,
-            ['report' => $report, 'filters' => $request->query()],
+            ['report' => $report, 'format' => $format, 'filters' => $request->query()],
         );
+
+        if ($format === 'pdf') {
+            return $this->pdfExport($request, $report);
+        }
 
         $securityEvents = $report === 'security'
             ? $this->securityExportQuery($request)
@@ -117,6 +126,33 @@ class AdminAnalyticsController extends Controller
         }, 'rikms-'.$report.'-report-'.now()->format('Y-m-d').'.csv', ['Content-Type' => 'text/csv']);
     }
 
+    private function pdfExport(Request $request, string $report): Response
+    {
+        abort_unless($report === 'research', 422, 'PDF export is currently available for research reports only.');
+
+        $records = $this->researchExportQuery($request)
+            ->with('agency:id,name')
+            ->orderByDesc('created_at')
+            ->get();
+        $options = new Options;
+        $options->set('defaultFont', 'DejaVu Sans');
+        $options->set('isRemoteEnabled', false);
+
+        $pdf = new Dompdf($options);
+        $pdf->loadHtml(view('reports.admin.research', [
+            'records' => $records,
+            'generatedAt' => now(),
+            'filters' => $request->only(['date_range', 'start_date', 'end_date', 'agency', 'publicationYear', 'category', 'status']),
+        ])->render());
+        $pdf->setPaper('a4', 'landscape');
+        $pdf->render();
+
+        return response($pdf->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="rikms-research-report-'.now()->format('Y-m-d').'.pdf"',
+        ]);
+    }
+
     private function securityExportQuery(Request $request): Builder
     {
         $query = SecurityEvent::query();
@@ -125,6 +161,7 @@ class AdminAnalyticsController extends Controller
             'last-7-days' => $query->where('created_at', '>=', now()->subDays(7)->startOfDay()),
             'last-30-days' => $query->where('created_at', '>=', now()->subDays(30)->startOfDay()),
             'this-month' => $query->whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()]),
+            'this-year' => $query->whereBetween('created_at', [now()->startOfYear(), now()->endOfYear()]),
             'custom' => $query
                 ->when($request->date('start_date'), fn (Builder $query, $date) => $query->where('created_at', '>=', $date->startOfDay()))
                 ->when($request->date('end_date'), fn (Builder $query, $date) => $query->where('created_at', '<=', $date->endOfDay())),
@@ -149,6 +186,7 @@ class AdminAnalyticsController extends Controller
             'last-7-days' => $query->where('created_at', '>=', now()->subDays(7)->startOfDay()),
             'last-30-days' => $query->where('created_at', '>=', now()->subDays(30)->startOfDay()),
             'this-month' => $query->whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()]),
+            'this-year' => $query->whereBetween('created_at', [now()->startOfYear(), now()->endOfYear()]),
             'this-year' => $query->whereYear('created_at', now()->year),
             'custom' => $query
                 ->when($request->date('start_date'), fn (Builder $query, $date) => $query->where('created_at', '>=', $date->startOfDay()))

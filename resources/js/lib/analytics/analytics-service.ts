@@ -92,14 +92,16 @@ export async function getDownloadTrends(filters: AnalyticsFilters = {}) {
 
 export async function exportAgencyAnalyticsReport(
     filters: AnalyticsFilters = {},
+    format: 'pdf' | 'csv' = 'csv',
 ): Promise<AnalyticsExportResult> {
     const params = paramsFromFilters(filters);
+    params.set('format', format);
     const query = params.toString();
     const url = `/api/agency/analytics/export${query ? `?${query}` : ''}`;
     const response = await fetch(url, {
         credentials: 'same-origin',
         headers: {
-            Accept: 'text/csv',
+            Accept: format === 'pdf' ? 'application/pdf' : 'text/csv',
             'X-Requested-With': 'XMLHttpRequest',
         },
     });
@@ -110,7 +112,7 @@ export async function exportAgencyAnalyticsReport(
 
     const { fileName } = await downloadResponseFile(
         response,
-        `agency-research-analytics-${filters.year ?? 'all-years'}.csv`,
+        `agency-research-analytics-${filters.year ?? 'all-years'}.${format}`,
     );
 
     return {

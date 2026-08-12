@@ -5,6 +5,7 @@ import {
     Loader2,
     Send,
     SearchCheck,
+    Undo2,
 } from 'lucide-react';
 import { useState } from 'react';
 import {
@@ -18,14 +19,20 @@ import {
 import {
     moderationIssueTypeLabels,
     moderationStatusLabels,
+    moderatorSelectableIssueTypes,
 } from '@/data/research-moderation-options';
-import type { FlaggedResearchRecord } from '@/types/research-moderation';
+import { getAllowedResearchModerationActions } from '@/lib/admin/research-moderation-actions';
+import type {
+    FlaggedResearchRecord,
+    ModerationIssueType,
+} from '@/types/research-moderation';
 
 type ReviewAction =
     | 'approved'
     | 'published'
     | 'approved-published'
     | 'flagged'
+    | 'returned'
     | 'archived';
 
 type ReviewResearchRecordModalProps = {
@@ -33,7 +40,11 @@ type ReviewResearchRecordModalProps = {
     open: boolean;
     isSaving: boolean;
     onOpenChange: (open: boolean) => void;
-    onSave: (action: ReviewAction, note: string) => Promise<void>;
+    onSave: (
+        action: ReviewAction,
+        note: string,
+        issueType?: ModerationIssueType,
+    ) => Promise<void>;
 };
 
 export function ReviewResearchRecordModal({
@@ -44,6 +55,9 @@ export function ReviewResearchRecordModal({
     onSave,
 }: ReviewResearchRecordModalProps) {
     const [note, setNote] = useState('');
+    const [issueType, setIssueType] = useState<ModerationIssueType | null>(
+        null,
+    );
     const [error, setError] = useState<string | null>(null);
 
     if (!record) {
@@ -53,6 +67,7 @@ export function ReviewResearchRecordModal({
     const handleOpenChange = (nextOpen: boolean) => {
         if (!nextOpen) {
             setNote('');
+            setIssueType(null);
             setError(null);
         }
 
@@ -61,22 +76,45 @@ export function ReviewResearchRecordModal({
 
     const handleSave = async (action: ReviewAction) => {
         const trimmedNote = note.trim();
+        const minimumRationaleLength =
+            action === 'flagged' &&
+            (effectiveIssueType === 'policy_noncompliance' ||
+                effectiveIssueType === 'incomplete_metadata')
+                ? 20
+                : 10;
 
-        if (action === 'archived' && !trimmedNote) {
-            setError('Moderation note is required for this action.');
+        if (
+            (action === 'archived' || action === 'flagged') &&
+            trimmedNote.length < minimumRationaleLength
+        ) {
+            setError(
+                action === 'flagged' &&
+                    effectiveIssueType === 'policy_noncompliance'
+                    ? 'Identify the applicable policy provision or provide a specific policy noncompliance explanation.'
+                    : action === 'flagged' &&
+                        effectiveIssueType === 'incomplete_metadata'
+                      ? 'List the missing or invalid metadata fields in the revision instructions.'
+                      : `${action === 'archived' ? 'Archive rationale' : 'Revision instructions'} must be at least 10 characters.`,
+            );
 
             return;
         }
 
         setError(null);
 
-        await onSave(action, trimmedNote);
+        await onSave(
+            action,
+            trimmedNote,
+            action === 'flagged' ? effectiveIssueType : undefined,
+        );
     };
 
-    const canApprove = ['submitted', 'under_review'].includes(
-        record.officialStatus ?? '',
-    );
-    const canPublish = record.officialStatus === 'approved';
+    const allowedActions = getAllowedResearchModerationActions(record);
+    const effectiveIssueType =
+        issueType ??
+        (moderatorSelectableIssueTypes.includes(record.issueType)
+            ? record.issueType
+            : 'other_manual_review');
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -133,7 +171,7 @@ export function ReviewResearchRecordModal({
                             </div>
                             <div>
                                 <dt className="text-xs font-semibold text-[#99a1af]">
-                                    Issue Type
+                                    Concern Type
                                 </dt>
                                 <dd className="mt-1 font-medium text-[#1e2939]">
                                     {
@@ -156,6 +194,38 @@ export function ReviewResearchRecordModal({
 
                     <div className="mt-4">
                         <label
+                            htmlFor="review-issue-type"
+                            className="text-sm font-semibold text-[#1e2939]"
+                        >
+                            Reason if flagged for review
+                        </label>
+                        <select
+                            id="review-issue-type"
+                            value={effectiveIssueType}
+                            onChange={(event) =>
+                                setIssueType(
+                                    event.target.value as ModerationIssueType,
+                                )
+                            }
+                            disabled={isSaving}
+                            className="mt-2 h-10 w-full rounded-[10px] border border-[#e5e7eb] bg-white px-3 text-sm text-[#1e2939] outline-none focus:border-[#1e3a8a]/40 focus:ring-2 focus:ring-[#1e3a8a]/10 disabled:opacity-60"
+                        >
+                            {moderatorSelectableIssueTypes.map((value) => (
+                                <option key={value} value={value}>
+                                    {moderationIssueTypeLabels[value]}
+                                </option>
+                            ))}
+                        </select>
+                        {effectiveIssueType === 'policy_noncompliance' ? (
+                            <p className="mt-1 text-xs leading-5 text-[#b91c1c]">
+                                Use only when a documented policy or governance
+                                rule has been breached.
+                            </p>
+                        ) : null}
+                    </div>
+
+                    <div className="mt-4">
+                        <label
                             htmlFor="moderation-note"
                             className="text-sm font-semibold text-[#1e2939]"
                         >
@@ -169,7 +239,7 @@ export function ReviewResearchRecordModal({
                                 setError(null);
                             }}
                             className="mt-2 min-h-28 w-full resize-y rounded-[12px] border border-[#e5e7eb] bg-white px-3 py-2 text-sm leading-6 text-[#1e2939] transition outline-none placeholder:text-[#99a1af] focus:border-[#1e3a8a]/40 focus:ring-2 focus:ring-[#1e3a8a]/10"
-                            placeholder="Document the moderation decision, required follow-up, or compliance rationale."
+                            placeholder="Document the decision and give the agency specific, actionable revision instructions."
                         />
                         {error ? (
                             <p className="mt-2 text-xs text-[#dc2626]">
@@ -189,7 +259,7 @@ export function ReviewResearchRecordModal({
                         Cancel
                     </button>
                     <div className="flex flex-wrap justify-end gap-2">
-                        {canApprove ? (
+                        {allowedActions.has('approve') ? (
                             <button
                                 type="button"
                                 onClick={() => handleSave('approved')}
@@ -204,7 +274,7 @@ export function ReviewResearchRecordModal({
                                 Approve Research
                             </button>
                         ) : null}
-                        {canApprove ? (
+                        {allowedActions.has('approve_and_publish') ? (
                             <button
                                 type="button"
                                 onClick={() => handleSave('approved-published')}
@@ -222,7 +292,7 @@ export function ReviewResearchRecordModal({
                                 Approve & Publish
                             </button>
                         ) : null}
-                        {canPublish ? (
+                        {allowedActions.has('publish') ? (
                             <button
                                 type="button"
                                 onClick={() => handleSave('published')}
@@ -240,24 +310,47 @@ export function ReviewResearchRecordModal({
                                 Publish Research
                             </button>
                         ) : null}
-                        <button
-                            type="button"
-                            onClick={() => handleSave('flagged')}
-                            disabled={isSaving}
-                            className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border border-[#ffd6a8] bg-[#fff7ed] px-4 text-sm font-semibold text-[#ca3500] transition hover:bg-[#ffedd4] disabled:cursor-wait disabled:opacity-70"
-                        >
-                            <Flag className="size-4" aria-hidden="true" />
-                            Keep Flagged
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => handleSave('archived')}
-                            disabled={isSaving}
-                            className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-[#dc2626] px-4 text-sm font-semibold text-white transition hover:bg-[#b91c1c] disabled:cursor-wait disabled:opacity-70"
-                        >
-                            <Archive className="size-4" aria-hidden="true" />
-                            Archive Research
-                        </button>
+                        {allowedActions.has('flag_for_review') ? (
+                            <button
+                                type="button"
+                                onClick={() => handleSave('flagged')}
+                                disabled={isSaving}
+                                className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border border-[#ffd6a8] bg-[#fff7ed] px-4 text-sm font-semibold text-[#ca3500] transition hover:bg-[#ffedd4] disabled:cursor-wait disabled:opacity-70"
+                            >
+                                <Flag className="size-4" aria-hidden="true" />
+                                Flag for Review
+                            </button>
+                        ) : null}
+                        {allowedActions.has('keep_flagged') ? (
+                            <p className="self-center text-sm font-medium text-[#ca3500]">
+                                Record remains flagged for review.
+                            </p>
+                        ) : null}
+                        {allowedActions.has('return_to_draft') ? (
+                            <button
+                                type="button"
+                                onClick={() => handleSave('returned')}
+                                disabled={isSaving}
+                                className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border border-[#dbeafe] bg-[#eff6ff] px-4 text-sm font-semibold text-[#1e3a8a] transition hover:bg-[#dbeafe] disabled:cursor-wait disabled:opacity-70"
+                            >
+                                <Undo2 className="size-4" aria-hidden="true" />
+                                Return to Draft
+                            </button>
+                        ) : null}
+                        {allowedActions.has('archive') ? (
+                            <button
+                                type="button"
+                                onClick={() => handleSave('archived')}
+                                disabled={isSaving}
+                                className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-[#dc2626] px-4 text-sm font-semibold text-white transition hover:bg-[#b91c1c] disabled:cursor-wait disabled:opacity-70"
+                            >
+                                <Archive
+                                    className="size-4"
+                                    aria-hidden="true"
+                                />
+                                Archive Research
+                            </button>
+                        ) : null}
                     </div>
                 </DialogFooter>
             </DialogContent>

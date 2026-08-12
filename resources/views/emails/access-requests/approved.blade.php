@@ -25,6 +25,8 @@ Access Research
 
 Please use the approved access only for the purpose stated in your request and follow applicable RIKMS and agency policies.
 
+This link is provided for the approved request only. Do not forward it. Access may expire according to the approval terms.
+
 For help, contact {{ $data['support_email'] }} or visit {{ $data['support_url'] }}.
 
 This is an automated notification from RIKMS.

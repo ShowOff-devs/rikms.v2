@@ -29,10 +29,38 @@ class ResearchResource extends JsonResource
             'public_metadata' => $this->public_metadata ?? [],
             'public_metadata_fields' => $this->public_metadata_fields ?? [],
             'status' => $this->status,
+            'moderation_issue_type' => $this->whenLoaded(
+                'latestModerationDecision',
+                fn (): ?string => $this->latestModerationDecision?->issue_type,
+            ),
+            'moderation_note' => $this->whenLoaded(
+                'latestModerationDecision',
+                fn (): ?string => $this->latestModerationDecision?->remarks,
+            ),
+            'moderated_at' => $this->whenLoaded(
+                'latestModerationDecision',
+                fn (): ?string => $this->latestModerationDecision?->reviewed_at?->toISOString(),
+            ),
+            'moderation_reviewer_name' => $this->whenLoaded(
+                'latestModerationDecision',
+                fn (): ?string => $this->latestModerationDecision?->relationLoaded('reviewer')
+                    ? $this->latestModerationDecision?->reviewer?->name
+                    : null,
+            ),
+            'revision_required' => $this->status === 'rejected',
+            'capabilities' => [
+                'can_update' => $request->user()?->can('updateAgencyDraft', $this->resource) ?? false,
+                'can_submit' => $request->user()?->can('submit', $this->resource) ?? false,
+            ],
             'access_level' => $this->access_level,
             'downloads' => (int) $this->downloads,
             'embargo_until' => $this->embargo_until?->toDateString(),
             'external_url' => $this->external_url,
+            'research_owner_name' => $this->research_owner_name,
+            'research_owner_email' => $this->research_owner_email,
+            'notify_owner_access_requests' => (bool) $this->notify_owner_access_requests,
+            'notify_owner_research_inquiries' => (bool) $this->notify_owner_research_inquiries,
+            'send_owner_copy_to_admin' => (bool) $this->send_owner_copy_to_admin,
             'submitted_at' => $this->submitted_at?->toISOString(),
             'approved_at' => $this->approved_at?->toISOString(),
             'published_at' => $this->published_at?->toISOString(),
@@ -48,6 +76,7 @@ class ResearchResource extends JsonResource
             'files' => ResearchFileResource::collection($this->whenLoaded('files')),
             'report_detail' => new ResearchReportDetailResource($this->whenLoaded('reportDetail')),
             'performance_items' => ResearchPerformanceItemResource::collection($this->whenLoaded('performanceItems')),
+            'report_highlights' => ResearchReportHighlightResource::collection($this->whenLoaded('reportHighlights')),
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
         ];

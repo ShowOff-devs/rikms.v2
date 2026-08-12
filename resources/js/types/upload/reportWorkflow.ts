@@ -57,6 +57,9 @@ export type ReportDetailsData = {
     reportingYear: string;
     agency: string;
     uploadStatus: ReportUploadStatus;
+    lastWizardStep?: string | null;
+    serverUpdatedAt?: string | null;
+    serverDraftVersion?: number | null;
 };
 
 export type ReportAIMetadataFields = {
@@ -87,6 +90,9 @@ export type ReportPerformanceProject = {
     projectName: string;
     targetValue: string | null;
     actualValue: string | null;
+    targetNumericValue: number | null;
+    actualNumericValue: number | null;
+    unit: string;
     accomplishmentPercentage: number | null;
     projectStatus: ReportProjectStatus;
     remarks?: string;
@@ -118,10 +124,19 @@ export type ReportFinancialsData = {
 };
 
 export type ReportHighlightsData = {
+    highlightId?: string;
     highlightTitle: string;
     highlightDescription: string;
-    supportingFiles: File[];
+    supportingFiles: ReportHighlightSupportingFile[];
     featuredHighlight: boolean;
+    uploadError?: string | null;
+};
+
+export type ReportHighlightSupportingFile = {
+    id: string;
+    name: string;
+    size: number;
+    type: string;
 };
 
 export type ReportSDGTaggingData = {

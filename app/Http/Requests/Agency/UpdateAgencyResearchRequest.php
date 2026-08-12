@@ -49,6 +49,13 @@ class UpdateAgencyResearchRequest extends FormRequest
             'access_level' => ['sometimes', 'nullable', Rule::in(['public', 'restricted', 'private', 'embargoed', 'request_required'])],
             'embargo_until' => ['sometimes', 'nullable', 'date', 'after:today'],
             'external_url' => ['sometimes', 'nullable', 'url', 'max:255'],
+            'research_owner_name' => ['sometimes', 'required', 'string', 'max:255'],
+            'research_owner_email' => ['sometimes', 'required', 'email', 'max:255'],
+            'notify_owner_access_requests' => ['sometimes', 'boolean'],
+            'notify_owner_research_inquiries' => ['sometimes', 'boolean'],
+            'send_owner_copy_to_admin' => ['sometimes', 'boolean'],
+            'expected_updated_at' => ['sometimes', 'nullable', 'date'],
+            'expected_draft_version' => ['sometimes', 'nullable', 'integer', 'min:0'],
             'report_details' => ['sometimes', 'array'],
             'report_details.reporting_period' => ['nullable', Rule::in(['Q1', 'Q2', 'Q3', 'Q4', 'Annual', 'Final'])],
             'report_details.project_start_date' => ['nullable', 'date'],
@@ -59,14 +66,30 @@ class UpdateAgencyResearchRequest extends FormRequest
             'report_details.utilized_amount' => ['nullable', 'numeric', 'min:0'],
             'report_details.physical_accomplishment_percent' => ['nullable', 'numeric', 'between:0,100'],
             'report_details.financial_as_of_date' => ['nullable', 'date'],
+            'report_details.pap_categories' => ['nullable', 'array', 'max:20'],
+            'report_details.pap_categories.*' => ['string', 'max:120'],
+            'report_details.pap_description' => ['nullable', 'string', 'max:'.self::LONG_TEXT_MAX],
+            'report_details.beneficiary_sectors' => ['nullable', 'array', 'max:5'],
+            'report_details.beneficiary_sectors.*' => ['string', Rule::in(['government', 'academe', 'business', 'civil-society', 'media'])],
+            'report_details.performance_remarks' => ['nullable', 'string', 'max:5000'],
+            'report_details.last_wizard_step' => ['nullable', 'string', Rule::in(['details', 'ai-metadata', 'performance', 'pap-classification', 'financials', 'highlights', 'sdg-tagging', 'review'])],
             'performance_items' => ['sometimes', 'array', 'max:'.self::PERFORMANCE_ITEMS_MAX],
             'performance_items.*.project_name' => ['nullable', 'string', 'max:255'],
             'performance_items.*.target_value' => ['nullable', 'string', 'max:120'],
             'performance_items.*.actual_value' => ['nullable', 'string', 'max:120'],
-            'performance_items.*.accomplishment_percentage' => ['nullable', 'numeric', 'between:0,100'],
-            'performance_items.*.project_status' => ['nullable', 'string', 'max:80'],
+            'performance_items.*.target_numeric_value' => ['nullable', 'numeric', 'min:0'],
+            'performance_items.*.actual_numeric_value' => ['nullable', 'numeric', 'min:0'],
+            'performance_items.*.unit' => ['nullable', 'string', 'max:80'],
+            'performance_items.*.accomplishment_percentage' => ['nullable', 'numeric', 'min:0'],
+            'performance_items.*.project_status' => ['nullable', 'string', Rule::in(['not-reported', 'not-started', 'in-progress', 'substantially-complete', 'completed'])],
             'performance_items.*.remarks' => ['nullable', 'string', 'max:5000'],
             'performance_items.*.sort_order' => ['nullable', 'integer', 'min:0'],
+            'report_highlights' => ['sometimes', 'array', 'max:10'],
+            'report_highlights.*.id' => ['nullable', 'integer', 'min:1'],
+            'report_highlights.*.title' => ['nullable', 'string', 'max:255'],
+            'report_highlights.*.description' => ['nullable', 'string', 'max:'.self::LONG_TEXT_MAX],
+            'report_highlights.*.is_featured' => ['sometimes', 'boolean'],
+            'report_highlights.*.sort_order' => ['nullable', 'integer', 'min:0'],
         ];
     }
 
@@ -93,6 +116,14 @@ class UpdateAgencyResearchRequest extends FormRequest
      */
     private function normalizeReportPayload(array $payload): array
     {
+        if (array_key_exists('research_owner_name', $payload) && is_string($payload['research_owner_name'])) {
+            $payload['research_owner_name'] = trim($payload['research_owner_name']);
+        }
+
+        if (array_key_exists('research_owner_email', $payload) && is_string($payload['research_owner_email'])) {
+            $payload['research_owner_email'] = mb_strtolower(trim($payload['research_owner_email']));
+        }
+
         if (isset($payload['report_details']) && is_array($payload['report_details'])) {
             foreach ([
                 'reporting_period',
@@ -104,6 +135,9 @@ class UpdateAgencyResearchRequest extends FormRequest
                 'utilized_amount',
                 'physical_accomplishment_percent',
                 'financial_as_of_date',
+                'pap_description',
+                'performance_remarks',
+                'last_wizard_step',
             ] as $key) {
                 if (array_key_exists($key, $payload['report_details'])) {
                     $payload['report_details'][$key] = $this->emptyStringToNull($payload['report_details'][$key]);
@@ -121,6 +155,9 @@ class UpdateAgencyResearchRequest extends FormRequest
                     'project_name',
                     'target_value',
                     'actual_value',
+                    'target_numeric_value',
+                    'actual_numeric_value',
+                    'unit',
                     'accomplishment_percentage',
                     'project_status',
                     'remarks',
@@ -130,6 +167,20 @@ class UpdateAgencyResearchRequest extends FormRequest
 
                 return $item;
             }, $payload['performance_items']);
+        }
+
+        if (isset($payload['report_highlights']) && is_array($payload['report_highlights'])) {
+            $payload['report_highlights'] = array_map(function (mixed $highlight): mixed {
+                if (! is_array($highlight)) {
+                    return $highlight;
+                }
+
+                foreach (['title', 'description'] as $key) {
+                    $highlight[$key] = $this->emptyStringToNull($highlight[$key] ?? null);
+                }
+
+                return $highlight;
+            }, $payload['report_highlights']);
         }
 
         return $payload;

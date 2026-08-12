@@ -13,6 +13,7 @@ import { useAgencySession } from '@/lib/auth/agency-auth';
 import {
     changePassword,
     getAgencySettings,
+    removeProfilePhoto,
     requestAccountDeactivation,
     revokeAgencySession,
     updateAccountSettings,
@@ -58,8 +59,8 @@ const emptyPassword: PasswordChangePayload = {
     confirmNewPassword: '',
 };
 
-const validPhotoTypes = ['image/png', 'image/svg+xml', 'image/jpeg'];
-const maxProfilePhotoBytes = 5 * 1024 * 1024;
+const validPhotoTypes = ['image/png', 'image/jpeg', 'image/webp'];
+const maxProfilePhotoBytes = 2 * 1024 * 1024;
 
 const accountSchema = z.object({
     fullName: z.string().trim().min(1, 'Full Name is required.'),
@@ -151,6 +152,10 @@ export function AgencySettingsPage() {
     const [profilePhotoPreviewUrl, setProfilePhotoPreviewUrl] = useState<
         string | undefined
     >();
+    const [profileCurrentPassword, setProfileCurrentPassword] = useState('');
+    const [accountAction, setAccountAction] = useState<
+        'profile' | 'photo' | 'password' | null
+    >(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -242,7 +247,14 @@ export function AgencySettingsPage() {
             settings,
         ],
     );
-    const canSave = Boolean(dirtyTabs[activeTab]) && !isSaving && !isLoading;
+    const canSave =
+        activeTab !== 'account' &&
+        Boolean(dirtyTabs[activeTab]) &&
+        !isSaving &&
+        !isLoading;
+    const emailChanged = Boolean(
+        settings && account.emailAddress !== settings.account.emailAddress,
+    );
 
     if (!session) {
         return (
@@ -320,27 +332,12 @@ export function AgencySettingsPage() {
         setFeedback('');
         setSaveError('');
 
-        if (field === 'browserNotifications' && value) {
-            if (typeof window === 'undefined' || !('Notification' in window)) {
-                setSaveError(
-                    'Browser notifications are not supported in this browser.',
-                );
+        if (field === 'browserNotifications') {
+            setSaveError(
+                'Browser notifications are not available during the pilot release.',
+            );
 
-                return;
-            }
-
-            const permission =
-                Notification.permission === 'default'
-                    ? await Notification.requestPermission()
-                    : Notification.permission;
-
-            if (permission !== 'granted') {
-                setSaveError(
-                    'Browser notification permission was not granted.',
-                );
-
-                return;
-            }
+            return;
         }
 
         setNotifications((current) => ({
@@ -406,7 +403,6 @@ export function AgencySettingsPage() {
     const saveAccountSettings = async () => {
         const accountResult = accountSchema.safeParse(account);
         const accountErrors: Record<string, string> = {};
-        const passwordErrors: Record<string, string> = {};
 
         if (!accountResult.success) {
             Object.assign(
@@ -415,19 +411,8 @@ export function AgencySettingsPage() {
             );
         }
 
-        if (hasPasswordChange) {
-            const passwordResult = passwordSchema.safeParse(password);
-
-            if (!passwordResult.success) {
-                Object.assign(
-                    passwordErrors,
-                    zodErrorsToRecord(passwordResult.error),
-                );
-            }
-        }
-
         if (Object.keys(accountErrors).length > 0) {
-            const nextErrors = { ...accountErrors, ...passwordErrors };
+            const nextErrors = { ...accountErrors };
             setErrors(nextErrors);
             focusFirstError(nextErrors, accountFieldOrder);
 
@@ -438,43 +423,21 @@ export function AgencySettingsPage() {
             );
         }
 
-        if (Object.keys(passwordErrors).length > 0) {
-            const nextErrors = { ...passwordErrors };
-            const hasIncompletePasswordChange = passwordFieldOrder.some(
-                (field) => !password[field].trim(),
-            );
-
-            setErrors(nextErrors);
-            focusFirstError(nextErrors, passwordFieldOrder);
-
-            if (hasIncompletePasswordChange) {
-                throw new Error('Complete all password fields or clear them.');
-            }
+        if (emailChanged && !profileCurrentPassword) {
+            setErrors({ currentPassword: 'Current password is required.' });
+            focusFirstError({ currentPassword: 'required' }, [
+                'currentPassword',
+            ]);
 
             throw new Error(
-                `Please fix the highlighted password fields: ${errorLabelsFor(
-                    Object.keys(passwordErrors),
-                )}.`,
+                'Enter your current password to change your email.',
             );
         }
 
-        let nextAccount = account;
-
-        if (profilePhotoFile) {
-            const uploadResult = await uploadProfilePhoto(profilePhotoFile);
-            nextAccount = {
-                ...account,
-                profilePhotoUrl: uploadResult.profilePhotoUrl,
-            };
-        }
-
-        const updatedAccount = await updateAccountSettings(nextAccount);
-
-        if (hasPasswordChange) {
-            await changePassword(password);
-
-            setPassword(emptyPassword);
-        }
+        const updatedAccount = await updateAccountSettings({
+            ...account,
+            currentPassword: emailChanged ? profileCurrentPassword : undefined,
+        });
 
         setAccount(updatedAccount);
         setSettings((current) =>
@@ -485,11 +448,86 @@ export function AgencySettingsPage() {
                   }
                 : current,
         );
-        setProfilePhotoFile(null);
-        setProfilePhotoPreviewUrl(undefined);
+        setProfileCurrentPassword('');
         setErrors({});
-        setFeedback('Account settings have been saved.');
+        setFeedback(
+            emailChanged
+                ? 'Profile updated successfully. Please verify your new email address before continuing.'
+                : 'Profile updated successfully.',
+        );
     };
+
+    const runAccountAction = async (
+        action: 'profile' | 'photo' | 'password',
+        callback: () => Promise<void>,
+    ) => {
+        setAccountAction(action);
+        setFeedback('');
+        setSaveError('');
+
+        try {
+            await callback();
+        } catch (error) {
+            setSaveError(
+                error instanceof Error
+                    ? error.message
+                    : 'Unable to save changes.',
+            );
+        } finally {
+            setAccountAction(null);
+        }
+    };
+
+    const saveProfilePhoto = () =>
+        runAccountAction('photo', async () => {
+            if (!profilePhotoFile) {
+                throw new Error('Select a photo to upload.');
+            }
+
+            const result = await uploadProfilePhoto(profilePhotoFile);
+            const updatedAccount = {
+                ...account,
+                profilePhotoUrl: result.profilePhotoUrl,
+            };
+            setAccount(updatedAccount);
+            setSettings((current) =>
+                current ? { ...current, account: updatedAccount } : current,
+            );
+            setProfilePhotoFile(null);
+            setProfilePhotoPreviewUrl(undefined);
+            setFeedback('Profile photo updated successfully.');
+        });
+
+    const removePhoto = () =>
+        runAccountAction('photo', async () => {
+            await removeProfilePhoto();
+            const updatedAccount = { ...account, profilePhotoUrl: null };
+            setAccount(updatedAccount);
+            setSettings((current) =>
+                current ? { ...current, account: updatedAccount } : current,
+            );
+            setFeedback('Profile photo removed successfully.');
+        });
+
+    const savePassword = () =>
+        runAccountAction('password', async () => {
+            const result = passwordSchema.safeParse(password);
+
+            if (!result.success) {
+                const nextErrors = zodErrorsToRecord(result.error);
+                setErrors(nextErrors);
+                focusFirstError(nextErrors, passwordFieldOrder);
+
+                throw new Error('Please fix the highlighted password fields.');
+            }
+
+            await changePassword(password);
+            setPassword(emptyPassword);
+            setErrors({});
+            setFeedback(
+                'Password updated successfully. Other active sessions have been signed out.',
+            );
+        });
 
     const saveSecuritySettings = async () => {
         const securityResult = securitySchema.safeParse(security);
@@ -700,6 +738,31 @@ export function AgencySettingsPage() {
                                             onPhotoSelected={
                                                 handlePhotoSelected
                                             }
+                                            currentPassword={
+                                                profileCurrentPassword
+                                            }
+                                            emailChanged={emailChanged}
+                                            isSavingProfile={
+                                                accountAction === 'profile'
+                                            }
+                                            isSavingPhoto={
+                                                accountAction === 'photo'
+                                            }
+                                            isSavingPassword={
+                                                accountAction === 'password'
+                                            }
+                                            onCurrentPasswordChange={
+                                                setProfileCurrentPassword
+                                            }
+                                            onSaveProfile={() =>
+                                                runAccountAction(
+                                                    'profile',
+                                                    saveAccountSettings,
+                                                )
+                                            }
+                                            onUploadPhoto={saveProfilePhoto}
+                                            onRemovePhoto={removePhoto}
+                                            onSavePassword={savePassword}
                                         />
                                     ) : null}
 

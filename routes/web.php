@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Controllers\ApprovedAccessController;
 use App\Models\Agency;
+use App\Models\Research;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -33,6 +35,12 @@ Route::get('/agencies/{slug}', fn (string $slug) => Inertia::render('agencies/sh
     'agencySlug' => $slug,
 ]))->name('agencies.show');
 Route::inertia('/contact', 'contact')->name('contact');
+Route::get('/approved-access/{token}', [ApprovedAccessController::class, 'show'])
+    ->middleware('throttle:approved-access')
+    ->name('approved-access.show');
+Route::get('/approved-access/{token}/download', [ApprovedAccessController::class, 'download'])
+    ->middleware('throttle:approved-access')
+    ->name('approved-access.download');
 Route::get('/privacy-policy', fn () => Inertia::render('public-policy', [
     'pageKey' => 'privacy-policy',
 ]))->name('privacy-policy');
@@ -91,6 +99,14 @@ Route::middleware(['auth', 'verified', 'role:agency_admin', 'agency.scope'])->gr
     Route::inertia('/agency/upload', 'agency/upload')->name('agency.upload');
     Route::inertia('/agency/upload/research', 'agency/upload/research')->name('agency.upload.research');
     Route::inertia('/agency/upload/terminal-report', 'agency/upload/terminal-report')->name('agency.upload.terminal-report');
+    Route::get('/agency/upload/terminal-report/{research}', function (Request $request, Research $research) {
+        abort_unless($request->user()?->can('updateAgencyDraft', $research), 403);
+        abort_unless(str_contains(mb_strtolower((string) $research->category), 'terminal report'), 404);
+
+        return Inertia::render('agency/upload/terminal-report', [
+            'researchId' => (string) $research->id,
+        ]);
+    })->name('agency.upload.terminal-report.edit');
     Route::inertia('/agency/upload/project-accomplishment', 'agency/upload/project-accomplishment')->name('agency.upload.project-accomplishment');
 });
 
@@ -110,7 +126,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
     })->name('login');
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])->name('login.store');
 
-    Route::middleware(['auth', 'verified', 'role:super_admin', 'super_admin.2fa'])->group(function () {
+    Route::middleware(['auth', 'verified', 'admin.portal', 'super_admin.2fa', 'admin.authorize'])->group(function () {
         Route::inertia('/dashboard', 'admin/dashboard')->name('dashboard');
         Route::inertia('/agencies', 'admin/agencies')->name('agencies');
         Route::inertia('/users', 'admin/agency-admin-users')->name('users');

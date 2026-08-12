@@ -6,10 +6,12 @@ use App\Models\Agency;
 use App\Models\AuditLog;
 use App\Models\Notification;
 use App\Models\Research;
+use App\Models\ResearchFile;
 use App\Models\Role;
 use App\Models\User;
 use App\Notifications\AccessRequestApprovedNotification;
 use App\Notifications\AccessRequestDeniedNotification;
+use App\Notifications\ResearchOwnerAccessRequestNotification;
 use App\Services\AccessRequestEmailNotificationService;
 use App\Support\AccessRequestEmailNotificationResult;
 use App\Support\AccessRequestMailFailureAuditor;
@@ -19,6 +21,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification as NotificationFacade;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Storage;
 
 function createPhase7Role(string $slug): Role
 {
@@ -100,6 +103,17 @@ test('/browse redirects to the implemented research browse page', function () {
     $this->get('/browse')->assertRedirect('/browse-research');
 });
 
+test('access request decision UI copy describes queueing rather than delivery', function () {
+    $source = file_get_contents(resource_path('js/lib/access-requests/access-request-service.ts'));
+
+    expect($source)
+        ->toContain('Access request approved. The requester’s email notification has been queued for delivery.')
+        ->toContain('Access request denied. The requester’s email notification has been queued for delivery.')
+        ->toContain('Access request saved, but no email was queued because the requester does not have a valid email address.')
+        ->toContain('Access request saved, but the email notification could not be queued. Please check the mail and queue configuration.')
+        ->not->toContain('The requester will be notified by email.');
+});
+
 test('guest can submit a public access request for restricted research', function () {
     $agency = createPhase7Agency('phase-7-public-agency');
     $agencyAdmin = createPhase7User('agency_admin', $agency);
@@ -163,6 +177,80 @@ test('public access request notifications respect agency admin preferences', fun
         'type' => 'access_request.submitted',
         'user_id' => $notifiedAdmin->id,
     ]);
+});
+
+test('public access request notifies the configured research owner and honors admin copy preference', function () {
+    NotificationFacade::fake();
+
+    $agency = createPhase7Agency('phase-7-research-owner-notification');
+    $uploader = createPhase7User('agency_admin', $agency);
+    $owner = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $uploader);
+    $research->forceFill([
+        'research_owner_name' => $owner->name,
+        'research_owner_email' => $owner->email,
+        'notify_owner_access_requests' => true,
+        'send_owner_copy_to_admin' => false,
+    ])->save();
+
+    $this->postJson(
+        "/api/public/research/{$research->slug}/access-requests",
+        phase7PublicPayload(['requester_email' => 'owner-routing@example.test']),
+    )->assertCreated();
+
+    $this->assertDatabaseHas('notifications', [
+        'type' => 'access_request.submitted',
+        'user_id' => $owner->id,
+        'agency_id' => $agency->id,
+    ]);
+    $this->assertDatabaseMissing('notifications', [
+        'type' => 'access_request.submitted',
+        'user_id' => $uploader->id,
+    ]);
+
+    NotificationFacade::assertSentOnDemand(
+        ResearchOwnerAccessRequestNotification::class,
+        function (ResearchOwnerAccessRequestNotification $notification, array $channels, object $notifiable) use ($owner, $research): bool {
+            $mail = $notification->toMail($notifiable);
+
+            return $channels === ['mail']
+                && $notifiable->routeNotificationFor('mail') === $owner->email
+                && $notification instanceof ShouldQueue
+                && $notification->data['research_title'] === $research->title
+                && $notification->data['requester_name'] === 'Public Researcher'
+                && $mail->attachments === []
+                && $mail->rawAttachments === [];
+        },
+    );
+});
+
+test('research owner access notifications can be disabled while retaining an agency admin copy', function () {
+    NotificationFacade::fake();
+
+    $agency = createPhase7Agency('phase-7-owner-notification-disabled');
+    $uploader = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $uploader);
+    $research->forceFill([
+        'research_owner_name' => 'External Research Owner',
+        'research_owner_email' => 'external.owner@example.test',
+        'notify_owner_access_requests' => false,
+        'send_owner_copy_to_admin' => true,
+    ])->save();
+
+    $this->postJson(
+        "/api/public/research/{$research->slug}/access-requests",
+        phase7PublicPayload(['requester_email' => 'admin-copy@example.test']),
+    )->assertCreated();
+
+    $this->assertDatabaseHas('notifications', [
+        'type' => 'access_request.submitted',
+        'user_id' => $uploader->id,
+        'agency_id' => $agency->id,
+    ]);
+    NotificationFacade::assertSentOnDemandTimes(
+        ResearchOwnerAccessRequestNotification::class,
+        0,
+    );
 });
 
 test('public access request validation and duplicate pending requests are blocked', function () {
@@ -298,7 +386,7 @@ test('honeypot submissions are rejected without records audit logs or notificati
     expect(Notification::query()->where('type', 'access_request.submitted')->exists())->toBeFalse();
 });
 
-test('captcha is optional by default and enforced when enabled', function () {
+test('captcha may be explicitly disabled in the testing environment', function () {
     $agency = createPhase7Agency('phase-7-captcha-agency');
     $agencyAdmin = createPhase7User('agency_admin', $agency);
     $research = createPhase7Research($agency, $agencyAdmin);
@@ -307,27 +395,28 @@ test('captcha is optional by default and enforced when enabled', function () {
         "/api/public/research/{$research->slug}/access-requests",
         phase7PublicPayload(['requester_email' => 'captcha-disabled@example.test']),
     )->assertCreated();
+});
+
+test('enabled captcha configuration verifies a token end to end', function () {
+    $agency = createPhase7Agency('phase-7-captcha-valid');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
 
     config([
         'rikms.public_access_requests.captcha.enabled' => true,
+        'rikms.public_access_requests.captcha.frontend_enabled' => true,
+        'rikms.public_access_requests.captcha.provider' => 'turnstile',
+        'rikms.public_access_requests.captcha.site_key' => 'test-site-key',
         'rikms.public_access_requests.captcha.secret_key' => 'test-secret',
+        'rikms.public_access_requests.captcha.allowed_hostnames' => ['rikms.example.test'],
+        'rikms.public_access_requests.captcha.expected_action' => 'public_access_request',
     ]);
 
-    Http::fakeSequence()
-        ->push(['success' => false], 200)
-        ->push(['success' => true], 200);
-
-    $this->postJson(
-        "/api/public/research/{$research->slug}/access-requests",
-        phase7PublicPayload([
-            'requester_email' => 'captcha-invalid@example.test',
-            'captcha_token' => 'invalid-token',
-        ]),
-    )
-        ->assertUnprocessable()
-        ->assertJsonValidationErrors(['captcha_token']);
-
-    expect(AccessRequest::query()->where('requester_email', 'captcha-invalid@example.test')->exists())->toBeFalse();
+    Http::fake(['*' => Http::response([
+        'success' => true,
+        'hostname' => 'rikms.example.test',
+        'action' => 'public_access_request',
+    ])]);
 
     $this->postJson(
         "/api/public/research/{$research->slug}/access-requests",
@@ -343,6 +432,126 @@ test('captcha is optional by default and enforced when enabled', function () {
         return ($body['secret'] ?? null) === 'test-secret'
             && ($body['response'] ?? null) === 'valid-token';
     });
+});
+
+test('enabled captcha rejects a valid token issued for another hostname', function () {
+    $agency = createPhase7Agency('phase-7-captcha-hostname');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+
+    config([
+        'rikms.public_access_requests.captcha.enabled' => true,
+        'rikms.public_access_requests.captcha.secret_key' => 'test-secret',
+        'rikms.public_access_requests.captcha.allowed_hostnames' => ['rikms.example.test'],
+        'rikms.public_access_requests.captcha.expected_action' => 'public_access_request',
+    ]);
+    Http::fake(['*' => Http::response([
+        'success' => true,
+        'hostname' => 'attacker.example.test',
+        'action' => 'public_access_request',
+    ])]);
+
+    $this->postJson(
+        "/api/public/research/{$research->slug}/access-requests",
+        phase7PublicPayload([
+            'requester_email' => 'captcha-hostname@example.test',
+            'captcha_token' => 'valid-wrong-host-token',
+        ]),
+    )->assertUnprocessable()->assertJsonValidationErrors(['captcha_token']);
+
+    expect(AccessRequest::query()->where('requester_email', 'captcha-hostname@example.test')->exists())->toBeFalse();
+});
+
+test('enabled captcha rejects a valid token issued for another action', function () {
+    $agency = createPhase7Agency('phase-7-captcha-action');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+
+    config([
+        'rikms.public_access_requests.captcha.enabled' => true,
+        'rikms.public_access_requests.captcha.secret_key' => 'test-secret',
+        'rikms.public_access_requests.captcha.allowed_hostnames' => ['rikms.example.test'],
+        'rikms.public_access_requests.captcha.expected_action' => 'public_access_request',
+    ]);
+    Http::fake(['*' => Http::response([
+        'success' => true,
+        'hostname' => 'rikms.example.test',
+        'action' => 'login',
+    ])]);
+
+    $this->postJson(
+        "/api/public/research/{$research->slug}/access-requests",
+        phase7PublicPayload([
+            'requester_email' => 'captcha-action@example.test',
+            'captcha_token' => 'valid-wrong-action-token',
+        ]),
+    )->assertUnprocessable()->assertJsonValidationErrors(['captcha_token']);
+
+    expect(AccessRequest::query()->where('requester_email', 'captcha-action@example.test')->exists())->toBeFalse();
+});
+
+test('enabled captcha rejects a missing token with a safe message', function () {
+    $agency = createPhase7Agency('phase-7-captcha-missing');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+
+    config([
+        'rikms.public_access_requests.captcha.enabled' => true,
+        'rikms.public_access_requests.captcha.secret_key' => 'test-secret',
+    ]);
+
+    $this->postJson(
+        "/api/public/research/{$research->slug}/access-requests",
+        phase7PublicPayload(['requester_email' => 'captcha-missing@example.test']),
+    )
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.captcha_token.0', 'We could not verify the submission. Please try again.');
+
+    Http::assertNothingSent();
+});
+
+test('enabled captcha rejects invalid tokens', function () {
+    $agency = createPhase7Agency('phase-7-captcha-invalid');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+
+    config([
+        'rikms.public_access_requests.captcha.enabled' => true,
+        'rikms.public_access_requests.captcha.secret_key' => 'test-secret',
+    ]);
+    Http::fake(['*' => Http::response(['success' => false])]);
+
+    $this->postJson(
+        "/api/public/research/{$research->slug}/access-requests",
+        phase7PublicPayload([
+            'requester_email' => 'captcha-invalid@example.test',
+            'captcha_token' => 'invalid-token',
+        ]),
+    )
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['captcha_token']);
+});
+
+test('enabled captcha fails closed when the provider is unavailable', function () {
+    $agency = createPhase7Agency('phase-7-captcha-unavailable');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+
+    config([
+        'rikms.public_access_requests.captcha.enabled' => true,
+        'rikms.public_access_requests.captcha.secret_key' => 'test-secret',
+    ]);
+    Http::fake(fn () => throw new RuntimeException('Simulated provider outage'));
+
+    $this->postJson(
+        "/api/public/research/{$research->slug}/access-requests",
+        phase7PublicPayload([
+            'requester_email' => 'captcha-unavailable@example.test',
+            'captcha_token' => 'provider-token',
+        ]),
+    )
+        ->assertUnprocessable()
+        ->assertJsonPath('errors.captcha_token.0', 'We could not verify the submission. Please try again.');
 });
 
 test('public access request throttling limits repeated IP and email submissions', function () {
@@ -509,15 +718,152 @@ test('agency access approval queues requester email notification after status up
 
     NotificationFacade::assertSentOnDemand(
         AccessRequestApprovedNotification::class,
-        function (AccessRequestApprovedNotification $notification, array $channels, object $notifiable) use ($research): bool {
+        function (AccessRequestApprovedNotification $notification, array $channels, object $notifiable) use ($research, $accessRequest): bool {
+            $mail = $notification->toMail($notifiable);
+            $approvedUrl = (string) ($notification->data['access_url'] ?? '');
+
             return $channels === ['mail']
                 && $notifiable->routeNotificationFor('mail') === 'approval@example.test'
                 && $notification instanceof ShouldQueue
                 && $notification->data['research_title'] === $research->title
                 && $notification->data['status'] === 'Approved'
-                && $notification->data['request_reference'] !== null;
+                && $notification->data['request_reference'] !== null
+                && str_contains($approvedUrl, '/approved-access/')
+                && ! str_contains($approvedUrl, '/browse-research/'.$research->slug)
+                && $accessRequest->fresh()->access_token_hash === hash('sha256', basename(parse_url($approvedUrl, PHP_URL_PATH)))
+                && $mail->attachments === []
+                && $mail->rawAttachments === [];
         },
     );
+});
+
+test('approved access token opens landing page and downloads only its restricted research pdf', function () {
+    Storage::fake('local');
+
+    $agency = createPhase7Agency('phase-7-token-download-agency');
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+    Storage::disk('local')->put("research/{$research->id}/approved.pdf", 'Approved PDF contents');
+    $file = ResearchFile::create([
+        'research_id' => $research->id,
+        'agency_id' => $agency->id,
+        'uploaded_by' => $agencyAdmin->id,
+        'original_name' => 'approved-research.pdf',
+        'stored_name' => 'approved.pdf',
+        'disk' => 'local',
+        'path' => "research/{$research->id}/approved.pdf",
+        'mime_type' => 'application/pdf',
+        'extension' => 'pdf',
+        'size_bytes' => 21,
+        'file_type' => 'research_document',
+        'visibility' => 'private',
+        'access_level' => 'restricted',
+        'status' => 'active',
+        'uploaded_at' => now(),
+    ]);
+    $token = str()->random(64);
+    $accessRequest = AccessRequest::create([
+        'research_id' => $research->id,
+        'agency_id' => $agency->id,
+        'requester_name' => 'Approved Token Researcher',
+        'requester_email' => 'approved-token@example.test',
+        'purpose' => 'Approved token download test',
+        'status' => 'approved',
+        'requested_at' => now(),
+        'access_token_hash' => hash('sha256', $token),
+        'access_token_generated_at' => now(),
+        'access_expires_at' => now()->addDay(),
+    ]);
+
+    $this->get("/approved-access/{$token}")
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('approved-access')
+            ->where('state', 'valid')
+            ->where('researchTitle', $research->title)
+            ->where('downloadUrl', route('approved-access.download', ['token' => $token])));
+
+    $this->get("/api/public/research/{$research->slug}/download")->assertForbidden();
+
+    $this->get("/approved-access/{$token}/download")
+        ->assertOk()
+        ->assertDownload('approved-research.pdf');
+
+    expect($accessRequest->fresh()->access_token_last_used_at)->not->toBeNull();
+    $audit = AuditLog::query()->where('event', 'access_request.approved_file_downloaded')->firstOrFail();
+    expect($audit->metadata['file_id'])->toBe($file->id)
+        ->and($audit->metadata['research_id'])->toBe($research->id)
+        ->and(json_encode($audit->toArray()))->not->toContain($token);
+});
+
+test('approved access tokens fail closed for invalid request states', function (string $state, callable $mutate) {
+    Storage::fake('local');
+
+    $agency = createPhase7Agency('phase-7-token-state-'.str()->random(6));
+    $agencyAdmin = createPhase7User('agency_admin', $agency);
+    $research = createPhase7Research($agency, $agencyAdmin);
+    Storage::disk('local')->put("research/{$research->id}/protected.pdf", 'Protected PDF');
+    $file = ResearchFile::create([
+        'research_id' => $research->id,
+        'agency_id' => $agency->id,
+        'uploaded_by' => $agencyAdmin->id,
+        'original_name' => 'protected.pdf',
+        'stored_name' => 'protected.pdf',
+        'disk' => 'local',
+        'path' => "research/{$research->id}/protected.pdf",
+        'mime_type' => 'application/pdf',
+        'extension' => 'pdf',
+        'size_bytes' => 13,
+        'file_type' => 'research_document',
+        'visibility' => 'private',
+        'access_level' => 'restricted',
+        'status' => 'active',
+        'uploaded_at' => now(),
+    ]);
+    $token = str()->random(64);
+    $accessRequest = AccessRequest::create([
+        'research_id' => $research->id,
+        'agency_id' => $agency->id,
+        'requester_name' => 'Invalid State Researcher',
+        'requester_email' => 'invalid-state@example.test',
+        'purpose' => 'Invalid token state test',
+        'status' => 'approved',
+        'requested_at' => now(),
+        'access_token_hash' => hash('sha256', $token),
+        'access_token_generated_at' => now(),
+        'access_expires_at' => now()->addDay(),
+    ]);
+
+    $mutate($accessRequest, $research, $file);
+
+    $this->get("/approved-access/{$token}")->assertForbidden();
+    $this->get("/approved-access/{$token}/download")->assertForbidden();
+
+    $audit = AuditLog::query()->where('event', 'access_request.approved_access_denied')->latest('created_at')->firstOrFail();
+    expect($audit->metadata['result'])->toBe($state)
+        ->and(json_encode($audit->toArray()))->not->toContain($token);
+})->with([
+    'pending request' => ['invalid', fn (AccessRequest $request) => $request->update(['status' => 'pending'])],
+    'denied request' => ['invalid', fn (AccessRequest $request) => $request->update(['status' => 'denied'])],
+    'expired approval' => ['expired', fn (AccessRequest $request) => $request->update(['access_expires_at' => now()->subMinute()])],
+    'revoked approval' => ['revoked', fn (AccessRequest $request) => $request->update(['access_revoked_at' => now()])],
+    'archived access request' => ['revoked', fn (AccessRequest $request) => $request->update(['archived_at' => now()])],
+    'invalid requester email' => ['invalid', fn (AccessRequest $request) => $request->update(['requester_email' => 'invalid'])],
+    'archived file' => ['invalid', fn (AccessRequest $request, Research $research, ResearchFile $file) => $file->update(['status' => 'archived', 'archived_at' => now()])],
+    'archived research' => ['invalid', fn (AccessRequest $request, Research $research) => $research->update(['status' => 'archived', 'archived_at' => now()])],
+    'superseded research' => ['invalid', function (AccessRequest $request, Research $research): void {
+        $replacement = $research->replicate(['slug']);
+        $replacement->slug = $research->slug.'-replacement';
+        $replacement->save();
+        $research->update(['status' => 'superseded', 'superseded_by_id' => $replacement->id]);
+    }],
+]);
+
+test('malformed approved access token returns a safe error without exposing records', function () {
+    $this->get('/approved-access/not-a-valid-token')->assertForbidden();
+    $this->get('/approved-access/not-a-valid-token/download')
+        ->assertForbidden()
+        ->assertDontSee('research');
 });
 
 test('agency access denial queues requester email notification with public reason only', function () {
@@ -623,10 +969,14 @@ test('duplicate finalized access decision does not send a duplicate requester em
         ->postJson("/api/agency/access-requests/{$accessRequest->id}/approve")
         ->assertOk();
 
+    $tokenHash = $accessRequest->fresh()->access_token_hash;
+
     $this->actingAs($agencyAdmin)
         ->postJson("/api/agency/access-requests/{$accessRequest->id}/approve")
         ->assertStatus(409);
 
+    expect($tokenHash)->not->toBeNull()
+        ->and($accessRequest->fresh()->access_token_hash)->toBe($tokenHash);
     NotificationFacade::assertSentOnDemandTimes(AccessRequestApprovedNotification::class, 1);
 });
 
@@ -769,7 +1119,7 @@ test('decision rollback does not dispatch requester email notification', functio
         AccessRequestEmailNotificationService::class,
         fn () => new class extends AccessRequestEmailNotificationService
         {
-            public function queueDecisionNotificationAfterCommit(AccessRequest $accessRequest, string $status): AccessRequestEmailNotificationResult
+            public function queueDecisionNotificationAfterCommit(AccessRequest $accessRequest, string $status, ?string $accessToken = null): AccessRequestEmailNotificationResult
             {
                 throw new RuntimeException('Forced rollback after decision update');
             }

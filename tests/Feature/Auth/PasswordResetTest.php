@@ -25,6 +25,30 @@ test('reset password link can be requested', function () {
     Notification::assertSentTo($user, ResetPassword::class);
 });
 
+test('password reset requests are throttled by normalized email and ip without account disclosure', function () {
+    Notification::fake();
+
+    $email = 'Missing.User@Example.test';
+
+    foreach (range(1, 5) as $attempt) {
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.10'])
+            ->post(route('password.email'), ['email' => $attempt === 1 ? $email : strtolower($email)])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+    }
+
+    $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.10'])
+        ->post(route('password.email'), ['email' => strtolower($email)])
+        ->assertTooManyRequests();
+
+    $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.11'])
+        ->post(route('password.email'), ['email' => strtolower($email)])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    Notification::assertNothingSent();
+});
+
 test('reset password screen can be rendered', function () {
     Notification::fake();
 

@@ -9,9 +9,9 @@
     ],
     "license": "MIT",
     "require": {
-        "php": "^8.2",
+        "php": "^8.4.1",
+        "dompdf/dompdf": "^3.1",
         "inertiajs/inertia-laravel": "^2.0",
-        "jenssegers/mongodb": "*",
         "laravel/fortify": "^1.30",
         "laravel/framework": "^12.0",
         "laravel/sanctum": "^4.3",
@@ -57,13 +57,18 @@
         ],
         "dev": [
             "Composer\\Config::disableProcessTimeout",
-            "npx concurrently -c \"#93c5fd,#c4b5fd,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1\" \"npm run dev\" --names='server,queue,vite'"
+            "npx concurrently -c \"#93c5fd,#c4b5fd,#86efac,#fdba74\" \"php artisan serve\" \"php artisan queue:listen database --queue=health,default --tries=3 --timeout=120\" \"php artisan schedule:work\" \"npm run dev\" --names='server,queue,scheduler,vite'"
         ],
         "dev:ssr": [
             "npm run build:ssr",
             "Composer\\Config::disableProcessTimeout",
-            "npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1\" \"php artisan pail --timeout=0\" \"php artisan inertia:start-ssr\" --names=server,queue,logs,ssr --kill-others"
+            "npx concurrently -c \"#93c5fd,#c4b5fd,#86efac,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan queue:listen database --queue=health,default --tries=3 --timeout=120\" \"php artisan schedule:work\" \"php artisan pail --timeout=0\" \"php artisan inertia:start-ssr\" --names=server,queue,scheduler,logs,ssr --kill-others"
         ],
+        "runtime:worker": "@php artisan queue:work database --queue=health,default --sleep=3 --tries=3 --backoff=10 --timeout=120 --max-time=3600",
+        "runtime:scheduler": "@php artisan schedule:work",
+        "runtime:check": "@php artisan rikms:runtime-check",
+        "clamav:check": "@php artisan rikms:clamav-check",
+        "monitor:check": "@php artisan rikms:monitor-check",
         "lint": [
             "pint --parallel"
         ],
@@ -76,6 +81,10 @@
             "npm run format:check",
             "npm run types:check",
             "@test"
+        ],
+        "security:audit": [
+            "composer audit --locked",
+            "npm audit --omit=dev"
         ],
         "test": [
             "@php artisan config:clear --ansi",
@@ -114,6 +123,9 @@
         "allow-plugins": {
             "pestphp/pest-plugin": true,
             "php-http/discovery": true
+        },
+        "platform": {
+            "php": "8.4.1"
         }
     },
     "minimum-stability": "stable",

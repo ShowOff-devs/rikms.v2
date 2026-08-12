@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Agency;
 use App\Models\User;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Support\Facades\Event;
@@ -42,6 +43,32 @@ test('email can be verified', function () {
     Event::assertDispatched(Verified::class);
     expect($user->fresh()->hasVerifiedEmail())->toBeTrue();
     $response->assertRedirect(route('dashboard', absolute: false).'?verified=1');
+});
+
+test('verified agency admin is sent directly to the agency dashboard', function () {
+    $agency = Agency::create([
+        'slug' => 'verification-test-agency',
+        'name' => 'Verification Test Agency',
+        'short_name' => 'VTA',
+        'type' => 'Government Agency',
+        'status' => 'active',
+    ]);
+    $user = User::factory()->unverified()->create([
+        'agency_id' => $agency->id,
+        'role' => 'agency_admin',
+        'status' => 'active',
+    ]);
+
+    $verificationUrl = URL::temporarySignedRoute(
+        'verification.verify',
+        now()->addMinutes(60),
+        ['id' => $user->id, 'hash' => sha1($user->email)],
+    );
+
+    $this->actingAs($user)->get($verificationUrl)
+        ->assertRedirect(route('agency.dashboard', absolute: false).'?verified=1');
+
+    expect($user->fresh()->hasVerifiedEmail())->toBeTrue();
 });
 
 test('email is not verified with invalid hash', function () {

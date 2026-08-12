@@ -1,4 +1,4 @@
-import { Camera, Mail } from 'lucide-react';
+import { Camera, Mail, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useMemo, useRef } from 'react';
 import type { AccountSettings } from '@/types/settings';
@@ -9,10 +9,18 @@ type AccountInformationCardProps = {
     errors: Record<string, string>;
     onAccountChange: (field: keyof AccountSettings, value: string) => void;
     onPhotoSelected: (file: File) => void;
+    currentPassword: string;
+    emailChanged: boolean;
+    isSavingProfile: boolean;
+    isSavingPhoto: boolean;
+    onCurrentPasswordChange: (value: string) => void;
+    onSaveProfile: () => void;
+    onUploadPhoto: () => void;
+    onRemovePhoto: () => void;
 };
 
 const acceptedPhotoTypes =
-    '.png,.svg,.jpg,.jpeg,image/png,image/svg+xml,image/jpeg';
+    '.png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp';
 
 const inputClass =
     'h-[42px] w-full rounded-[10px] border border-[#e5e7eb] bg-[#f9fafb] px-4 text-sm text-[#101828] outline-none placeholder:text-[rgba(10,10,10,0.5)] focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10 aria-invalid:border-[#ff6467] aria-invalid:ring-[#ff6467]/10 disabled:cursor-not-allowed disabled:bg-[#f3f4f6] disabled:text-[#6a7282]';
@@ -23,6 +31,14 @@ export function AccountInformationCard({
     errors,
     onAccountChange,
     onPhotoSelected,
+    currentPassword,
+    emailChanged,
+    isSavingProfile,
+    isSavingPhoto,
+    onCurrentPasswordChange,
+    onSaveProfile,
+    onUploadPhoto,
+    onRemovePhoto,
 }: AccountInformationCardProps) {
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const visiblePhotoUrl = profilePhotoPreviewUrl ?? account.profilePhotoUrl;
@@ -94,6 +110,29 @@ export function AccountInformationCard({
                         <Camera className="size-4" />
                         Change photo
                     </button>
+                    {profilePhotoPreviewUrl ? (
+                        <button
+                            type="button"
+                            onClick={onUploadPhoto}
+                            disabled={isSavingPhoto}
+                            className="mt-3 ml-2 inline-flex h-9 items-center rounded-[10px] bg-[#1e3a8a] px-3 text-sm font-medium text-white disabled:opacity-60"
+                        >
+                            {isSavingPhoto ? 'Uploading...' : 'Upload Photo'}
+                        </button>
+                    ) : null}
+                    {account.profilePhotoUrl && !profilePhotoPreviewUrl ? (
+                        <button
+                            type="button"
+                            onClick={onRemovePhoto}
+                            disabled={isSavingPhoto}
+                            className="mt-3 ml-2 inline-flex h-9 items-center gap-2 rounded-[10px] border border-[#ffc9c9] px-3 text-sm font-medium text-[#c10007] disabled:opacity-60"
+                        >
+                            <Trash2 className="size-4" /> Remove photo
+                        </button>
+                    ) : null}
+                    <p className="mt-2 text-xs text-[#6a7282]">
+                        PNG, JPG, or WebP. Maximum 2 MB.
+                    </p>
                     {errors.profilePhoto ? (
                         <p className="mt-2 text-xs leading-4 font-medium text-[#e7000b]">
                             {errors.profilePhoto}
@@ -149,6 +188,35 @@ export function AccountInformationCard({
                         className={inputClass}
                     />
                 </Field>
+                {emailChanged ? (
+                    <Field
+                        label="Current Password"
+                        required
+                        error={errors.currentPassword}
+                    >
+                        <input
+                            data-field="currentPassword"
+                            value={currentPassword}
+                            onChange={(event) =>
+                                onCurrentPasswordChange(event.target.value)
+                            }
+                            type="password"
+                            autoComplete="current-password"
+                            aria-invalid={Boolean(errors.currentPassword)}
+                            className={inputClass}
+                        />
+                    </Field>
+                ) : null}
+            </div>
+            <div className="mt-5 flex justify-end">
+                <button
+                    type="button"
+                    onClick={onSaveProfile}
+                    disabled={isSavingProfile}
+                    className="h-10 rounded-[10px] bg-[#1e3a8a] px-4 text-sm font-semibold text-white disabled:opacity-60"
+                >
+                    {isSavingProfile ? 'Saving...' : 'Save Profile'}
+                </button>
             </div>
         </section>
     );

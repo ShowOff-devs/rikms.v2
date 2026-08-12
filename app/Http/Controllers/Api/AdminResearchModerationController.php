@@ -28,6 +28,7 @@ class AdminResearchModerationController extends Controller
 {
     private const MODERATION_AUDIT_EVENTS = [
         'research.approved',
+        'research.approved_published',
         'research.rejected',
         'research.published',
         'research.returned',
@@ -55,7 +56,89 @@ class AdminResearchModerationController extends Controller
             return ApiResponse::error('Only submitted or under-review research can be rejected.', [], 422);
         }
 
-        return $this->moderate($request, $research, 'rejected', 'research.rejected', [], 'Research rejected.');
+        return $this->moderate($request, $research, 'rejected', 'research.rejected', [], 'Research revision requested.');
+    }
+
+    public function approveAndPublish(ApproveResearchRequest $request, Research $research): JsonResponse
+    {
+        if (! in_array($research->status, [Statuses::RESEARCH_SUBMITTED, Statuses::RESEARCH_UNDER_REVIEW], true)) {
+            return ApiResponse::error('Only submitted or under-review research can be approved and published.', [], 422);
+        }
+
+        DB::transaction(function () use ($request, $research): void {
+            $lockedResearch = Research::query()->lockForUpdate()->findOrFail($research->id);
+
+            if (! in_array($lockedResearch->status, [Statuses::RESEARCH_SUBMITTED, Statuses::RESEARCH_UNDER_REVIEW], true)) {
+                abort(422, 'This action is not allowed for the current research status.');
+            }
+
+            $oldValues = $lockedResearch->only(['status', 'approved_at', 'approved_by', 'published_at', 'slug']);
+            $nextValues = [
+                'status' => Statuses::RESEARCH_PUBLISHED,
+                'approved_at' => now(),
+                'approved_by' => $request->user()->id,
+                'published_at' => now(),
+            ];
+
+            if (! $lockedResearch->slug && $lockedResearch->title) {
+                $nextValues['slug'] = ResearchSlugger::generateUniqueResearchSlug(
+                    $lockedResearch->title,
+                    (int) $lockedResearch->id,
+                );
+            }
+
+            $lockedResearch->update($nextValues);
+
+            if ($lockedResearch->revision_parent_id) {
+                $parent = $lockedResearch->revisionParent()->lockForUpdate()->first();
+
+                if ($parent && $parent->status === Statuses::RESEARCH_PUBLISHED) {
+                    $parentOldValues = $parent->only(['status', 'superseded_by_id']);
+                    $parent->update([
+                        'status' => Statuses::RESEARCH_SUPERSEDED,
+                        'superseded_by_id' => $lockedResearch->id,
+                    ]);
+                    AuditLogger::record(
+                        $request,
+                        'research.superseded',
+                        $parent,
+                        $parentOldValues,
+                        $parent->fresh()->only(['status', 'superseded_by_id']),
+                        ['published_revision_id' => $lockedResearch->id],
+                    );
+                }
+            }
+
+            ResearchApproval::create([
+                'research_id' => $lockedResearch->id,
+                'reviewed_by' => $request->user()->id,
+                'status' => 'approved',
+                'issue_type' => null,
+                'remarks' => $request->validated('notes'),
+                'reviewed_at' => now(),
+            ]);
+
+            $this->notifyAgency(
+                $lockedResearch,
+                'research.approved_published',
+                'Research Approved and Published',
+                'A research record was approved and published in one moderation action.',
+            );
+
+            AuditLogger::record(
+                $request,
+                'research.approved_published',
+                $lockedResearch,
+                $oldValues,
+                $lockedResearch->fresh()->only(['status', 'approved_at', 'approved_by', 'published_at', 'slug']),
+                ['notes' => $request->validated('notes')],
+            );
+        });
+
+        return ApiResponse::success(
+            'Research approved and published.',
+            (new ResearchResource($research->refresh()->load(['agency', 'uploader', 'latestModerationDecision'])))->resolve($request),
+        );
     }
 
     public function publish(PublishResearchRequest $request, Research $research): JsonResponse
@@ -113,6 +196,7 @@ class AdminResearchModerationController extends Controller
                 $research,
                 $oldValues,
                 $research->fresh()->only(['status', 'archived_at', 'archived_by', 'archive_reason']),
+                ['reason' => $request->validated('reason')],
             );
         });
 
@@ -275,20 +359,27 @@ class AdminResearchModerationController extends Controller
                 }
             }
 
-            ResearchApproval::create([
+            $moderationDecision = ResearchApproval::create([
                 'research_id' => $research->id,
                 'reviewed_by' => $request->user()->id,
                 'status' => $status === Statuses::RESEARCH_PUBLISHED ? 'approved' : $status,
+                'issue_type' => $event === 'research.rejected'
+                    ? ($request->input('issue_type') ?: 'other_manual_review')
+                    : null,
                 'remarks' => $request->input('notes'),
                 'reviewed_at' => now(),
             ]);
 
-            $this->notifyAgency(
-                $research,
-                $event,
-                str($event)->after('research.')->replace('_', ' ')->title()->prepend('Research ')->toString(),
-                'A research moderation action was completed.',
-            );
+            if ($event === 'research.rejected') {
+                $this->notifyAgencyRevisionRequested($research, $moderationDecision, $request);
+            } else {
+                $this->notifyAgency(
+                    $research,
+                    $event,
+                    str($event)->after('research.')->replace('_', ' ')->title()->prepend('Research ')->toString(),
+                    'A research moderation action was completed.',
+                );
+            }
 
             AuditLogger::record(
                 $request,
@@ -296,14 +387,49 @@ class AdminResearchModerationController extends Controller
                 $research,
                 $oldValues,
                 $research->fresh()->only(['status', 'approved_at', 'approved_by', 'published_at']),
-                ['notes' => $request->input('notes')],
+                [
+                    'notes' => $request->input('notes'),
+                    'issue_type' => $event === 'research.rejected'
+                        ? ($request->input('issue_type') ?: 'other_manual_review')
+                        : null,
+                ],
             );
         });
 
         return ApiResponse::success(
             $message,
-            (new ResearchResource($research->refresh()->load(['agency', 'uploader'])))->resolve($request),
+            (new ResearchResource($research->refresh()->load(['agency', 'uploader', 'latestModerationDecision.reviewer'])))->resolve($request),
         );
+    }
+
+    private function notifyAgencyRevisionRequested(
+        Research $research,
+        ResearchApproval $decision,
+        Request $request,
+    ): void {
+        $instructions = trim((string) $decision->remarks);
+
+        Notification::create([
+            'agency_id' => $research->agency_id,
+            'type' => 'research.revision_requested',
+            'title' => 'Revision Requested',
+            'message' => $instructions,
+            'data' => [
+                'research_id' => $research->id,
+                'research_title' => $research->title,
+                'status' => $research->status,
+                'concern_type' => $decision->issue_type,
+                'issue_type' => $decision->issue_type,
+                'instructions' => $instructions,
+                'moderation_date' => $decision->reviewed_at?->toISOString(),
+                'severity' => 'blocking',
+                'moderator_id' => $request->user()->id,
+                'moderator_name' => $request->user()->name,
+            ],
+            'action_url' => '/agency/research/'.$research->id,
+            'priority' => 'high',
+            'status' => Statuses::NOTIFICATION_UNREAD,
+        ]);
     }
 
     private function notifyAgency(Research $research, string $type, string $title, string $message): void
@@ -483,6 +609,7 @@ class AdminResearchModerationController extends Controller
     {
         return match ($event) {
             'research.approved' => 'Approved research:',
+            'research.approved_published' => 'Approved and published research:',
             'research.rejected' => 'Flagged for revision:',
             'research.published' => 'Published research:',
             'research.returned' => 'Returned research to draft:',
@@ -498,6 +625,7 @@ class AdminResearchModerationController extends Controller
     {
         return match ($event) {
             'research.approved' => 'approved',
+            'research.approved_published' => 'version-approved',
             'research.rejected', 'research.returned' => 'revision-requested',
             'research.published', 'research.superseded' => 'version-approved',
             'research.archived' => 'archived',
