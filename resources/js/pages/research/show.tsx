@@ -11,6 +11,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import PortalFooter from '@/components/layout/portal-footer';
 import PortalNavbar from '@/components/layout/portal-navbar';
+import TurnstileWidget from '@/components/public/turnstile-widget';
 import ResearchEmptyState from '@/components/research/ResearchEmptyState';
 import { ApiError } from '@/lib/api-client';
 import {
@@ -23,26 +24,6 @@ import type {
     PublicResearchMetadataField,
     ResearchRecord,
 } from '@/types/research';
-
-type TurnstileApi = {
-    render: (
-        element: HTMLElement,
-        options: {
-            sitekey: string;
-            action: string;
-            callback: (token: string) => void;
-            'expired-callback': () => void;
-            'error-callback': () => void;
-        },
-    ) => string;
-    reset: (widgetId?: string) => void;
-};
-
-declare global {
-    interface Window {
-        turnstile?: TurnstileApi;
-    }
-}
 
 type ResearchDetailPageProps = {
     researchId?: string;
@@ -100,7 +81,7 @@ export default function ResearchDetailPage({
     const [accessRequestsEnabled, setAccessRequestsEnabled] = useState(true);
     const [captchaToken, setCaptchaToken] = useState('');
     const [captchaError, setCaptchaError] = useState<string | null>(null);
-    const [captchaWidgetId, setCaptchaWidgetId] = useState<string | null>(null);
+    const [captchaResetKey, setCaptchaResetKey] = useState(0);
     const [form, setForm] = useState({
         name: '',
         email: '',
@@ -132,89 +113,6 @@ export default function ResearchDetailPage({
             isCurrent = false;
         };
     }, [researchId]);
-
-    useEffect(() => {
-        if (!requestOpen || !captchaEnabled || !captchaSiteKey) {
-            return;
-        }
-
-        const reportCaptchaUnavailable = () => {
-            setCaptchaToken('');
-            setCaptchaError(
-                'Verification is temporarily unavailable. Please try again later.',
-            );
-        };
-
-        const renderCaptcha = () => {
-            const container = document.getElementById(
-                'public-access-request-captcha',
-            );
-
-            if (!container || container.childElementCount > 0) {
-                return;
-            }
-
-            if (window.turnstile) {
-                const widgetId = window.turnstile.render(container, {
-                    sitekey: captchaSiteKey,
-                    action: 'public_access_request',
-                    callback: (token) => {
-                        setCaptchaError(null);
-                        setCaptchaToken(token);
-                    },
-                    'expired-callback': () => setCaptchaToken(''),
-                    'error-callback': reportCaptchaUnavailable,
-                });
-
-                setCaptchaWidgetId(widgetId);
-            }
-        };
-
-        if (window.turnstile) {
-            renderCaptcha();
-
-            return;
-        }
-
-        const existingScript = document.querySelector<HTMLScriptElement>(
-            'script[data-public-access-request-captcha]',
-        );
-
-        if (existingScript) {
-            existingScript.addEventListener('load', renderCaptcha, {
-                once: true,
-            });
-            existingScript.addEventListener('error', reportCaptchaUnavailable, {
-                once: true,
-            });
-
-            return () => {
-                existingScript.removeEventListener('load', renderCaptcha);
-                existingScript.removeEventListener(
-                    'error',
-                    reportCaptchaUnavailable,
-                );
-            };
-        }
-
-        const script = document.createElement('script');
-
-        script.src =
-            'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-        script.async = true;
-        script.defer = true;
-        script.dataset.publicAccessRequestCaptcha = 'true';
-        script.addEventListener('load', renderCaptcha, { once: true });
-        script.addEventListener('error', reportCaptchaUnavailable, {
-            once: true,
-        });
-        document.head.appendChild(script);
-
-        return () => {
-            script.removeEventListener('load', renderCaptcha);
-            script.removeEventListener('error', reportCaptchaUnavailable);
-        };
-    }, [requestOpen]);
 
     const canRequestAccess =
         research?.accessLevel === 'restricted' ||
@@ -252,10 +150,7 @@ export default function ResearchDetailPage({
                 setSubmitError(submissionErrorMessage(error));
                 setFieldErrors(flattenErrors(error.errors));
 
-                if (captchaWidgetId && window.turnstile) {
-                    window.turnstile.reset(captchaWidgetId);
-                    setCaptchaToken('');
-                }
+                setCaptchaResetKey((current) => current + 1);
             } else {
                 setSubmitError(
                     'Unable to submit your request. Please try again.',
@@ -657,9 +552,16 @@ export default function ResearchDetailPage({
                                 </label>
                                 {captchaEnabled && captchaSiteKey ? (
                                     <div>
-                                        <div
+                                        <TurnstileWidget
                                             id="public-access-request-captcha"
-                                            className="min-h-[65px]"
+                                            enabled={
+                                                requestOpen && captchaEnabled
+                                            }
+                                            siteKey={captchaSiteKey}
+                                            action="public_access_request"
+                                            resetKey={captchaResetKey}
+                                            onTokenChange={setCaptchaToken}
+                                            onError={setCaptchaError}
                                         />
                                         {fieldErrors.captcha_token ? (
                                             <span className="mt-1 block text-xs leading-4 text-[#b91c1c]">

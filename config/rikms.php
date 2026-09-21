@@ -1,6 +1,7 @@
 <?php
 
 $safeDevelopmentEnvironment = in_array(env('APP_ENV'), ['local', 'testing'], true);
+$publicSupportEmail = trim((string) env('RIKMS_SUPPORT_EMAIL', ''));
 
 return [
     'dev_seed_accounts' => [
@@ -33,6 +34,28 @@ return [
                 explode(',', (string) env('CAPTCHA_ALLOWED_HOSTNAMES', '')),
             ))),
             'expected_action' => 'public_access_request',
+        ],
+    ],
+
+    'public_contact' => [
+        'enabled' => $publicSupportEmail !== ''
+            && filter_var(env('PUBLIC_CONTACT_ENABLED', true), FILTER_VALIDATE_BOOL),
+        'support_email' => $publicSupportEmail,
+        'limits' => [
+            'submissions_per_ten_minutes' => (int) env('PUBLIC_CONTACT_LIMIT_PER_TEN_MINUTES', 5),
+        ],
+        'captcha' => [
+            'enabled' => filter_var(env('PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED', false), FILTER_VALIDATE_BOOL),
+            'frontend_enabled' => filter_var(env('VITE_PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED', false), FILTER_VALIDATE_BOOL),
+            'provider' => env('CAPTCHA_PROVIDER', 'turnstile'),
+            'site_key' => env('VITE_CAPTCHA_SITE_KEY'),
+            'secret_key' => env('CAPTCHA_SECRET_KEY'),
+            'timeout_seconds' => (float) env('CAPTCHA_VERIFY_TIMEOUT_SECONDS', 3),
+            'allowed_hostnames' => array_values(array_filter(array_map(
+                static fn (string $hostname): string => strtolower(rtrim(trim($hostname), '.')),
+                explode(',', (string) env('CAPTCHA_ALLOWED_HOSTNAMES', '')),
+            ))),
+            'expected_action' => 'public_contact',
         ],
     ],
 

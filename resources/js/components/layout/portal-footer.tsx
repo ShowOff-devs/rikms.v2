@@ -23,16 +23,10 @@ export default function PortalFooter() {
                                 About
                             </Link>
                             <Link
-                                href="/contact"
+                                href="/help"
                                 className="block hover:text-white"
                             >
-                                Help
-                            </Link>
-                            <Link
-                                href="/contact"
-                                className="block hover:text-white"
-                            >
-                                Contact
+                                Help &amp; Support
                             </Link>
                         </div>
                     </div>

@@ -94,7 +94,7 @@ test('public summary exposes landing page metrics from current public data', fun
         'status' => 'active',
     ]);
 
-    Agency::create([
+    $inactiveAgency = Agency::create([
         'slug' => 'inactive-agency',
         'name' => 'Inactive Agency',
         'short_name' => 'IA',
@@ -102,6 +102,23 @@ test('public summary exposes landing page metrics from current public data', fun
         'type' => 'Government Agency',
         'email' => 'inactive@example.gov.ph',
         'status' => 'inactive',
+    ]);
+
+    $inactiveResearch = Research::create([
+        'slug' => 'inactive-agency-study',
+        'agency_id' => $inactiveAgency->id,
+        'uploaded_by' => $research->uploaded_by,
+        'title' => 'Study Owned by an Inactive Agency',
+        'abstract' => 'This published record must not appear in the public portal.',
+        'authors' => ['Dr. Hidden Record'],
+        'publication_year' => 2027,
+        'category' => 'Technology',
+        'sdgs' => ['SDG 9'],
+        'keywords' => ['inactive agency'],
+        'status' => 'published',
+        'access_level' => 'public',
+        'downloads' => 0,
+        'published_at' => now(),
     ]);
 
     Research::create([
@@ -131,6 +148,40 @@ test('public summary exposes landing page metrics from current public data', fun
         ->assertJsonPath('recentPublicationCount', 1)
         ->assertJsonPath('sdgCards.8.count', 1)
         ->assertJsonCount(2, 'featuredResearch');
+
+    $this->getJson('/api/public/research?search=inactive-agency-study')
+        ->assertOk()
+        ->assertJsonPath('total', 0);
+
+    $this->getJson("/api/public/research/{$inactiveResearch->slug}")
+        ->assertNotFound();
+});
+
+test('agency deactivation immediately invalidates cached public research', function () {
+    [$agency, $research] = createPublicPortalResearch();
+
+    $this->getJson('/api/public/summary')
+        ->assertOk()
+        ->assertJsonPath('researchCount', 1);
+
+    $this->getJson('/api/public/research')
+        ->assertOk()
+        ->assertJsonPath('total', 1);
+
+    $agency->update(['status' => 'inactive']);
+
+    $this->getJson('/api/public/summary')
+        ->assertOk()
+        ->assertJsonPath('researchCount', 0)
+        ->assertJsonPath('agencyCount', 0)
+        ->assertJsonCount(0, 'featuredResearch');
+
+    $this->getJson('/api/public/research')
+        ->assertOk()
+        ->assertJsonPath('total', 0);
+
+    $this->getJson("/api/public/research/{$research->slug}")
+        ->assertNotFound();
 });
 
 test('public research detail supports slug and numeric id fallback', function () {

@@ -43,7 +43,11 @@ class Agency extends Model
 
     protected static function booted(): void
     {
-        $invalidate = fn (): mixed => app(PublicResponseCache::class)->invalidateAgencies();
+        $invalidate = function (): void {
+            $cache = app(PublicResponseCache::class);
+            $cache->invalidateAgencies();
+            $cache->invalidateResearch();
+        };
 
         static::saved($invalidate);
         static::deleted($invalidate);

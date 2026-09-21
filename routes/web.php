@@ -34,25 +34,21 @@ Route::inertia('/agencies', 'agencies')->name('agencies');
 Route::get('/agencies/{slug}', fn (string $slug) => Inertia::render('agencies/show', [
     'agencySlug' => $slug,
 ]))->name('agencies.show');
-Route::inertia('/contact', 'contact')->name('contact');
+Route::get('/help', fn () => Inertia::render('contact', [
+    'contactEnabled' => (bool) config('rikms.public_contact.enabled'),
+    'supportEmail' => trim((string) config('rikms.public_contact.support_email')) ?: null,
+]))->name('help');
+Route::permanentRedirect('/contact', '/help')->name('contact');
 Route::get('/approved-access/{token}', [ApprovedAccessController::class, 'show'])
     ->middleware('throttle:approved-access')
     ->name('approved-access.show');
 Route::get('/approved-access/{token}/download', [ApprovedAccessController::class, 'download'])
     ->middleware('throttle:approved-access')
     ->name('approved-access.download');
-Route::get('/privacy-policy', fn () => Inertia::render('public-policy', [
-    'pageKey' => 'privacy-policy',
-]))->name('privacy-policy');
-Route::get('/terms-of-use', fn () => Inertia::render('public-policy', [
-    'pageKey' => 'terms-of-use',
-]))->name('terms-of-use');
-Route::get('/open-access-policy', fn () => Inertia::render('public-policy', [
-    'pageKey' => 'open-access-policy',
-]))->name('open-access-policy');
-Route::get('/submission-guidelines', fn () => Inertia::render('public-policy', [
-    'pageKey' => 'submission-guidelines',
-]))->name('submission-guidelines');
+Route::inertia('/privacy-policy', 'policies/privacy-policy')->name('privacy-policy');
+Route::inertia('/terms-of-use', 'policies/terms-of-use')->name('terms-of-use');
+Route::inertia('/open-access-policy', 'policies/open-access-policy')->name('open-access-policy');
+Route::inertia('/submission-guidelines', 'policies/submission-guidelines')->name('submission-guidelines');
 Route::get('/login', function () {
     return redirect()->route('agency.login');
 })->name('login');
