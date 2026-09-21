@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\SecurityEventResource;
 use App\Models\SecurityEvent;
 use App\Models\User;
+use App\Services\QueueHealthService;
 use App\Services\RuntimeHeartbeat;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
@@ -43,28 +44,38 @@ class AdminSecurityController extends Controller
         ]);
     }
 
-    public function queueHealth(Request $request, RuntimeHeartbeat $heartbeat): JsonResponse
-    {
-        $pendingJobs = Schema::hasTable('jobs') ? DB::table('jobs')->count() : 0;
-        $failedJobs = Schema::hasTable('failed_jobs') ? DB::table('failed_jobs')->count() : 0;
-        $oldestCreatedAt = $pendingJobs > 0 ? DB::table('jobs')->min('created_at') : null;
-        $oldestPendingAgeMinutes = is_numeric($oldestCreatedAt)
-            ? max(0, (int) floor((now()->timestamp - (int) $oldestCreatedAt) / 60))
-            : null;
+    public function queueHealth(
+        Request $request,
+        RuntimeHeartbeat $heartbeat,
+        QueueHealthService $queueHealth,
+    ): JsonResponse {
+        try {
+            $queue = $queueHealth->snapshot();
+            $queueAvailable = true;
+        } catch (\Throwable) {
+            $queue = [
+                'connection' => (string) config('queue.default'),
+                'pending_jobs' => 0,
+                'failed_jobs' => 0,
+                'oldest_pending_job_age_minutes' => null,
+            ];
+            $queueAvailable = false;
+        }
 
         $runtime = $heartbeat->status();
         $status = match (true) {
+            ! $queueAvailable => 'critical',
             ! $runtime['scheduler']['healthy'] || ! $runtime['worker']['healthy'] => 'critical',
-            $failedJobs > 0 || ($oldestPendingAgeMinutes !== null && $oldestPendingAgeMinutes >= 60) => 'critical',
-            $oldestPendingAgeMinutes !== null && $oldestPendingAgeMinutes >= 5 => 'warning',
+            $queue['failed_jobs'] > 0 || ($queue['oldest_pending_job_age_minutes'] !== null && $queue['oldest_pending_job_age_minutes'] >= 60) => 'critical',
+            $queue['oldest_pending_job_age_minutes'] !== null && $queue['oldest_pending_job_age_minutes'] >= 5 => 'warning',
             default => 'healthy',
         };
 
         return ApiResponse::success('Queue health retrieved.', [
-            'queue_connection' => config('queue.default'),
-            'pending_jobs' => $pendingJobs,
-            'failed_jobs' => $failedJobs,
-            'oldest_pending_job_age_minutes' => $oldestPendingAgeMinutes,
+            'queue_connection' => $queue['connection'],
+            'pending_jobs' => $queue['pending_jobs'],
+            'failed_jobs' => $queue['failed_jobs'],
+            'oldest_pending_job_age_minutes' => $queue['oldest_pending_job_age_minutes'],
             'scheduler_heartbeat' => $runtime['scheduler'],
             'worker_heartbeat' => $runtime['worker'],
             'status' => $status,

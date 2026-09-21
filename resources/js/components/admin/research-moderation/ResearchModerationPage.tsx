@@ -16,6 +16,7 @@ import {
     publishResearchRecord,
     returnResearchToDraft,
 } from '@/lib/admin/research-moderation-service';
+import { ApiError } from '@/lib/api-client';
 import type {
     DuplicateResearchMatch,
     FlaggedResearchRecord,
@@ -279,6 +280,33 @@ export function ResearchModerationPage() {
         setConfirmationDuplicate(null);
     };
 
+    const refreshAfterModerationConflict = async (caught: unknown) => {
+        if (!(caught instanceof ApiError) || caught.status !== 409) {
+            return;
+        }
+
+        try {
+            const [loadedRecords, loadedDuplicates, loadedActivities] =
+                await Promise.all([
+                    getFlaggedResearchRecords(),
+                    getDuplicateResearchMatches(),
+                    getModerationActivityLog(),
+                ]);
+
+            setRecords(loadedRecords);
+            setDuplicates(loadedDuplicates);
+            setActivities(loadedActivities);
+            setSelectedDetailsRecord(null);
+            setSelectedReviewRecord(null);
+            closeConfirmation(true);
+            setError(null);
+        } catch {
+            setError(
+                'The research changed, but the moderation data could not be refreshed. Reload the page before trying again.',
+            );
+        }
+    };
+
     const openConfirmation = (
         record: FlaggedResearchRecord,
         action: ModerationConfirmationAction,
@@ -340,6 +368,7 @@ export function ResearchModerationPage() {
             setSelectedReviewRecord(null);
             closeConfirmation(true);
         } catch (caught) {
+            await refreshAfterModerationConflict(caught);
             setFeedback({
                 type: 'error',
                 message:
@@ -378,6 +407,7 @@ export function ResearchModerationPage() {
             setSelectedReviewRecord(null);
             closeConfirmation(true);
         } catch (caught) {
+            await refreshAfterModerationConflict(caught);
             setFeedback({
                 type: 'error',
                 message:
@@ -416,6 +446,7 @@ export function ResearchModerationPage() {
             setSelectedReviewRecord(null);
             closeConfirmation(true);
         } catch (caught) {
+            await refreshAfterModerationConflict(caught);
             setFeedback({
                 type: 'error',
                 message:
@@ -477,6 +508,7 @@ export function ResearchModerationPage() {
             setSelectedReviewRecord(null);
             closeConfirmation(true);
         } catch (caught) {
+            await refreshAfterModerationConflict(caught);
             setFeedback({
                 type: 'error',
                 message:
@@ -511,6 +543,7 @@ export function ResearchModerationPage() {
             setSelectedReviewRecord(null);
             closeConfirmation(true);
         } catch (caught) {
+            await refreshAfterModerationConflict(caught);
             setFeedback({
                 type: 'error',
                 message:
@@ -549,6 +582,7 @@ export function ResearchModerationPage() {
             setSelectedReviewRecord(null);
             closeConfirmation(true);
         } catch (caught) {
+            await refreshAfterModerationConflict(caught);
             setFeedback({
                 type: 'error',
                 message:

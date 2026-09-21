@@ -43,9 +43,10 @@ test('retryable jobs and notifications have bounded attempts timeouts and backof
 });
 
 test('scheduler monitors queue depth every minute without overlap', function () {
+    $queueConnection = (string) config('queue.default');
     $events = collect(app(Schedule::class)->events());
     $event = $events
-        ->first(fn ($event): bool => str_contains($event->command ?? '', 'queue:monitor database:health,database:default --max=100'));
+        ->first(fn ($event): bool => str_contains($event->command ?? '', "queue:monitor {$queueConnection}:health,{$queueConnection}:default --max=100"));
     $schedulerHeartbeat = $events->firstWhere('description', 'rikms:scheduler-heartbeat');
     $workerHeartbeat = $events->firstWhere('description', 'rikms:queue-worker-heartbeat');
     $cspPrune = $events->first(fn ($event): bool => str_contains($event->command ?? '', 'csp:prune-reports'));
@@ -78,13 +79,28 @@ test('runtime check proves fresh scheduler and worker heartbeats', function () {
         ->and(Artisan::output())->toContain('RIKMS queue and scheduler are healthy.');
 });
 
+test('runtime check fails safely when heartbeat storage is unavailable', function () {
+    config()->set('queue.default', 'database');
+
+    $heartbeat = Mockery::mock(RuntimeHeartbeat::class);
+    $heartbeat->shouldReceive('status')
+        ->once()
+        ->andThrow(new RuntimeException('cache credentials must not be displayed'));
+    app()->instance(RuntimeHeartbeat::class, $heartbeat);
+
+    expect(Artisan::call('rikms:runtime-check'))->toBe(1)
+        ->and(Artisan::output())->toContain('RIKMS queue/scheduler runtime check failed.')
+        ->not->toContain('cache credentials must not be displayed');
+});
+
 test('ubuntu worker and scheduler examples preserve graceful operational boundaries', function () {
     $queueUnit = file_get_contents(base_path('deploy/systemd/rikms-queue.service'));
     $schedulerUnit = file_get_contents(base_path('deploy/systemd/rikms-scheduler.service'));
     $schedulerTimer = file_get_contents(base_path('deploy/systemd/rikms-scheduler.timer'));
 
     expect($queueUnit)
-        ->toContain('queue:work database --queue=health,default')
+        ->toContain('queue:work --queue=health,default')
+        ->toContain('EnvironmentFile=-/etc/rikms/rikms.env')
         ->toContain('--tries=3')
         ->toContain('--timeout=120')
         ->toContain('ExecReload=/usr/bin/php artisan queue:restart')
@@ -94,6 +110,7 @@ test('ubuntu worker and scheduler examples preserve graceful operational boundar
         ->toContain('NoNewPrivileges=true')
         ->toContain('ReadWritePaths=/var/www/rikms/storage /var/www/rikms/bootstrap/cache')
         ->and($schedulerUnit)->toContain('artisan schedule:run --no-interaction')
+        ->toContain('EnvironmentFile=-/etc/rikms/rikms.env')
         ->toContain('UMask=0027')
         ->toContain('NoNewPrivileges=true')
         ->and($schedulerTimer)->toContain('OnCalendar=*-*-* *:*:00')

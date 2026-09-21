@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\DraftWriteConflictException;
 use App\Exceptions\MalwareScanException;
+use App\Exceptions\UploadConstraintException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Agency\DeleteResearchFileRequest;
 use App\Http\Requests\Agency\StoreAgencyResearchRequest;
@@ -12,18 +14,21 @@ use App\Http\Requests\Agency\SubmitAgencyResearchRequest;
 use App\Http\Requests\Agency\UpdateAgencyResearchRequest;
 use App\Http\Resources\ResearchFileResource;
 use App\Http\Resources\ResearchResource;
-use App\Jobs\ClassifyResearchSdgJob;
-use App\Jobs\ExtractResearchMetadataJob;
-use App\Jobs\ParsePdfDocumentJob;
+use App\Models\Agency;
+use App\Models\ArchiveRecord;
 use App\Models\Notification;
 use App\Models\Research;
 use App\Models\ResearchFile;
 use App\Models\ResearchReportHighlight;
+use App\Services\AiPipelineDispatcher;
 use App\Services\AiPipelineResultWriter;
 use App\Services\PlatformSettingsService;
 use App\Services\QuarantinedUploadStorage;
 use App\Services\Reports\PerformanceCalculationService;
 use App\Services\Reports\TerminalReportSubmissionValidator;
+use App\Services\ResearchFileStorage;
+use App\Services\ResearchUploadCommitService;
+use App\Services\UploadQuotaService;
 use App\Services\UploadSecurityScanner;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
@@ -32,9 +37,10 @@ use App\Support\ResearchSlugger;
 use App\Support\SecurityEventLogger;
 use App\Support\Statuses;
 use App\Support\UserNotificationPreferences;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -47,8 +53,12 @@ class AgencyResearchWriteController extends Controller
 {
     public function __construct(
         private readonly PlatformSettingsService $settings,
+        private readonly AiPipelineDispatcher $aiPipelineDispatcher,
         private readonly UploadSecurityScanner $uploadSecurityScanner,
         private readonly QuarantinedUploadStorage $quarantinedUploadStorage,
+        private readonly ResearchFileStorage $researchFileStorage,
+        private readonly ResearchUploadCommitService $researchUploadCommitter,
+        private readonly UploadQuotaService $uploadQuota,
         private readonly PerformanceCalculationService $performanceCalculation,
         private readonly TerminalReportSubmissionValidator $terminalReportSubmissionValidator,
     ) {}
@@ -102,67 +112,82 @@ class AgencyResearchWriteController extends Controller
     public function update(UpdateAgencyResearchRequest $request, Research $research): JsonResponse
     {
         $expectedDraftVersion = $request->validated('expected_draft_version');
-        $currentDraftVersion = (int) ($research->reportDetail?->draft_version ?? 0);
-
-        if ($expectedDraftVersion !== null
-            && (int) $expectedDraftVersion !== $currentDraftVersion) {
-            return ApiResponse::error(
-                'This draft was updated in another session. Reload it before saving again.',
-                ['expected_draft_version' => ['The draft has changed since it was loaded.']],
-                409,
-            );
-        }
-
         $expectedUpdatedAt = $request->validated('expected_updated_at');
+        $actor = $request->user();
 
-        if ($expectedDraftVersion === null && $expectedUpdatedAt
-            && $research->updated_at?->toISOString() !== $expectedUpdatedAt) {
+        try {
+            DB::transaction(function () use ($request, $research, $actor, $expectedDraftVersion, $expectedUpdatedAt): void {
+                $lockedResearch = Research::query()
+                    ->whereKey($research->id)
+                    ->where('agency_id', $actor?->agency_id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $lockedResearch || ! $actor?->isActive() || ! $actor->can('updateAgencyDraft', $lockedResearch)) {
+                    throw new AuthorizationException;
+                }
+
+                $lockedDetail = $lockedResearch->reportDetail()->lockForUpdate()->first();
+
+                if ($lockedDetail) {
+                    $lockedResearch->setRelation('reportDetail', $lockedDetail);
+                }
+
+                $currentDraftVersion = (int) ($lockedDetail?->draft_version ?? 0);
+
+                if ($expectedDraftVersion !== null && (int) $expectedDraftVersion !== $currentDraftVersion) {
+                    throw new DraftWriteConflictException('expected_draft_version');
+                }
+
+                if ($expectedDraftVersion === null && $expectedUpdatedAt
+                    && $lockedResearch->updated_at?->toISOString() !== $expectedUpdatedAt) {
+                    throw new DraftWriteConflictException('expected_updated_at');
+                }
+
+                $oldValues = $lockedResearch->only([
+                    'title',
+                    'abstract',
+                    'authors',
+                    'publication_year',
+                    'category',
+                    'sdgs',
+                    'keywords',
+                    'public_metadata',
+                    'public_metadata_fields',
+                    'access_level',
+                    'embargo_until',
+                    'external_url',
+                    'research_owner_name',
+                    'research_owner_email',
+                    'notify_owner_access_requests',
+                    'notify_owner_research_inquiries',
+                    'send_owner_copy_to_admin',
+                ]);
+                $validated = $request->validated();
+                $payload = $this->researchPayload($validated);
+
+                if (! $lockedResearch->slug && ! empty($payload['title'])) {
+                    $payload['slug'] = ResearchSlugger::generateUniqueResearchSlug((string) $payload['title'], (int) $lockedResearch->id);
+                }
+
+                $lockedResearch->update($payload);
+                $this->syncReportData($lockedResearch->refresh(), $validated, (int) $actor->id);
+
+                AuditLogger::record(
+                    $request,
+                    'research.updated',
+                    $lockedResearch,
+                    $oldValues,
+                    $lockedResearch->fresh()->only(array_keys($oldValues)),
+                );
+            });
+        } catch (DraftWriteConflictException $exception) {
             return ApiResponse::error(
-                'This draft was updated in another session. Reload it before saving again.',
-                ['expected_updated_at' => ['The draft has changed since it was loaded.']],
+                $exception->getMessage(),
+                [$exception->field => ['The draft has changed since it was loaded.']],
                 409,
             );
         }
-
-        $oldValues = $research->only([
-            'title',
-            'abstract',
-            'authors',
-            'publication_year',
-            'category',
-            'sdgs',
-            'keywords',
-            'public_metadata',
-            'public_metadata_fields',
-            'access_level',
-            'embargo_until',
-            'external_url',
-            'research_owner_name',
-            'research_owner_email',
-            'notify_owner_access_requests',
-            'notify_owner_research_inquiries',
-            'send_owner_copy_to_admin',
-        ]);
-
-        DB::transaction(function () use ($request, $research, $oldValues): void {
-            $validated = $request->validated();
-            $payload = $this->researchPayload($validated);
-
-            if (! $research->slug && ! empty($payload['title'])) {
-                $payload['slug'] = ResearchSlugger::generateUniqueResearchSlug((string) $payload['title'], (int) $research->id);
-            }
-
-            $research->update($payload);
-            $this->syncReportData($research->refresh(), $validated, (int) $request->user()->id);
-
-            AuditLogger::record(
-                $request,
-                'research.updated',
-                $research,
-                $oldValues,
-                $research->fresh()->only(array_keys($oldValues)),
-            );
-        });
 
         return ApiResponse::success(
             'Agency research draft updated.',
@@ -203,64 +228,124 @@ class AgencyResearchWriteController extends Controller
             return ApiResponse::error('Only published research from your agency can be revised.', [], 403);
         }
 
-        $existingRevision = Research::query()
-            ->where('revision_parent_id', $research->id)
-            ->whereIn('status', [
-                Statuses::RESEARCH_DRAFT,
-                Statuses::RESEARCH_SUBMITTED,
-                Statuses::RESEARCH_UNDER_REVIEW,
-                'approved',
-                'rejected',
-            ])
-            ->whereNull('archived_at')
-            ->latest()
-            ->first();
+        $copiedObjects = [];
 
-        if ($existingRevision) {
-            return ApiResponse::success(
-                'Draft revision already exists.',
-                (new ResearchResource($existingRevision->load(['agency', 'uploader'])))->resolve($request),
-            );
+        try {
+            $result = DB::transaction(function () use ($request, $research, &$copiedObjects): array {
+                $actor = $request->user();
+
+                if (! $actor?->isActive() || $actor->agency_id === null) {
+                    throw new AuthorizationException;
+                }
+
+                Agency::query()->whereKey($actor->agency_id)->lockForUpdate()->firstOrFail();
+                $lockedResearch = Research::query()
+                    ->whereKey($research->id)
+                    ->where('agency_id', $actor->agency_id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $lockedResearch || ! $actor->can('createRevision', $lockedResearch)) {
+                    throw new AuthorizationException;
+                }
+
+                $existingRevision = Research::query()
+                    ->where('active_revision_parent_id', $lockedResearch->id)
+                    ->latest()
+                    ->first();
+
+                if ($existingRevision) {
+                    return ['revision' => $existingRevision, 'created' => false];
+                }
+
+                $lockedResearch->load([
+                    'reportHighlights.files' => fn ($query) => $query
+                        ->where('status', 'active')
+                        ->whereNull('archived_at'),
+                ]);
+                $revisionBytes = $lockedResearch->reportHighlights
+                    ->flatMap->files
+                    ->sum(fn (ResearchFile $file): int => max(0, (int) $file->size_bytes));
+
+                if (! $this->uploadQuota->canStore((int) $lockedResearch->agency_id, $revisionBytes)) {
+                    throw new UploadConstraintException($this->uploadQuota->message());
+                }
+
+                $revision = Research::create([
+                    'slug' => ResearchSlugger::generateUniqueResearchSlug($lockedResearch->title.' revision '.((int) $lockedResearch->revision_number + 1)),
+                    'agency_id' => $lockedResearch->agency_id,
+                    'uploaded_by' => $actor->id,
+                    'revision_parent_id' => $lockedResearch->id,
+                    'revision_number' => (int) $lockedResearch->revision_number + 1,
+                    'title' => $lockedResearch->title,
+                    'abstract' => $lockedResearch->abstract,
+                    'authors' => $lockedResearch->authors ?? [],
+                    'publication_year' => $lockedResearch->publication_year,
+                    'category' => $lockedResearch->category,
+                    'sdgs' => $lockedResearch->sdgs ?? [],
+                    'keywords' => $lockedResearch->keywords ?? [],
+                    'public_metadata' => $lockedResearch->public_metadata ?? [],
+                    'public_metadata_fields' => $lockedResearch->public_metadata_fields ?? [],
+                    'status' => Statuses::RESEARCH_DRAFT,
+                    'access_level' => $lockedResearch->access_level,
+                    'downloads' => 0,
+                    'embargo_until' => $lockedResearch->embargo_until,
+                    'external_url' => $lockedResearch->external_url,
+                    'research_owner_name' => $lockedResearch->research_owner_name,
+                    'research_owner_email' => $lockedResearch->research_owner_email,
+                    'notify_owner_access_requests' => $lockedResearch->notify_owner_access_requests,
+                    'notify_owner_research_inquiries' => $lockedResearch->notify_owner_research_inquiries,
+                    'send_owner_copy_to_admin' => $lockedResearch->send_owner_copy_to_admin,
+                ]);
+
+                $this->copyReportDataToRevision($lockedResearch, $revision, $copiedObjects);
+
+                AuditLogger::record($request, 'research.revision_created', $revision, null, [
+                    'source_research_id' => $lockedResearch->id,
+                    'revision_number' => $revision->revision_number,
+                    'status' => $revision->status,
+                ]);
+
+                return ['revision' => $revision, 'created' => true];
+            });
+        } catch (UploadConstraintException $exception) {
+            $this->researchFileStorage->cleanup($copiedObjects);
+
+            return ApiResponse::error($exception->getMessage(), [], $exception->statusCode);
+        } catch (QueryException $exception) {
+            $this->researchFileStorage->cleanup($copiedObjects);
+
+            if ($this->isConstraintViolation($exception, 'research_active_revision_parent_unique')) {
+                $existingRevision = Research::query()
+                    ->where('active_revision_parent_id', $research->id)
+                    ->latest()
+                    ->first();
+
+                if ($existingRevision) {
+                    $result = ['revision' => $existingRevision, 'created' => false];
+                } else {
+                    return $this->databaseConflictResponse('The draft revision changed concurrently. Reload the record before trying again.');
+                }
+            } elseif ($this->isDeadlock($exception)) {
+                return $this->databaseConflictResponse('The draft revision could not be created because another write completed first. Try again.');
+            } else {
+                throw $exception;
+            }
+        } catch (Throwable $exception) {
+            $this->researchFileStorage->cleanup($copiedObjects);
+
+            throw $exception;
         }
 
-        $revision = DB::transaction(function () use ($request, $research): Research {
-            $revision = Research::create([
-                'slug' => ResearchSlugger::generateUniqueResearchSlug($research->title.' revision '.((int) $research->revision_number + 1)),
-                'agency_id' => $research->agency_id,
-                'uploaded_by' => $request->user()->id,
-                'revision_parent_id' => $research->id,
-                'revision_number' => (int) $research->revision_number + 1,
-                'title' => $research->title,
-                'abstract' => $research->abstract,
-                'authors' => $research->authors ?? [],
-                'publication_year' => $research->publication_year,
-                'category' => $research->category,
-                'sdgs' => $research->sdgs ?? [],
-                'keywords' => $research->keywords ?? [],
-                'public_metadata' => $research->public_metadata ?? [],
-                'public_metadata_fields' => $research->public_metadata_fields ?? [],
-                'status' => Statuses::RESEARCH_DRAFT,
-                'access_level' => $research->access_level,
-                'downloads' => 0,
-                'embargo_until' => $research->embargo_until,
-                'external_url' => $research->external_url,
-                'research_owner_name' => $research->research_owner_name,
-                'research_owner_email' => $research->research_owner_email,
-                'notify_owner_access_requests' => $research->notify_owner_access_requests,
-                'notify_owner_research_inquiries' => $research->notify_owner_research_inquiries,
-                'send_owner_copy_to_admin' => $research->send_owner_copy_to_admin,
-            ]);
+        /** @var Research $revision */
+        $revision = $result['revision'];
 
-            $this->copyReportDataToRevision($research, $revision);
-
-            AuditLogger::record($request, 'research.revision_created', $revision, null, [
-                'source_research_id' => $research->id,
-                'revision_number' => $revision->revision_number,
-                'status' => $revision->status,
-            ]);
-
-            return $revision;
-        });
+        if (! $result['created']) {
+            return ApiResponse::success(
+                'Draft revision already exists.',
+                (new ResearchResource($revision->load(['agency', 'uploader'])))->resolve($request),
+            );
+        }
 
         return ApiResponse::success(
             'Draft revision created.',
@@ -306,6 +391,10 @@ class AgencyResearchWriteController extends Controller
         $quarantineDisk = (string) config('rikms.uploads.quarantine_disk', 'upload_quarantine');
         $storageDisk = (string) config('rikms.uploads.storage_disk', 'private_uploads');
         $quarantinePath = $uploadedFile->storeAs('research/quarantine', $storedName, $quarantineDisk);
+
+        if (! is_string($quarantinePath) || $quarantinePath === '') {
+            return ApiResponse::error('The uploaded PDF could not be staged safely. Please try again.', [], 500);
+        }
 
         try {
             $scan = $this->uploadSecurityScanner->scanStoredFile($quarantineDisk, $quarantinePath);
@@ -380,11 +469,8 @@ class AgencyResearchWriteController extends Controller
 
         $aiEnabled = $this->settings->aiProcessingEnabled();
 
-        $researchFile = DB::transaction(function () use ($request, $research, $uploadedFile, $checksum, $storedName, $storageDisk, $path, $scan, $aiEnabled): ResearchFile {
-            $researchFile = ResearchFile::create([
-                'research_id' => $research->id,
-                'agency_id' => $research->agency_id,
-                'uploaded_by' => $request->user()->id,
+        try {
+            $researchFile = $this->researchUploadCommitter->commitMain($request, (int) $research->id, [
                 'original_name' => $uploadedFile->getClientOriginalName(),
                 'stored_name' => $storedName,
                 'disk' => $storageDisk,
@@ -419,36 +505,51 @@ class AgencyResearchWriteController extends Controller
                 ],
                 'uploaded_at' => now(),
             ]);
+        } catch (UploadConstraintException $exception) {
+            Storage::disk($storageDisk)->delete($path);
 
-            AuditLogger::record($request, 'research_file.uploaded', $researchFile, null, $researchFile->only([
-                'id',
-                'research_id',
-                'agency_id',
-                'uploaded_by',
-                'original_name',
-                'mime_type',
-                'size_bytes',
-                'checksum',
-                'status',
-            ]));
+            return $this->uploadConstraintResponse($exception);
+        } catch (QueryException $exception) {
+            Storage::disk($storageDisk)->delete($path);
 
-            return $researchFile;
-        });
+            if ($this->isDeadlock($exception)) {
+                return $this->databaseConflictResponse('The upload conflicted with another agency upload. Try again.');
+            }
+
+            throw $exception;
+        } catch (Throwable $exception) {
+            Storage::disk($storageDisk)->delete($path);
+
+            throw $exception;
+        }
+
+        $aiQueueFailed = false;
 
         if ($aiEnabled) {
-            Bus::chain([
-                new ParsePdfDocumentJob($research->id, $researchFile->id, $research->agency_id, $request->user()->id),
-                new ExtractResearchMetadataJob($research->id, $researchFile->id, $research->agency_id, $request->user()->id),
-                new ClassifyResearchSdgJob($research->id, $researchFile->id, $research->agency_id, $request->user()->id),
-            ])->dispatch();
+            try {
+                $this->aiPipelineDispatcher->dispatch($researchFile);
+            } catch (Throwable $exception) {
+                app(AiPipelineResultWriter::class)->markAiProcessingFailed(
+                    (int) $researchFile->id,
+                    'AI processing could not be queued. An administrator may retry it.',
+                );
+                Log::error('Research upload succeeded but AI processing could not be queued.', [
+                    'research_id' => $research->id,
+                    'file_id' => $researchFile->id,
+                    'error' => $exception->getMessage(),
+                ]);
+                $aiQueueFailed = true;
+            }
         } else {
             app(AiPipelineResultWriter::class)->markAiProcessingSkipped((int) $researchFile->id);
         }
 
         return ApiResponse::success(
-            $aiEnabled
-                ? 'Research file uploaded and AI processing jobs queued.'
-                : 'Research file uploaded. AI-assisted processing is currently disabled.',
+            match (true) {
+                $aiQueueFailed => 'Research file uploaded, but AI processing could not be queued. An administrator may retry it.',
+                $aiEnabled => 'Research file uploaded and AI processing jobs queued.',
+                default => 'Research file uploaded. AI-assisted processing is currently disabled.',
+            },
             (new ResearchFileResource($researchFile->load(['research', 'uploader'])))->resolve($request),
             [],
             201,
@@ -485,7 +586,7 @@ class AgencyResearchWriteController extends Controller
             return ApiResponse::error('The highlight does not belong to this report.', [], 404);
         }
 
-        if ($highlight->files()->count() >= StoreReportHighlightFileRequest::MAX_FILES) {
+        if ($highlight->files()->where('status', 'active')->whereNull('archived_at')->count() >= StoreReportHighlightFileRequest::MAX_FILES) {
             return ApiResponse::error(
                 'A highlight may have at most '.StoreReportHighlightFileRequest::MAX_FILES.' supporting files.',
                 ['file' => ['Remove a supporting file before uploading another.']],
@@ -496,7 +597,11 @@ class AgencyResearchWriteController extends Controller
         $uploadedFile = $request->file('file');
         $checksum = hash_file('sha256', $uploadedFile->getRealPath());
 
-        if ($highlight->files()->where('checksum', $checksum)->exists()) {
+        if ($highlight->files()
+            ->where('status', 'active')
+            ->whereNull('archived_at')
+            ->where('checksum', $checksum)
+            ->exists()) {
             return ApiResponse::error(
                 'This supporting file has already been uploaded.',
                 ['file' => ['This supporting file has already been uploaded.']],
@@ -509,6 +614,10 @@ class AgencyResearchWriteController extends Controller
         $quarantineDisk = (string) config('rikms.uploads.quarantine_disk', 'upload_quarantine');
         $storageDisk = (string) config('rikms.uploads.storage_disk', 'private_uploads');
         $quarantinePath = $uploadedFile->storeAs('research/quarantine', $storedName, $quarantineDisk);
+
+        if (! is_string($quarantinePath) || $quarantinePath === '') {
+            return ApiResponse::error('The supporting file could not be staged safely.', [], 500);
+        }
 
         try {
             $scan = $this->uploadSecurityScanner->scanStoredFile($quarantineDisk, $quarantinePath);
@@ -548,12 +657,12 @@ class AgencyResearchWriteController extends Controller
         }
 
         try {
-            $researchFile = DB::transaction(function () use ($request, $research, $highlight, $uploadedFile, $checksum, $storedName, $extension, $storageDisk, $path, $scan): ResearchFile {
-                $file = ResearchFile::create([
-                    'research_id' => $research->id,
-                    'report_highlight_id' => $highlight->id,
-                    'agency_id' => $research->agency_id,
-                    'uploaded_by' => $request->user()->id,
+            $researchFile = $this->researchUploadCommitter->commitSupporting(
+                $request,
+                (int) $research->id,
+                (int) $highlight->id,
+                StoreReportHighlightFileRequest::MAX_FILES,
+                [
                     'original_name' => $uploadedFile->getClientOriginalName(),
                     'stored_name' => $storedName,
                     'disk' => $storageDisk,
@@ -576,14 +685,20 @@ class AgencyResearchWriteController extends Controller
                         ],
                     ],
                     'uploaded_at' => now(),
-                ]);
+                ],
+            );
+        } catch (UploadConstraintException $exception) {
+            Storage::disk($storageDisk)->delete($path);
 
-                AuditLogger::record($request, 'report_highlight_file.uploaded', $file, null, $file->only([
-                    'id', 'research_id', 'report_highlight_id', 'agency_id', 'original_name', 'checksum', 'status',
-                ]));
+            return $this->uploadConstraintResponse($exception);
+        } catch (QueryException $exception) {
+            Storage::disk($storageDisk)->delete($path);
 
-                return $file;
-            });
+            if ($this->isDeadlock($exception)) {
+                return $this->databaseConflictResponse('The supporting upload conflicted with another agency upload. Try again.');
+            }
+
+            throw $exception;
         } catch (Throwable $exception) {
             Storage::disk($storageDisk)->delete($path);
             throw $exception;
@@ -606,26 +721,31 @@ class AgencyResearchWriteController extends Controller
         $oldValues = $file->only(['status', 'path', 'archived_at']);
 
         DB::transaction(function () use ($request, $file, $oldValues): void {
+            ArchiveRecord::create([
+                'archivable_type' => $file->getMorphClass(),
+                'archivable_id' => $file->id,
+                'archived_by' => $request->user()->id,
+                'reason' => 'Removed by agency administrator.',
+                'metadata' => ['previous_status' => $file->status, 'scope' => 'agency'],
+                'archived_at' => now(),
+            ]);
             $file->update([
-                'status' => 'deleted',
+                'status' => 'archived',
                 'archived_at' => now(),
                 'archived_by' => $request->user()->id,
-                'archive_reason' => 'Deleted by agency administrator.',
+                'archive_reason' => 'Removed by agency administrator.',
             ]);
-            $file->delete();
 
             AuditLogger::record(
                 $request,
-                'research_file.deleted',
+                'research_file.archived',
                 $file,
                 $oldValues,
                 $file->fresh()?->only(['status', 'path', 'archived_at']),
             );
         });
 
-        Storage::disk($file->disk)->delete($file->path);
-
-        return ApiResponse::success('Research file deleted.');
+        return ApiResponse::success('Research file moved to the archive.');
     }
 
     /**
@@ -894,7 +1014,8 @@ class AgencyResearchWriteController extends Controller
             ->exists();
     }
 
-    private function copyReportDataToRevision(Research $source, Research $revision): void
+    /** @param array<int, array{disk: string, path: string}> $copiedObjects */
+    private function copyReportDataToRevision(Research $source, Research $revision, array &$copiedObjects): void
     {
         $source->loadMissing(['reportDetail', 'performanceItems', 'reportHighlights.files']);
 
@@ -940,7 +1061,10 @@ class AgencyResearchWriteController extends Controller
                 'sort_order',
             ]));
 
-            $highlight->files->each(function (ResearchFile $file) use ($revision, $revisionHighlight): void {
+            $highlight->files->each(function (ResearchFile $file) use ($revision, $revisionHighlight, &$copiedObjects): void {
+                $copy = $this->researchFileStorage->copyForRevision($file, (int) $revision->id, (int) $revisionHighlight->id);
+                $copiedObjects[] = ['disk' => $file->disk, 'path' => $copy['path']];
+
                 $revision->files()->create(array_merge($file->only([
                     'agency_id',
                     'uploaded_by',
@@ -960,6 +1084,8 @@ class AgencyResearchWriteController extends Controller
                     'uploaded_at',
                 ]), [
                     'report_highlight_id' => $revisionHighlight->id,
+                    'stored_name' => $copy['stored_name'],
+                    'path' => $copy['path'],
                 ]));
             });
         });
@@ -979,6 +1105,43 @@ class AgencyResearchWriteController extends Controller
                 $request->user()?->agency_id !== null
                 && (int) $request->user()->agency_id === (int) $research->agency_id
             );
+    }
+
+    private function uploadConstraintResponse(UploadConstraintException $exception): JsonResponse
+    {
+        return ApiResponse::error(
+            $exception->getMessage(),
+            [$exception->field => [$exception->getMessage()]],
+            $exception->statusCode,
+        );
+    }
+
+    private function databaseConflictResponse(string $message): JsonResponse
+    {
+        return ApiResponse::error($message, [
+            'conflict' => [$message],
+        ], 409);
+    }
+
+    private function isConstraintViolation(QueryException $exception, string $constraint): bool
+    {
+        $sqlState = (string) ($exception->errorInfo[0] ?? $exception->getCode());
+        $message = mb_strtolower($exception->getMessage());
+
+        return in_array($sqlState, ['23000', '23505', '19'], true)
+            && (
+                str_contains($message, mb_strtolower($constraint))
+                || str_contains($message, 'active_revision_parent_id')
+            );
+    }
+
+    private function isDeadlock(QueryException $exception): bool
+    {
+        $sqlState = (string) ($exception->errorInfo[0] ?? $exception->getCode());
+        $driverCode = (int) ($exception->errorInfo[1] ?? 0);
+
+        return in_array($sqlState, ['40001', '40P01'], true)
+            || in_array($driverCode, [1205, 1213], true);
     }
 
     private function notifyAgencyResearchCreated(Research $research): void

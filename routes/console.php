@@ -15,12 +15,14 @@ Schedule::call(fn () => app(RuntimeHeartbeat::class)->recordScheduler())
     ->everyMinute()
     ->withoutOverlapping();
 
-Schedule::job(new RecordQueueWorkerHeartbeat, 'health', 'database')
+$queueConnection = (string) config('queue.default');
+
+Schedule::job(new RecordQueueWorkerHeartbeat, 'health', $queueConnection)
     ->name('rikms:queue-worker-heartbeat')
     ->everyMinute()
     ->withoutOverlapping();
 
-Schedule::command('queue:monitor database:health,database:default --max=100')
+Schedule::command("queue:monitor {$queueConnection}:health,{$queueConnection}:default --max=100")
     ->everyMinute()
     ->withoutOverlapping();
 

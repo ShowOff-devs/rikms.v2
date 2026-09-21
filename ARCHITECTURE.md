@@ -1,5 +1,5 @@
 # RIKMS v2 System Architecture
-Stack: Laravel 12 API + React / Next.js Frontend
+Stack: Laravel 12 + Inertia 2 + React 19 Frontend
 
 ---
 
@@ -25,7 +25,7 @@ The architecture is designed to be:
 - secure
 - API-driven
 
-The system follows a **separated backend and frontend architecture**.
+The system follows a **Laravel monolith architecture with an Inertia-delivered React frontend and JSON API endpoints**.
 
 ---
 
@@ -40,8 +40,8 @@ The system follows a **separated backend and frontend architecture**.
 - API Resources for response formatting
 
 ## Frontend
-- React
-- Next.js
+- React 19
+- Inertia 2
 - Tailwind CSS (recommended styling system)
 - TypeScript (recommended)
 - Axios or Fetch API for HTTP communication
@@ -58,7 +58,7 @@ The system follows a **separated backend and frontend architecture**.
 
 The system follows a **three-layer architecture**.
 Frontend Layer
-React / Next.js Application
+React 19 application delivered through Inertia 2
 
 ↓
 
@@ -95,20 +95,20 @@ Data Layer
 
 ---
 
-# 4. API-First Architecture
+# 4. Inertia and API Architecture
 
-RIKMS v2 is built as an **API-first system**.
+RIKMS v2 uses Laravel routes and controllers to deliver React pages through Inertia. JSON API endpoints support dynamic portal workflows, public data access, and future integrations.
 
-All system features are exposed through RESTful APIs.
+Laravel remains the single backend boundary for authentication, authorization, validation, business workflows, and persistence.
 
 Advantages:
-- frontend independence
+- one authentication and authorization boundary
 - mobile compatibility
 - integration readiness
 - easier testing
 - modular architecture
 
-Frontend applications interact with the system **only through the API layer**.
+React pages receive initial page data through Inertia and use protected JSON endpoints for interactive workflows.
 
 Direct database access from the frontend is never allowed.
 
@@ -184,11 +184,11 @@ Business logic must be placed inside **Services or Actions**.
 
 ---
 
-# 7. Frontend Architecture (React / Next.js)
+# 7. Frontend Architecture (React + Inertia)
 
 Frontend code follows a **feature-based architecture**.
 
-frontend/src/
+resources/js/
 
 components/
 ui/
@@ -498,7 +498,7 @@ RIKMS v2 is designed to support:
 Architecture decisions prioritize:
 
 - modular components
-- API-first design
+- explicit Inertia and JSON API boundaries
 - clear domain separation
 - maintainable services
 

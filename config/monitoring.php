@@ -12,6 +12,10 @@ return [
     'send_recovery_alerts' => filter_var(env('MONITORING_SEND_RECOVERY_ALERTS', true), FILTER_VALIDATE_BOOL),
     'state_path' => env('MONITORING_STATE_PATH', storage_path('app/monitoring/alert-state.json')),
     'require_backup_ready' => filter_var(env('MONITORING_REQUIRE_BACKUP_READY', false), FILTER_VALIDATE_BOOL),
+    'queues' => array_values(array_filter(array_map(
+        static fn (string $queue): string => trim($queue),
+        explode(',', (string) env('MONITORING_QUEUES', 'health,default')),
+    ))),
     'thresholds' => [
         'pending_jobs_warning' => (int) env('MONITORING_PENDING_JOBS_WARNING', 100),
         'pending_jobs_critical' => (int) env('MONITORING_PENDING_JOBS_CRITICAL', 500),

@@ -1,7 +1,7 @@
 # RIKMS v2 Production-readiness Evidence
 
-Review date: 2026-08-10  
-Branch inspected: `release/pilot-rc1`  
+Review date: 2026-09-07
+Branch inspected: `main`
 Status: **Not production-ready**
 
 This is the current readiness record. Historical audits remain useful snapshots, but their implementation-gap claims may have been superseded. Repository implementation and fresh command output take precedence. The four requested PDFs under `project_sources/` were not present in the inspected workspace, so no policy claim from those sources is included in this review.
@@ -20,7 +20,7 @@ This is the current readiness record. Historical audits remain useful snapshots,
 | ------- | ------ | -------- | ------------------------------ | ----------- | ----- | ---------------- |
 | Deterministic frontend install and check-only CI | Verified | `package-lock.json`; `.github/workflows/lint.yml`; `.github/workflows/tests.yml` use `npm ci` and check-only scripts | Inspect workflows; run `npm ci` on a clean runner | Local/CI | Application team | Confirm next GitHub Actions run |
 | Frontend production dependency advisories | Verified | npm production audit reported zero vulnerabilities | `npm audit --omit=dev` | Local | Application team | Repeat for the release SHA |
-| PHP dependency advisories | Verified | Locked `guzzlehttp/guzzle` 7.15.2 and `league/commonmark` 2.9.1 include the available fixes; the 2026-08-10 audit found no advisories | `composer audit --locked`; inspect locked versions | Local | Application team | Repeat for the release SHA and in CI |
+| PHP dependency advisories | Verified | Locked `league/commonmark` 2.10.0 resolves GHSA-8rr7-cvq3-gmfh; the 2026-09-07 audit found no remaining advisories | `composer audit --locked`; inspect locked versions | Local | Application team | Repeat for the release SHA and in CI |
 | PHP, frontend format, lint, types, build, SQLite tests | Verified | Composer/npm scripts and the Phase 10 command record below | `composer lint:check`; npm checks/build; `php artisan test`; `composer ci:check` | Local | Application team | Repeat on clean CI runner |
 | MySQL schema and behavior | Implemented but awaiting staging | `mysql-integration` workflow; `tests/Feature/MySqlProductionCompatibilityTest.php` | GitHub MySQL 8.4 service: migrate fresh/seed, rollback/remigrate, full tests | GitHub Actions/staging | Database owner | Obtain a successful CI run and safe staging migration/rollback evidence |
 | Relational source-of-truth boundary | Verified | Eloquent relational models/migrations; Mongo models limited to AI/PDF/SDG results | Inspect `app/Models`, migrations, `app/Models/Mongo` | Repository | Application team | Monitor for boundary regressions |
@@ -34,7 +34,7 @@ This is the current readiness record. Historical audits remain useful snapshots,
 | Ubuntu worker/scheduler service definitions | Documentation/configuration only | `deploy/systemd/*.service`, timer, runbook | Review paths/user; install and exercise units | Ubuntu staging | Operations | Host-specific review and execution |
 | Coverage baseline | Implemented but awaiting staging | Xdebug coverage job uploads Clover artifact; local host lacks a coverage driver | Run GitHub `coverage-baseline` job | GitHub Actions | Application team | Capture baseline artifact and define gradual policy |
 | Automated backup execution | Not implemented | External-drive readiness service/API and preparation UI exist, but the operational test confirms there is no execution or restore route/job | Inspect the single read-only readiness route and verify execution remains disabled | Repository | Operations/product | Connect the drive, pass readiness, then design controlled backup execution and restore rehearsal |
-| Backup and restore proof | Blocked by infrastructure | Restore procedure requires real off-host backups and a disposable target | Restore MySQL, files, and MongoDB to isolated staging; reconcile integrity | Staging/backup platform | Operations/database owner | Provide backup platform, retention, alerts, and successful restore evidence |
+| Backup and restore proof | Blocked by infrastructure | Production boot now requires the backup-readiness gate, and the deployment check can write/read/delete probe the configured destination; a real off-host recovery set and isolated restore are still external requirements | Run `php artisan rikms:infrastructure-check --write`, then restore MySQL, files, and MongoDB to isolated staging and reconcile integrity | Staging/backup platform | Operations/database owner | Provide backup platform, retention, alerts, and successful restore evidence |
 | Monitoring and alert delivery | Implemented but awaiting staging | Unified monitor command, synchronous email/webhook dispatcher, cooldown/recovery state, independent systemd timer, Grafana Alloy example, and runbook | Configure organization-owned destinations and inject controlled failures | Ubuntu staging/monitoring | Operations/security | Prove delivery, external host monitoring, ownership, and response |
 | Production environment validation | Verified | `AppServiceProvider` production checks and focused tests | Run configuration tests; boot with controlled invalid production cases | Automated test | Application/security | Validate the final secret/config set in staging without exposing values |
 | Dormant upload/AI mock services | Verified | Three unused production-source mock modules removed; ESLint import restriction added | Repository search; lint, types, and production build | Local | Frontend team | Prevent reintroduction through CI |
@@ -57,7 +57,7 @@ This is the current readiness record. Historical audits remain useful snapshots,
 
 ## Current gate decision
 
-The repository has a clean PHP and npm dependency audit after the 2026-08-10 remediation. It must not yet be labelled production-ready because the working tree is not a frozen release candidate and MySQL CI/staging, real ClamAV, live CAPTCHA, MongoDB/OpenAI, CSP report review, Ubuntu services/recovery, browser smoke testing, monitoring, and especially backup/restore evidence remain incomplete.
+The repository has a clean PHP and npm dependency audit after the 2026-09-07 CommonMark remediation. It must not yet be labelled production-ready because the working tree is not a frozen release candidate and MySQL CI/staging, real ClamAV, live CAPTCHA, MongoDB/OpenAI, CSP report review, Ubuntu services/recovery, browser smoke testing, monitoring, and actual backup/restore evidence remain incomplete.
 
 ## Manual Ubuntu staging checklist
 

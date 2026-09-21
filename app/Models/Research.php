@@ -19,6 +19,7 @@ class Research extends Model
         'agency_id',
         'uploaded_by',
         'revision_parent_id',
+        'active_revision_parent_id',
         'superseded_by_id',
         'revision_number',
         'title',
@@ -73,11 +74,37 @@ class Research extends Model
 
     protected static function booted(): void
     {
+        static::saving(function (Research $research): void {
+            $research->active_revision_parent_id = $research->carriesActiveRevisionIdentity()
+                ? $research->revision_parent_id
+                : null;
+        });
+
+        static::deleting(function (Research $research): void {
+            if ($research->active_revision_parent_id !== null) {
+                $research->forceFill(['active_revision_parent_id' => null])->saveQuietly();
+            }
+        });
+
         $invalidate = fn (): mixed => app(PublicResponseCache::class)->invalidateResearch();
 
         static::saved($invalidate);
         static::deleted($invalidate);
         static::restored($invalidate);
+    }
+
+    private function carriesActiveRevisionIdentity(): bool
+    {
+        return $this->revision_parent_id !== null
+            && in_array($this->status, [
+                Statuses::RESEARCH_DRAFT,
+                Statuses::RESEARCH_SUBMITTED,
+                Statuses::RESEARCH_UNDER_REVIEW,
+                'approved',
+                'rejected',
+            ], true)
+            && $this->archived_at === null
+            && $this->deleted_at === null;
     }
 
     public function agency()

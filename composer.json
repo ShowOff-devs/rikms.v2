@@ -17,8 +17,9 @@
         "laravel/sanctum": "^4.3",
         "laravel/tinker": "^2.10.1",
         "laravel/wayfinder": "^0.1.9",
+        "league/flysystem-aws-s3-v3": "^3.25",
         "mongodb/laravel-mongodb": "^5.7",
-        "mongodb/mongodb": "^1.21",
+        "mongodb/mongodb": "^1.21.4",
         "openai-php/client": "^0.19.2",
         "predis/predis": "^3.4",
         "smalot/pdfparser": "^2.12"
@@ -64,9 +65,10 @@
             "Composer\\Config::disableProcessTimeout",
             "npx concurrently -c \"#93c5fd,#c4b5fd,#86efac,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan queue:listen database --queue=health,default --tries=3 --timeout=120\" \"php artisan schedule:work\" \"php artisan pail --timeout=0\" \"php artisan inertia:start-ssr\" --names=server,queue,scheduler,logs,ssr --kill-others"
         ],
-        "runtime:worker": "@php artisan queue:work database --queue=health,default --sleep=3 --tries=3 --backoff=10 --timeout=120 --max-time=3600",
+        "runtime:worker": "@php artisan queue:work --queue=health,default --sleep=3 --tries=3 --backoff=10 --timeout=120 --max-time=3600",
         "runtime:scheduler": "@php artisan schedule:work",
         "runtime:check": "@php artisan rikms:runtime-check",
+        "infrastructure:check": "@php artisan rikms:infrastructure-check --write",
         "clamav:check": "@php artisan rikms:clamav-check",
         "monitor:check": "@php artisan rikms:monitor-check",
         "lint": [

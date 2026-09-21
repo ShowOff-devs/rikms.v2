@@ -2,6 +2,8 @@
 
 RIKMS exposes health signals but monitoring must run independently of the web process, Laravel scheduler, and application queue. The pilot design uses an on-host systemd timer for component checks, an off-host log destination for investigation, and synchronous email and/or webhook delivery for alerts.
 
+For externally operated production dependencies, also run `php artisan rikms:infrastructure-check --write --json` as a deployment gate. Runtime monitoring does not replace provider alerts for database replication, Redis memory, object-storage policy drift, or backup freshness.
+
 ## Application configuration
 
 Configure at least one monitored destination before enabling alerts:

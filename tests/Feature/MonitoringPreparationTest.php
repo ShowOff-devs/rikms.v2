@@ -55,6 +55,7 @@ test('unified monitor detects a critical queue backlog', function () {
     config()->set([
         'rikms.uploads.malware_scanner' => 'none',
         'monitoring.alerts_enabled' => false,
+        'queue.default' => 'database',
         'monitoring.thresholds.pending_jobs_warning' => 1,
         'monitoring.thresholds.pending_jobs_critical' => 1,
     ]);
