@@ -123,7 +123,7 @@ test('turnstile frontend and backend use the same fixed action', function () {
     $frontend = file_get_contents(resource_path('js/pages/research/show.tsx'));
 
     expect($expectedAction)->toBe('public_access_request')
-        ->and($frontend)->toContain("action: '{$expectedAction}'");
+        ->and($frontend)->toContain("action=\"{$expectedAction}\"");
 });
 
 test('deployed environments reject unsafe security service configuration', function (array $override, string $violation) {

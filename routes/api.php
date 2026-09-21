@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\CspReportController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PublicAccessRequestController;
 use App\Http\Controllers\Api\PublicAgencyController;
+use App\Http\Controllers\Api\PublicContactController;
 use App\Http\Controllers\Api\PublicResearchController;
 use App\Http\Resources\UserResource;
 use App\Services\PlatformSettingsService;
@@ -49,6 +50,9 @@ Route::prefix('public')->middleware('throttle:public-api')->group(function () {
     Route::get('/research/{identifier}/download', [PublicResearchController::class, 'download'])
         ->middleware('throttle:public-downloads');
     Route::get('/research/{identifier}', [PublicResearchController::class, 'show']);
+    Route::post('/contact', [PublicContactController::class, 'store'])
+        ->middleware('throttle:public-contact')
+        ->name('public.contact.store');
     Route::get('/agencies', [PublicAgencyController::class, 'index']);
     Route::get('/agencies/types', [PublicAgencyController::class, 'types']);
     Route::get('/agencies/{agency:slug}', [PublicAgencyController::class, 'show']);

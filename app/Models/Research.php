@@ -168,6 +168,11 @@ class Research extends Model
             ->where('research.status', Statuses::RESEARCH_PUBLISHED)
             ->whereNull('research.archived_at')
             ->whereNull('research.superseded_by_id')
+            ->whereHas('agency', function (Builder $query): void {
+                $query
+                    ->where('status', 'active')
+                    ->whereNull('archived_at');
+            })
             ->where(function (Builder $query): void {
                 $query
                     ->whereNull('research.access_level')

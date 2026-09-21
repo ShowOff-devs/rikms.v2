@@ -410,6 +410,22 @@ class AppServiceProvider extends ServiceProvider
 
             return $configuredLimits;
         });
+
+        RateLimiter::for('public-contact', function (Request $request): Limit {
+            $limit = max(1, (int) config(
+                'rikms.public_contact.limits.submissions_per_ten_minutes',
+                5,
+            ));
+
+            return Limit::perMinutes(10, $limit)
+                ->by('public-contact:'.hash('sha256', (string) $request->ip()))
+                ->response(fn (Request $request, array $headers): JsonResponse => response()
+                    ->json([
+                        'message' => 'Too many inquiries have been submitted. Please wait before trying again.',
+                        'errors' => [],
+                    ], 429)
+                    ->withHeaders($headers));
+        });
     }
 
     protected function configureAuthenticationEventLogging(): void

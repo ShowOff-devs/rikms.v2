@@ -9,7 +9,12 @@ const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
 createInertiaApp({
     id: 'app',
-    title: (title) => (title ? `${title} - ${appName}` : appName),
+    title: (title) =>
+        title
+            ? title.endsWith(`| ${appName}`)
+                ? title
+                : `${title} - ${appName}`
+            : appName,
     resolve: (name) =>
         resolvePageComponent(
             `./pages/${name}.tsx`,

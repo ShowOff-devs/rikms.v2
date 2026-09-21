@@ -45,7 +45,18 @@ const defaultSummary: PublicPortalSummary = {
     featuredResearch: [],
 };
 
-const lightSdgCards = new Set(['2', '7', '11', '12']);
+const lightSdgCards = new Set([
+    '2',
+    '3',
+    '5',
+    '6',
+    '7',
+    '9',
+    '11',
+    '12',
+    '14',
+    '15',
+]);
 
 function sdgTextColors(number: string) {
     const usesDarkText = lightSdgCards.has(number);
@@ -53,7 +64,7 @@ function sdgTextColors(number: string) {
     return {
         primary: usesDarkText ? '#111827' : '#ffffff',
         secondary: usesDarkText
-            ? 'rgba(17,24,39,0.72)'
+            ? 'rgba(17,24,39,0.82)'
             : 'rgba(255,255,255,0.72)',
         badgeBackground: usesDarkText
             ? 'rgba(17,24,39,0.12)'
@@ -296,24 +307,24 @@ export default function Welcome() {
                     </div>
 
                     {isSummaryLoading ? (
-                        <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                        <div className="mt-10 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-10">
                             {Array.from({ length: 10 }, (_, index) => (
                                 <div
                                     key={index}
-                                    className="min-h-40 animate-pulse rounded-[14px] bg-white shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_0px_rgba(0,0,0,0.1)]"
+                                    className="min-h-40 animate-pulse rounded-[14px] bg-white shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_0px_rgba(0,0,0,0.1)] xl:col-span-2"
                                 />
                             ))}
                         </div>
                     ) : (
-                        <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-                            {summary.sdgCards.map((card) => {
+                        <div className="mt-10 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-10">
+                            {summary.sdgCards.map((card, index) => {
                                 const colors = sdgTextColors(card.number);
 
                                 return (
                                     <Link
                                         key={card.number}
                                         href={`/browse-research?sdg=${encodeURIComponent(card.label)}`}
-                                        className="min-h-40 rounded-[14px] px-5 py-5 shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_0px_rgba(0,0,0,0.1)] transition hover:-translate-y-0.5"
+                                        className={`min-h-40 rounded-[14px] px-4 py-5 shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_0px_rgba(0,0,0,0.1)] transition hover:-translate-y-0.5 sm:px-5 xl:col-span-2 ${index === 15 ? 'xl:col-start-4' : ''}`}
                                         style={{
                                             backgroundColor: card.color,
                                             color: colors.primary,
@@ -462,21 +473,21 @@ export default function Welcome() {
                         </div>
 
                         {isAgenciesLoading ? (
-                            <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                            <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-6">
                                 {Array.from({ length: 3 }, (_, index) => (
                                     <div
                                         key={index}
-                                        className="h-[188px] animate-pulse rounded-[14px] border border-[#f3f4f6] bg-white shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_0px_rgba(0,0,0,0.1)]"
+                                        className="h-[188px] animate-pulse rounded-[14px] border border-[#f3f4f6] bg-white shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_0px_rgba(0,0,0,0.1)] md:col-span-3 xl:col-span-2"
                                     />
                                 ))}
                             </div>
                         ) : agencies.length > 0 ? (
-                            <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                {agencies.map((agency) => (
+                            <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-6">
+                                {agencies.map((agency, index) => (
                                     <Link
                                         key={agency.slug}
                                         href={`/agencies/${agency.slug}`}
-                                        className="rounded-[14px] border border-[#f3f4f6] bg-white px-6 py-6 text-center shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_0px_rgba(0,0,0,0.1)] transition hover:-translate-y-0.5"
+                                        className={`rounded-[14px] border border-[#f3f4f6] bg-white px-6 py-6 text-center shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_0px_rgba(0,0,0,0.1)] transition hover:-translate-y-0.5 md:col-span-3 xl:col-span-2 ${agencies.length % 3 === 1 && index === agencies.length - 1 ? 'xl:col-start-3' : ''} ${agencies.length % 3 === 2 && index === agencies.length - 2 ? 'xl:col-start-2' : ''}`}
                                     >
                                         <LandingAgencyLogo agency={agency} />
                                         <h3 className="mt-3 text-xl font-semibold text-[#1e3a8a]">
