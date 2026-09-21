@@ -732,20 +732,12 @@ async function pollAgencyAiResults(
     const startedAt = Date.now();
     let results = initialResults ?? (await getAgencyAiResults(researchId));
 
-    if (import.meta.env.DEV) {
-        console.debug('AI results response', results);
-    }
-
     while (
         shouldPollAiStatus(aiResultStatus(results.ai_metadata)) &&
         Date.now() - startedAt < aiResultsPollTimeoutMs
     ) {
         await sleep(aiResultsPollIntervalMs);
         results = await getAgencyAiResults(researchId);
-
-        if (import.meta.env.DEV) {
-            console.debug('AI results response', results);
-        }
     }
 
     return results;

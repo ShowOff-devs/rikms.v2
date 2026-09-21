@@ -45,16 +45,10 @@ BACKUP_REQUIRE_SEPARATE_FILESYSTEM=true
 
 Use the operating system's normal drive-unlock process. A BitLocker or LUKS recovery key must never be reused as `BACKUP_ENCRYPTION_KEY`. Clear cached Laravel configuration, open Super Admin → Settings → Backup and Data Recovery, and select **Check Backup Readiness**. A ready result authorizes only a future controlled test-backup implementation; it does not enable execution.
 
-## Production Recommendation
+## Production operating model
 
-For production, implement real backup execution with:
+Production backup execution is externally operated and must not run through a web request or the application queue. The repository provides the component inventory, readiness gate, and restore validation commands in [the external infrastructure operator contract](EXTERNAL_INFRASTRUCTURE.md).
 
-- `spatie/laravel-backup` for relational database and file backups.
-- `mongodump` and `mongorestore` workflows for MongoDB AI/PDF/SDG collections.
-- A `backup_runs` table to track status, started time, finished time, disk, file path, size, initiator, errors, and retention metadata.
-- A `super_admin`-only protected API for manual backup execution and backup run status.
-- Queued backup jobs instead of synchronous request-time execution.
-- Audit logs for backup start, success, failure, restore request, and restore completion events.
-- Notifications for backup success/failure and storage health issues.
-- S3, R2, or another off-server backup disk rather than local-only storage.
-- A documented restore runbook that separately covers relational data, uploaded files, and MongoDB collections.
+The external service must capture the relational database, MongoDB database, and both object-storage namespaces as one documented recovery set. It must own encryption, retention, immutability, replication, alerting, access approval, and restore-test evidence. Application backup UI remains preparation-only and must not represent an external backup as successful without an approved integration supplying authoritative run status.
+
+Production, staging, and pilot configuration must set `INFRA_REQUIRE_BACKUP_READY=true`. The deployment command `php artisan rikms:infrastructure-check --write` then blocks release when the destination, capacity, encryption key, or temporary write/read/delete probe is not ready. Passing this gate confirms destination readiness only; a documented isolated restore remains mandatory production evidence.

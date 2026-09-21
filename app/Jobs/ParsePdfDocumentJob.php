@@ -40,6 +40,7 @@ class ParsePdfDocumentJob implements ShouldQueue
         $disk = $file?->disk;
         $storedPath = $file?->path;
         $absolutePath = null;
+        $temporaryPath = null;
         $fileExists = false;
         $fileSize = null;
 
@@ -54,8 +55,13 @@ class ParsePdfDocumentJob implements ShouldQueue
         } else {
             try {
                 $storage = Storage::disk($file->disk);
-                $absolutePath = $storage->path($file->path);
-                $fileExists = $storage->exists($file->path) || is_file($absolutePath);
+                $fileExists = $storage->exists($file->path);
+
+                if (! $fileExists) {
+                    throw new \RuntimeException('The stored research file was not found.');
+                }
+
+                $absolutePath = $this->extractionPath($file, $temporaryPath);
                 $fileSize = $fileExists ? $this->fileSize($file->disk, $file->path, $absolutePath) : null;
 
                 Log::debug('Starting PDF text extraction.', [
@@ -63,7 +69,6 @@ class ParsePdfDocumentJob implements ShouldQueue
                     'file_id' => $this->fileId,
                     'disk' => $disk,
                     'path' => $storedPath,
-                    'absolute_path' => $absolutePath,
                     'file_exists' => $fileExists,
                     'file_size' => $fileSize,
                 ]);
@@ -77,6 +82,10 @@ class ParsePdfDocumentJob implements ShouldQueue
                     'error' => $exception->getMessage(),
                     'page_count' => null,
                 ];
+            } finally {
+                if (is_string($temporaryPath) && is_file($temporaryPath)) {
+                    @unlink($temporaryPath);
+                }
             }
         }
 
@@ -85,7 +94,6 @@ class ParsePdfDocumentJob implements ShouldQueue
             'file_id' => $this->fileId,
             'disk' => $disk,
             'path' => $storedPath,
-            'absolute_path' => $absolutePath,
             'file_exists' => $fileExists,
             'file_size' => $fileSize,
             'extraction_success' => $result['success'] ?? false,
@@ -99,7 +107,6 @@ class ParsePdfDocumentJob implements ShouldQueue
                 'file_id' => $this->fileId,
                 'disk' => $disk,
                 'path' => $storedPath,
-                'absolute_path' => $absolutePath,
                 'file_exists' => $fileExists,
                 'file_size' => $fileSize,
                 'error' => $result['error'] ?? 'Unknown PDF parsing error.',
@@ -130,5 +137,49 @@ class ParsePdfDocumentJob implements ShouldQueue
         $size = @filesize($absolutePath);
 
         return is_numeric($size) ? (int) $size : null;
+    }
+
+    private function extractionPath(ResearchFile $file, ?string &$temporaryPath): string
+    {
+        $configuration = config("filesystems.disks.{$file->disk}", []);
+        $storage = Storage::disk($file->disk);
+
+        if (($configuration['driver'] ?? null) === 'local') {
+            return $storage->path($file->path);
+        }
+
+        $source = $storage->readStream($file->path);
+
+        if (! is_resource($source)) {
+            throw new \RuntimeException('The stored research file could not be opened.');
+        }
+
+        $temporaryPath = tempnam(sys_get_temp_dir(), 'rikms-pdf-');
+
+        if (! is_string($temporaryPath) || $temporaryPath === '') {
+            fclose($source);
+
+            throw new \RuntimeException('A temporary PDF workspace could not be created.');
+        }
+
+        $destination = @fopen($temporaryPath, 'wb');
+
+        if (! is_resource($destination)) {
+            fclose($source);
+            @unlink($temporaryPath);
+
+            throw new \RuntimeException('The temporary PDF workspace could not be opened.');
+        }
+
+        try {
+            if (stream_copy_to_stream($source, $destination) === false) {
+                throw new \RuntimeException('The stored research file could not be materialized for processing.');
+            }
+        } finally {
+            fclose($source);
+            fclose($destination);
+        }
+
+        return $temporaryPath;
     }
 }

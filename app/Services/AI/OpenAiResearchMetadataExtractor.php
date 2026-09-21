@@ -33,20 +33,7 @@ class OpenAiResearchMetadataExtractor
      */
     public function extract(string $text): array
     {
-        /*$apiKey = (string) config('services.openai.api_key');
-
-        if ($apiKey === '') {
-            throw new RuntimeException('OPENAI_API_KEY is not configured.');
-        }*/
         $apiKey = trim((string) config('services.openai.api_key'));
-
-        \Log::debug('OpenAI metadata extractor config check.', [
-            'has_api_key' => $apiKey !== '',
-            'api_key_prefix' => $apiKey !== ''
-                ? substr($apiKey, 0, 7)
-                : null,
-            'model' => config('services.openai.model'),
-        ]);
 
         if (blank($apiKey)) {
             throw new RuntimeException('OPENAI_API_KEY is not configured.');

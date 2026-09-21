@@ -33,7 +33,9 @@ class AiPipelineResultWriter
         $method = (string) ($result['method'] ?? 'smalot/pdfparser');
 
         try {
-            PdfParsingResult::query()->create(array_merge($payload, [
+            PdfParsingResult::query()->updateOrCreate([
+                'idempotency_key' => $this->pipelineKey($fileId, 'pdf_parsing'),
+            ], array_merge($payload, [
                 'page_count' => $result['page_count'] ?? null,
                 'extracted_text' => $text,
                 'text_length' => strlen($text),
@@ -79,7 +81,9 @@ class AiPipelineResultWriter
         $metadata = $this->sanitizeForMongo($metadata);
 
         try {
-            AiMetadata::query()->create([
+            AiMetadata::query()->updateOrCreate([
+                'idempotency_key' => $this->pipelineKey($fileId, 'ai_metadata'),
+            ], [
                 'research_id' => $researchId,
                 'file_id' => $fileId,
                 'agency_id' => $agencyId,
@@ -141,7 +145,9 @@ class AiPipelineResultWriter
         $rawResponse = $this->sanitizeForMongo($rawResponse);
 
         try {
-            AiMetadata::query()->create([
+            AiMetadata::query()->updateOrCreate([
+                'idempotency_key' => $this->pipelineKey($fileId, 'ai_metadata'),
+            ], [
                 'research_id' => $researchId,
                 'file_id' => $fileId,
                 'agency_id' => $agencyId,
@@ -236,7 +242,9 @@ class AiPipelineResultWriter
         $overallConfidence = min(1.0, max(0.0, (float) ($classification['overall_confidence'] ?? 0.0)));
 
         try {
-            SdgClassification::query()->create($this->sanitizeForMongo([
+            SdgClassification::query()->updateOrCreate([
+                'idempotency_key' => $this->pipelineKey($fileId, 'sdg_classification'),
+            ], $this->sanitizeForMongo([
                 'research_id' => $researchId,
                 'file_id' => $fileId,
                 'agency_id' => $agencyId,
@@ -286,7 +294,9 @@ class AiPipelineResultWriter
         $rawResponse = $this->sanitizeForMongo($rawResponse);
 
         try {
-            SdgClassification::query()->create($this->sanitizeForMongo([
+            SdgClassification::query()->updateOrCreate([
+                'idempotency_key' => $this->pipelineKey($fileId, 'sdg_classification'),
+            ], $this->sanitizeForMongo([
                 'research_id' => $researchId,
                 'file_id' => $fileId,
                 'agency_id' => $agencyId,
@@ -327,7 +337,9 @@ class AiPipelineResultWriter
         $message = $this->sanitizeString($exception->getMessage());
 
         try {
-            PdfParsingResult::query()->create(array_merge($payload, [
+            PdfParsingResult::query()->updateOrCreate([
+                'idempotency_key' => $this->pipelineKey($fileId, 'pdf_parsing'),
+            ], array_merge($payload, [
                 'page_count' => null,
                 'extracted_text' => '',
                 'text_length' => 0,
@@ -357,10 +369,29 @@ class AiPipelineResultWriter
         return filled(config('database.connections.mongodb.dsn'));
     }
 
+    private function pipelineKey(int $fileId, string $pipeline): string
+    {
+        return $pipeline.':'.$fileId;
+    }
+
     public function markAiProcessingSkipped(int $fileId, string $message = 'AI-assisted processing is currently disabled.'): void
     {
         foreach (['pdf_parsing', 'ai_metadata', 'sdg_classification'] as $pipeline) {
             $this->markFilePipeline($fileId, $pipeline, 'skipped', $message);
+        }
+    }
+
+    public function markAiProcessingFailed(int $fileId, string $message): void
+    {
+        foreach (['pdf_parsing', 'ai_metadata', 'sdg_classification'] as $pipeline) {
+            $this->markFilePipeline($fileId, $pipeline, 'failed', $message);
+        }
+    }
+
+    public function markAiProcessingQueued(int $fileId): void
+    {
+        foreach (['pdf_parsing', 'ai_metadata', 'sdg_classification'] as $pipeline) {
+            $this->markFilePipeline($fileId, $pipeline, 'queued');
         }
     }
 

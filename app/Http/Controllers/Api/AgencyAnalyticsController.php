@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\AccessRequest;
 use App\Models\Research;
+use App\Models\ResearchAnalyticsEvent;
 use App\Support\ApiResponse;
 use App\Support\CsvExport;
 use Dompdf\Dompdf;
 use Dompdf\Options;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,8 +23,9 @@ class AgencyAnalyticsController extends Controller
     public function show(Request $request): JsonResponse
     {
         $filters = $this->filters($request);
-        $records = $this->filteredResearch($request, $filters)->get();
+        $records = $this->filteredResearch($request, $filters);
         $allRecords = $this->baseResearch($request)->get();
+        $downloadActivity = $this->downloadActivity($request, $records);
 
         return ApiResponse::success('Agency analytics retrieved.', [
             'filters' => $filters,
@@ -31,9 +34,12 @@ class AgencyAnalyticsController extends Controller
             'categoryDistribution' => $this->categoryDistribution($records),
             'sdgContributions' => $this->sdgContributions($records),
             'mostAccessedResearch' => $this->mostAccessedResearch($records),
-            'accessRequestBreakdown' => $this->accessRequestBreakdown($request),
-            'downloadTrends' => $this->downloadTrends($records),
-            'records' => $records->map(fn (Research $research): array => $this->analyticsRecord($research))->values(),
+            'accessRequestBreakdown' => $this->accessRequestBreakdown($records),
+            'downloadTrends' => $downloadActivity['trends'],
+            'records' => $records->map(fn (Research $research): array => $this->analyticsRecord(
+                $research,
+                $downloadActivity['byResearch'][(string) $research->id] ?? array_fill(0, 12, 0),
+            ))->values(),
             'filterOptions' => $this->filterOptions($allRecords),
         ]);
     }
@@ -44,7 +50,7 @@ class AgencyAnalyticsController extends Controller
         abort_unless(in_array($format, ['csv', 'pdf'], true), 422, 'Unsupported report format.');
 
         $filters = $this->filters($request);
-        $records = $this->filteredResearch($request, $filters)->get();
+        $records = $this->filteredResearch($request, $filters);
 
         if ($format === 'pdf') {
             return $this->pdfExport($request, $records, $filters);
@@ -64,7 +70,7 @@ class AgencyAnalyticsController extends Controller
                 $this->analyticsStatus($research->status),
                 $this->accessType($research->access_level),
                 (int) $research->downloads,
-                0,
+                (int) $research->views_count,
             ])));
 
             fclose($handle);
@@ -95,16 +101,31 @@ class AgencyAnalyticsController extends Controller
         ]);
     }
 
-    private function baseResearch(Request $request)
+    private function baseResearch(Request $request): Builder
     {
+        $agencyId = $request->user()->agency_id;
+
         return Research::query()
-            ->where('agency_id', $request->user()->agency_id)
-            ->whereNull('archived_at');
+            ->where('agency_id', $agencyId)
+            ->whereNull('archived_at')
+            ->with([
+                'files' => fn ($query) => $query
+                    ->whereNull('archived_at')
+                    ->where('status', '!=', 'deleted')
+                    ->orderByDesc('uploaded_at')
+                    ->orderByDesc('id'),
+            ])
+            ->withCount([
+                'analyticsEvents as views_count' => fn (Builder $query) => $query
+                    ->where('agency_id', $agencyId)
+                    ->where('event_type', 'view'),
+                'accessRequests',
+            ]);
     }
 
-    private function filteredResearch(Request $request, array $filters)
+    private function filteredResearch(Request $request, array $filters): Collection
     {
-        return $this->baseResearch($request)
+        $records = $this->baseResearch($request)
             ->when($filters['year'] !== 'all', fn ($query) => $query->where('publication_year', (int) $filters['year']))
             ->when($filters['category'] !== 'all', fn ($query) => $query->where('category', $filters['category']))
             ->when($filters['status'] !== 'all', function ($query) use ($filters): void {
@@ -121,7 +142,19 @@ class AgencyAnalyticsController extends Controller
             ->when($filters['sdg'] !== 'all', function ($query) use ($filters): void {
                 $query->whereJsonContains('sdgs', $filters['sdg']);
             })
-            ->latest();
+            ->latest()
+            ->get();
+
+        if ($filters['documentType'] === 'all') {
+            return $records;
+        }
+
+        $documentType = (string) $filters['documentType'];
+
+        return $records
+            ->filter(fn (Research $research): bool => $this->documentType($research) === $documentType
+                || $research->files->contains('file_type', $documentType))
+            ->values();
     }
 
     private function filters(Request $request): array
@@ -143,7 +176,7 @@ class AgencyAnalyticsController extends Controller
         return [
             $this->metric('total-research', 'Total Research', $records->count(), $previousRecords->count()),
             $this->metric('total-downloads', 'Total Downloads', $records->sum('downloads'), $previousRecords->sum('downloads')),
-            $this->metric('total-views', 'Total Views', 0, 0),
+            $this->metric('total-views', 'Total Views', $records->sum('views_count'), $previousRecords->sum('views_count')),
             $this->metric('access-requests', 'Access Requests', $this->accessRequestCount($records), $this->accessRequestCount($previousRecords)),
         ];
     }
@@ -195,7 +228,7 @@ class AgencyAnalyticsController extends Controller
     private function mostAccessedResearch(Collection $records): array
     {
         return $records
-            ->sortByDesc('downloads')
+            ->sortByDesc(fn (Research $research): int => (int) $research->downloads + (int) $research->views_count)
             ->take(8)
             ->map(fn (Research $research): array => [
                 'id' => (string) $research->id,
@@ -203,16 +236,16 @@ class AgencyAnalyticsController extends Controller
                 'category' => $research->category ?: 'Uncategorized',
                 'year' => $research->publication_year ?: (int) now()->year,
                 'downloads' => (int) $research->downloads,
-                'views' => 0,
+                'views' => (int) $research->views_count,
             ])
             ->values()
             ->all();
     }
 
-    private function accessRequestBreakdown(Request $request): array
+    private function accessRequestBreakdown(Collection $records): array
     {
         $counts = AccessRequest::query()
-            ->whereHas('research', fn ($query) => $query->where('agency_id', $request->user()->agency_id))
+            ->whereIn('research_id', $records->pluck('id'))
             ->selectRaw('status, count(*) as aggregate')
             ->groupBy('status')
             ->pluck('aggregate', 'status');
@@ -224,24 +257,52 @@ class AgencyAnalyticsController extends Controller
         ];
     }
 
-    private function downloadTrends(Collection $records): array
+    private function downloadActivity(Request $request, Collection $records): array
     {
         $months = collect(range(0, 11))
             ->map(fn (int $offset) => now()->startOfYear()->addMonths($offset));
+        $researchIds = $records->pluck('id');
+        $byResearch = $researchIds
+            ->mapWithKeys(fn (int|string $id): array => [(string) $id => array_fill(0, 12, 0)])
+            ->all();
 
-        return $months->map(fn ($month): array => [
-            'month' => $month->format('M'),
-            'downloads' => $records
-                ->filter(fn (Research $research) => $research->created_at?->format('Y-m') === $month->format('Y-m'))
-                ->sum('downloads'),
-        ])->all();
+        $trends = $months->map(function ($month, int $index) use ($request, $researchIds, &$byResearch): array {
+            $counts = $researchIds->isEmpty()
+                ? collect()
+                : ResearchAnalyticsEvent::query()
+                    ->where('agency_id', $request->user()->agency_id)
+                    ->whereIn('research_id', $researchIds)
+                    ->where('event_type', 'download')
+                    ->where('occurred_at', '>=', $month->copy()->startOfMonth())
+                    ->where('occurred_at', '<', $month->copy()->addMonth()->startOfMonth())
+                    ->select('research_id')
+                    ->selectRaw('count(*) as aggregate')
+                    ->groupBy('research_id')
+                    ->pluck('aggregate', 'research_id');
+
+            foreach ($counts as $researchId => $count) {
+                $byResearch[(string) $researchId][$index] = (int) $count;
+            }
+
+            return [
+                'month' => $month->format('M'),
+                'downloads' => (int) $counts->sum(),
+            ];
+        })->all();
+
+        return ['trends' => $trends, 'byResearch' => $byResearch];
     }
 
     private function filterOptions(Collection $records): array
     {
         return [
             'years' => $records->pluck('publication_year')->filter()->unique()->sortDesc()->map(fn ($year) => (string) $year)->values()->all(),
-            'documentTypes' => ['Research Study'],
+            'documentTypes' => $records
+                ->map(fn (Research $research): string => $this->documentType($research))
+                ->unique()
+                ->sort()
+                ->values()
+                ->all(),
             'categories' => $records->pluck('category')->filter()->unique()->sort()->values()->all(),
             'sdgs' => $records->flatMap(fn (Research $research) => $research->sdgs ?? [])->unique()->sort()->values()->all(),
             'statuses' => ['approved', 'pending', 'denied'],
@@ -249,21 +310,21 @@ class AgencyAnalyticsController extends Controller
         ];
     }
 
-    private function analyticsRecord(Research $research): array
+    private function analyticsRecord(Research $research, array $monthlyDownloads): array
     {
         return [
             'id' => (string) $research->id,
             'title' => $research->title,
             'category' => $research->category ?: 'Uncategorized',
             'year' => $research->publication_year ?: (int) now()->year,
-            'documentType' => 'Research Study',
+            'documentType' => $this->documentType($research),
             'sdgs' => $research->sdgs ?? [],
             'status' => $this->analyticsStatus($research->status),
             'accessType' => $this->accessType($research->access_level),
             'downloads' => (int) $research->downloads,
-            'views' => 0,
-            'accessRequests' => AccessRequest::query()->where('research_id', $research->id)->count(),
-            'monthlyDownloads' => array_fill(0, 12, 0),
+            'views' => (int) $research->views_count,
+            'accessRequests' => (int) $research->access_requests_count,
+            'monthlyDownloads' => $monthlyDownloads,
         ];
     }
 
@@ -278,9 +339,32 @@ class AgencyAnalyticsController extends Controller
 
     private function accessRequestCount(Collection $records): int
     {
-        $researchIds = $records->pluck('id');
+        return (int) $records->sum('access_requests_count');
+    }
 
-        return AccessRequest::query()->whereIn('research_id', $researchIds)->count();
+    private function documentType(Research $research): string
+    {
+        $category = str((string) $research->category)->lower()->toString();
+
+        if (str_contains($category, 'terminal report')) {
+            return 'Terminal Report';
+        }
+
+        if (str_contains($category, 'project accomplishment')) {
+            return 'Project Accomplishment Report';
+        }
+
+        $fileType = $research->files
+            ->pluck('file_type')
+            ->filter()
+            ->first(fn (string $type): bool => $type !== 'report-highlight-supporting');
+
+        return match ($fileType) {
+            null, 'research', 'research-study', 'research_document' => 'Research Study',
+            'terminal-report' => 'Terminal Report',
+            'project-accomplishment', 'project-accomplishment-report' => 'Project Accomplishment Report',
+            default => str($fileType)->replace(['-', '_'], ' ')->headline()->toString(),
+        };
     }
 
     private function metric(string $id, string $label, int $current, int $previous): array

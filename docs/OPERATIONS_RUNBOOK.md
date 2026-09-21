@@ -1,5 +1,7 @@
 # Queue, scheduler, coverage, and recovery operations
 
+Production infrastructure is externally operated. Before releasing against a new or changed database, MongoDB cluster, Redis service, or object-storage namespace, follow [the external infrastructure operator contract](EXTERNAL_INFRASTRUCTURE.md) and require a successful `php artisan rikms:infrastructure-check --write` result.
+
 ## Coverage baseline
 
 The test workflow generates an Xdebug Clover report in the `coverage-baseline` job and retains `coverage.xml` as the `php-coverage-baseline` artifact for 14 days. PHPUnit limits coverage to `app/`; vendor packages, generated frontend/route assets, configuration, views, routes, database artifacts, and framework bootstrap files are outside that source set. The empty starter `app/Http/Controllers/Controller.php` is explicitly excluded.
@@ -8,7 +10,7 @@ No global percentage gate is enabled yet. Record several successful main-branch 
 
 ## Queue contract
 
-The database worker has a 120-second execution timeout and `DB_QUEUE_RETRY_AFTER=180`. The retry reservation must remain longer than the worker timeout to prevent a second worker from acquiring a still-running job. Metadata and SDG jobs use three attempts with 10, 30, and 60-second backoff. PDF parsing uses one 120-second attempt because parser failures are recorded as terminal results. Access-decision mail notifications use three attempts, a 60-second timeout, and the same bounded backoff.
+The worker has a 120-second execution timeout. `DB_QUEUE_RETRY_AFTER` or `REDIS_QUEUE_RETRY_AFTER`, according to the selected driver, must remain longer than the worker timeout to prevent a second worker from acquiring a still-running job. Metadata and SDG jobs use three attempts with 10, 30, and 60-second backoff. PDF parsing uses one 120-second attempt because parser failures are recorded as terminal results. Access-decision mail notifications use three attempts, a 60-second timeout, and the same bounded backoff.
 
 Handled provider/application failures are written as explicit failed pipeline results and are not retried blindly. Unhandled queue failures are stored through `QUEUE_FAILED_DRIVER=database-uuids` in `failed_jobs`.
 
@@ -90,3 +92,15 @@ These units and restart steps were validated structurally and through local auto
 ## Backup safety
 
 RIKMS currently has no backup execution endpoint, queued backup job, restore endpoint, or backup helper. The UI remains informational and disabled. Production operations must use an administrator-approved external backup procedure until a dedicated, authenticated, audited, off-host backup implementation is delivered. Do not represent settings such as `backup.last_backup_at` as proof that a backup exists, and never test restore procedures against production data.
+
+## Storage reconciliation
+
+Run a read-only reconciliation after deployments and on a reviewed operations schedule:
+
+```bash
+php artisan rikms:storage-reconcile
+```
+
+It reports missing research objects, unreferenced private objects, abandoned quarantine objects, orphaned MongoDB AI results, and AI status mismatches. Repair is deliberately fail-closed. Review the dry-run output first, set `STORAGE_RECONCILIATION_REPAIR_ENABLED=true` for the maintenance window, then run `php artisan rikms:storage-reconcile --repair`. Disable repair again afterward. A repaired missing object is marked `missing`; it is never silently recreated or presented as downloadable.
+
+If an upload succeeded but queue dispatch failed, inspect queue/database health and the file's storage object, then requeue that single idempotent pipeline with `php artisan rikms:ai-requeue <research-file-id>`. Do not bulk requeue files without reviewing provider capacity and failure history.

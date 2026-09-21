@@ -16,6 +16,7 @@ use App\Services\QuarantinedUploadStorage;
 use App\Services\UploadLimitService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -158,6 +159,29 @@ test('valid PDFs below and near the configured limit are accepted without AI job
 
     expect(ResearchFile::query()->where('agency_id', $agency->id)->count())->toBe(2);
     pilotUploadAssertNoAiJobs();
+});
+
+test('promoted upload is removed when relational metadata creation fails', function () {
+    Bus::fake();
+    Storage::fake('local');
+    pilotUploadSet(PlatformSettingsService::AI_PROCESSING_ENABLED, false);
+    [$agency, $user, $research] = pilotUploadContext('pilot-upload-db-failure');
+    $eventName = 'eloquent.creating: '.ResearchFile::class;
+
+    Event::listen($eventName, fn (): never => throw new RuntimeException('Simulated metadata failure.'));
+
+    try {
+        $this->actingAs($user)
+            ->postJson("/api/agency/research/{$research->id}/files", [
+                'file' => UploadedFile::fake()->createWithContent('atomic.pdf', testPdfContent(4096)),
+            ])
+            ->assertServerError();
+    } finally {
+        Event::forget($eventName);
+    }
+
+    expect(Storage::disk('local')->allFiles("research/{$research->id}"))->toBe([])
+        ->and(ResearchFile::query()->where('research_id', $research->id)->exists())->toBeFalse();
 });
 
 test('agency upload page receives the effective upload limit for display', function () {

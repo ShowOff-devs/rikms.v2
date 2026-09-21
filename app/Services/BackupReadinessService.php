@@ -7,7 +7,7 @@ use Throwable;
 class BackupReadinessService
 {
     /** @return array<string, mixed> */
-    public function inspect(): array
+    public function inspect(bool $write = false): array
     {
         $configuredPath = trim((string) config('backup.destination_path'));
         $minimumFreeBytes = max(1, (int) config('backup.minimum_free_space_mb', 10240)) * 1024 * 1024;
@@ -28,6 +28,13 @@ class BackupReadinessService
             && $safeDestination
             && $hasCapacity
             && $encryptionReady;
+        $writeProbeSucceeded = $write && $ready
+            ? $this->writeProbe($configuredPath)
+            : null;
+
+        if ($write) {
+            $ready = $ready && $writeProbeSucceeded === true;
+        }
 
         return [
             'status' => $this->status(
@@ -37,6 +44,8 @@ class BackupReadinessService
                 $safeDestination,
                 $hasCapacity,
                 $encryptionReady,
+                $write,
+                $writeProbeSucceeded,
             ),
             'ready_for_test_backup' => $ready,
             'execution_enabled' => (bool) config('backup.execution_enabled', false),
@@ -52,6 +61,10 @@ class BackupReadinessService
                 'minimum_free_space_mb' => (int) floor($minimumFreeBytes / 1024 / 1024),
             ],
             'encryption_key_configured' => $encryptionReady,
+            'write_probe' => [
+                'performed' => $write && $writeProbeSucceeded !== null,
+                'succeeded' => $writeProbeSucceeded,
+            ],
             'checked_at' => now()->toISOString(),
         ];
     }
@@ -63,6 +76,8 @@ class BackupReadinessService
         bool $safeDestination,
         bool $hasCapacity,
         bool $encryptionReady,
+        bool $write,
+        ?bool $writeProbeSucceeded,
     ): string {
         return match (true) {
             ! $pathConfigured => 'destination_not_configured',
@@ -71,8 +86,31 @@ class BackupReadinessService
             ! $destinationWritable => 'destination_not_writable',
             ! $hasCapacity => 'insufficient_free_space',
             ! $encryptionReady => 'encryption_key_not_configured',
+            $write && $writeProbeSucceeded !== true => 'destination_probe_failed',
             default => 'ready_for_test_backup',
         };
+    }
+
+    private function writeProbe(string $path): bool
+    {
+        $probe = rtrim($path, '\\/').DIRECTORY_SEPARATOR.'.rikms-backup-health-'.bin2hex(random_bytes(16)).'.tmp';
+        $payload = random_bytes(32);
+
+        try {
+            $written = file_put_contents($probe, $payload, LOCK_EX);
+
+            if ($written !== strlen($payload) || file_get_contents($probe) !== $payload) {
+                return false;
+            }
+
+            return unlink($probe) && ! file_exists($probe);
+        } catch (Throwable) {
+            return false;
+        } finally {
+            if (is_file($probe)) {
+                @unlink($probe);
+            }
+        }
     }
 
     private function isOutsideApplication(string $path): bool

@@ -13,6 +13,7 @@ use App\Models\Research;
 use App\Models\ResearchFile;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\ResearchFileStorage;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use App\Support\CsvExport;
@@ -26,6 +27,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class AdminArchiveController extends Controller
 {
     use RespondsWithApiPagination;
+
+    public function __construct(private readonly ResearchFileStorage $researchFileStorage) {}
 
     public function research(Request $request): JsonResponse
     {
@@ -55,9 +58,10 @@ class AdminArchiveController extends Controller
 
     public function files(Request $request): JsonResponse
     {
-        $query = ResearchFile::query()
+        $query = ResearchFile::withTrashed()
             ->with(['research.agency', 'uploader', 'archivedBy'])
             ->whereNotNull('archived_at')
+            ->where('status', '!=', 'deleted')
             ->when($request->filled('agency_id'), fn (Builder $query) => $query->where('agency_id', $request->integer('agency_id')))
             ->when($request->filled('research_id'), fn (Builder $query) => $query->where('research_id', $request->integer('research_id')))
             ->when($request->filled('keyword'), function (Builder $query) use ($request): void {
@@ -178,6 +182,14 @@ class AdminArchiveController extends Controller
             return ApiResponse::error('This research file is not archived.', [], 422);
         }
 
+        if (! $this->researchFileStorage->exists($file)) {
+            return ApiResponse::error(
+                'The archived file cannot be restored because its stored object is missing.',
+                [],
+                409,
+            );
+        }
+
         $archiveRecord = ArchiveRecord::query()
             ->where('archivable_type', $file->getMorphClass())
             ->where('archivable_id', $file->id)
@@ -187,6 +199,10 @@ class AdminArchiveController extends Controller
         $oldValues = $file->only(['status', 'archived_at', 'archived_by', 'archive_reason', 'restored_at', 'restored_by']);
 
         DB::transaction(function () use ($request, $file, $archiveRecord, $oldValues): void {
+            if ($file->trashed()) {
+                $file->restore();
+            }
+
             $file->update([
                 'status' => 'active',
                 'archived_at' => null,
@@ -329,7 +345,13 @@ class AdminArchiveController extends Controller
         $oldValues = $file->only(['status', 'archived_at', 'archived_by', 'archive_reason', 'deleted_at']);
         $responseData = (new ResearchFileResource($file->load(['research.agency', 'uploader', 'archivedBy'])))->resolve($request);
 
+        if (! $this->researchFileStorage->deleteIfUnreferenced($file)) {
+            return ApiResponse::error('The stored file could not be deleted. The archive record was retained.', [], 500);
+        }
+
         DB::transaction(function () use ($request, $file, $oldValues): void {
+            $file->forceFill(['status' => 'deleted'])->save();
+
             if (! $file->trashed()) {
                 $file->delete();
             }

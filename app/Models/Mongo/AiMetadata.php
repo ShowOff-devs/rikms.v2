@@ -11,6 +11,7 @@ class AiMetadata extends Model
     protected $collection = 'ai_metadata';
 
     protected $fillable = [
+        'idempotency_key',
         'research_id',
         'file_id',
         'agency_id',

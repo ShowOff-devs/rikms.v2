@@ -11,6 +11,7 @@ class SdgClassification extends Model
     protected $collection = 'sdg_classifications';
 
     protected $fillable = [
+        'idempotency_key',
         'research_id',
         'file_id',
         'agency_id',

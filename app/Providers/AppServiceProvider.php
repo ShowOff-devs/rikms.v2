@@ -150,8 +150,21 @@ class AppServiceProvider extends ServiceProvider
             $violations[] = 'QUEUE_CONNECTION must not be sync';
         }
 
-        if (config('queue.default') !== 'database') {
+        if (app()->environment('pilot') && config('queue.default') !== 'database') {
             $violations[] = 'QUEUE_CONNECTION must be database for the pilot runtime';
+        }
+
+        if (app()->environment(['staging', 'production'])
+            && ! in_array((string) config('queue.default'), ['database', 'redis'], true)) {
+            $violations[] = 'QUEUE_CONNECTION must be database or redis in staging and production';
+        }
+
+        if (! str_starts_with((string) config('queue.failed.driver'), 'database')) {
+            $violations[] = 'QUEUE_FAILED_DRIVER must use database-backed failed-job storage';
+        }
+
+        if (! in_array((string) config('database.default'), ['mysql', 'mariadb'], true)) {
+            $violations[] = 'DB_CONNECTION must be mysql or mariadb outside local/testing environments';
         }
 
         if (config('rikms.uploads.malware_scanner') !== 'clamav') {
@@ -208,6 +221,47 @@ class AppServiceProvider extends ServiceProvider
                     $violations[] = "Local upload disk [{$uploadDisk}] must be outside the public directory";
                 }
             }
+
+            if (($diskConfig['driver'] ?? null) === 's3'
+                && trim((string) ($diskConfig['bucket'] ?? '')) === '') {
+                $violations[] = "S3 upload disk [{$uploadDisk}] must configure a bucket";
+            }
+        }
+
+        $quarantineConfig = config("filesystems.disks.{$quarantineDisk}");
+        $storageConfig = config("filesystems.disks.{$storageDisk}");
+
+        if (is_array($quarantineConfig)
+            && is_array($storageConfig)
+            && ($quarantineConfig['driver'] ?? null) === 'local'
+            && ($storageConfig['driver'] ?? null) === 'local'
+            && $this->normalizedStorageRoot($quarantineConfig) === $this->normalizedStorageRoot($storageConfig)) {
+            $violations[] = 'Upload quarantine and permanent storage must use different local roots';
+        }
+
+        if (is_array($quarantineConfig)
+            && is_array($storageConfig)
+            && ($quarantineConfig['driver'] ?? null) === 's3'
+            && ($storageConfig['driver'] ?? null) === 's3'
+            && $this->s3Namespace($quarantineConfig) === $this->s3Namespace($storageConfig)) {
+            $violations[] = 'Upload quarantine and permanent storage must use different S3 buckets or roots';
+        }
+
+        if (config('infrastructure.require_remote_storage')) {
+            foreach ([$quarantineDisk, $storageDisk] as $uploadDisk) {
+                if (config("filesystems.disks.{$uploadDisk}.driver") === 'local') {
+                    $violations[] = "Upload disk [{$uploadDisk}] must use remote storage";
+                }
+            }
+        }
+
+        if (config('infrastructure.require_mongodb')
+            && ! filled(config('database.connections.mongodb.dsn'))) {
+            $violations[] = 'MONGODB_URI must be configured when INFRA_REQUIRE_MONGODB is true';
+        }
+
+        if (! config('infrastructure.require_backup_ready')) {
+            $violations[] = 'INFRA_REQUIRE_BACKUP_READY must be true in deployed environments';
         }
 
         $captchaEnabled = config('rikms.public_access_requests.captcha.enabled') === true;
@@ -282,6 +336,24 @@ class AppServiceProvider extends ServiceProvider
         if ($violations !== []) {
             throw new RuntimeException('Unsafe production configuration: '.implode('; ', $violations).'.');
         }
+    }
+
+    /** @param array<string, mixed> $configuration */
+    private function normalizedStorageRoot(array $configuration): string
+    {
+        $root = str_replace('\\', '/', rtrim((string) ($configuration['root'] ?? ''), '\\/'));
+
+        return PHP_OS_FAMILY === 'Windows' ? mb_strtolower($root) : $root;
+    }
+
+    /** @param array<string, mixed> $configuration */
+    private function s3Namespace(array $configuration): string
+    {
+        return implode('|', [
+            mb_strtolower(rtrim((string) ($configuration['endpoint'] ?? ''), '/')),
+            mb_strtolower((string) ($configuration['bucket'] ?? '')),
+            trim((string) ($configuration['root'] ?? ''), '/'),
+        ]);
     }
 
     protected function configureRateLimiters(): void

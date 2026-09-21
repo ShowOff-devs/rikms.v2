@@ -11,6 +11,7 @@ class PdfParsingResult extends Model
     protected $collection = 'pdf_parsing_results';
 
     protected $fillable = [
+        'idempotency_key',
         'research_id',
         'file_id',
         'agency_id',

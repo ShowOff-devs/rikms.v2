@@ -11,6 +11,7 @@ use App\Support\ApiResponse;
 use App\Support\AuditLogger;
 use App\Support\Statuses;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -119,29 +120,41 @@ class AgencyArchiveController extends Controller
         $previousStatus = $archiveRecord?->metadata['previous_status'] ?? Statuses::RESEARCH_DRAFT;
         $oldValues = $research->only(['status', 'archived_at', 'archived_by', 'archive_reason', 'restored_at', 'restored_by']);
 
-        DB::transaction(function () use ($request, $research, $archiveRecord, $previousStatus, $oldValues): void {
-            $research->update([
-                'status' => $previousStatus,
-                'archived_at' => null,
-                'archived_by' => null,
-                'archive_reason' => null,
-                'restored_at' => now(),
-                'restored_by' => $request->user()->id,
-            ]);
+        try {
+            DB::transaction(function () use ($request, $research, $archiveRecord, $previousStatus, $oldValues): void {
+                $research->update([
+                    'status' => $previousStatus,
+                    'archived_at' => null,
+                    'archived_by' => null,
+                    'archive_reason' => null,
+                    'restored_at' => now(),
+                    'restored_by' => $request->user()->id,
+                ]);
 
-            $archiveRecord?->update([
-                'restored_by' => $request->user()->id,
-                'restored_at' => now(),
-            ]);
+                $archiveRecord?->update([
+                    'restored_by' => $request->user()->id,
+                    'restored_at' => now(),
+                ]);
 
-            AuditLogger::record(
-                $request,
-                'agency.research.restored',
-                $research,
-                $oldValues,
-                $research->fresh()->only(['status', 'archived_at', 'archived_by', 'archive_reason', 'restored_at', 'restored_by']),
+                AuditLogger::record(
+                    $request,
+                    'agency.research.restored',
+                    $research,
+                    $oldValues,
+                    $research->fresh()->only(['status', 'archived_at', 'archived_by', 'archive_reason', 'restored_at', 'restored_by']),
+                );
+            });
+        } catch (QueryException $exception) {
+            if (! $this->isActiveRevisionConflict($exception)) {
+                throw $exception;
+            }
+
+            return ApiResponse::error(
+                'This archived revision cannot be restored because another active revision already exists.',
+                ['conflict' => ['Reload the research record before choosing which revision to keep.']],
+                409,
             );
-        });
+        }
 
         return ApiResponse::success(
             'Agency research restored.',
@@ -180,5 +193,17 @@ class AgencyArchiveController extends Controller
     private function canManage(Request $request, Research $research): bool
     {
         return (int) $research->agency_id === (int) $request->user()->agency_id;
+    }
+
+    private function isActiveRevisionConflict(QueryException $exception): bool
+    {
+        $sqlState = (string) ($exception->errorInfo[0] ?? $exception->getCode());
+        $message = mb_strtolower($exception->getMessage());
+
+        return in_array($sqlState, ['23000', '23505', '19'], true)
+            && (
+                str_contains($message, 'research_active_revision_parent_unique')
+                || str_contains($message, 'active_revision_parent_id')
+            );
     }
 }

@@ -168,7 +168,7 @@ Route::prefix('admin')
         Route::get('/archive/users', [AdminArchiveController::class, 'users'])->name('archive.users');
         Route::get('/archive/activity', [AdminArchiveController::class, 'activity'])->name('archive.activity');
         Route::get('/archive/export', [AdminArchiveController::class, 'export'])->name('archive.export');
-        Route::post('/research-files/{file}/restore', [AdminArchiveController::class, 'restoreFile'])->name('research-files.restore');
+        Route::post('/research-files/{file}/restore', [AdminArchiveController::class, 'restoreFile'])->name('research-files.restore')->withTrashed();
         Route::delete('/research-files/{file}/archive', [AdminArchiveController::class, 'destroyFile'])->name('research-files.archive.destroy')->withTrashed();
         Route::post('/agencies/{agency}/restore', [AdminArchiveController::class, 'restoreAgency'])->name('agencies.restore')->withTrashed();
         Route::delete('/agencies/{agency}/archive', [AdminArchiveController::class, 'destroyAgency'])->name('agencies.archive.destroy')->withTrashed();

@@ -20,6 +20,19 @@ test('local responses include baseline headers without csp or hsts by default', 
         ->assertHeaderMissing('Content-Security-Policy-Report-Only');
 });
 
+test('api responses include baseline security headers', function () {
+    config()->set('app.env', 'local');
+    config()->set('security_headers.csp.mode', 'off');
+
+    $this->getJson('/api/public/platform-settings')
+        ->assertOk()
+        ->assertHeader('X-Content-Type-Options', 'nosniff')
+        ->assertHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+        ->assertHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+        ->assertHeader('X-Frame-Options', 'DENY')
+        ->assertHeaderMissing('Strict-Transport-Security');
+});
+
 test('local csp may be configured as report only', function () {
     config()->set('app.env', 'local');
     config()->set('security_headers.csp.mode', 'report-only');
@@ -115,6 +128,7 @@ test('turnstile frontend and backend use the same fixed action', function () {
 
 test('deployed environments reject unsafe security service configuration', function (array $override, string $violation) {
     $originalEnvironment = $this->app->environment();
+    $originalDatabase = config('database.default');
     $this->app->detectEnvironment(fn (): string => 'production');
     config()->set([
         'app.env' => 'production',
@@ -129,6 +143,7 @@ test('deployed environments reject unsafe security service configuration', funct
         'rikms.dev_seed_accounts.allow_outside_safe_environments' => false,
         'trustedproxy.hosts' => ['^rikms\\.example\\.test$'],
         'queue.default' => 'database',
+        'database.default' => 'mysql',
         'security_headers.csp.mode' => 'enforce',
         'security_headers.csp.production_validated' => true,
         'security_headers.csp.report_uri' => '/api/security/csp-reports',
@@ -147,6 +162,7 @@ test('deployed environments reject unsafe security service configuration', funct
         'rikms.uploads.clamav_timeout_seconds' => 10,
         'rikms.uploads.quarantine_disk' => 'upload_quarantine',
         'rikms.uploads.storage_disk' => 'private_uploads',
+        'infrastructure.require_backup_ready' => true,
     ]);
     config()->set($override);
 
@@ -159,6 +175,7 @@ test('deployed environments reject unsafe security service configuration', funct
     } catch (RuntimeException $caught) {
         $exception = $caught;
     } finally {
+        config()->set('database.default', $originalDatabase);
         $this->app->detectEnvironment(fn (): string => $originalEnvironment);
     }
 
@@ -171,7 +188,8 @@ test('deployed environments reject unsafe security service configuration', funct
     'invalid port' => [['rikms.uploads.clamav_port' => 0], 'CLAMAV_PORT must be between 1 and 65535'],
     'invalid timeout' => [['rikms.uploads.clamav_timeout_seconds' => 0], 'CLAMAV_TIMEOUT_SECONDS must be greater than zero'],
     'invalid stream limit' => [['rikms.uploads.clamav_stream_max_length_mb' => 0], 'CLAMAV_STREAM_MAX_LENGTH_MB must be greater than zero'],
-    'non-database pilot queue' => [['queue.default' => 'redis'], 'QUEUE_CONNECTION must be database for the pilot runtime'],
+    'unsupported production queue' => [['queue.default' => 'sqs'], 'QUEUE_CONNECTION must be database or redis in staging and production'],
+    'sqlite production database' => [['database.default' => 'sqlite'], 'DB_CONNECTION must be mysql or mariadb'],
     'shared upload disk' => [['rikms.uploads.storage_disk' => 'upload_quarantine'], 'UPLOAD_QUARANTINE_DISK and UPLOAD_STORAGE_DISK must be separate'],
     'public upload disk' => [['rikms.uploads.storage_disk' => 'public'], 'Upload disk [public] must not be public'],
     'csp not enforced' => [['security_headers.csp.mode' => 'report-only'], 'CSP_MODE must be enforce in production'],
@@ -181,10 +199,12 @@ test('deployed environments reject unsafe security service configuration', funct
     'missing captcha hostname allowlist' => [['rikms.public_access_requests.captcha.allowed_hostnames' => []], 'CAPTCHA_ALLOWED_HOSTNAMES must contain at least one hostname'],
     'invalid captcha hostname allowlist' => [['rikms.public_access_requests.captcha.allowed_hostnames' => ['https://rikms.example.test']], 'CAPTCHA_ALLOWED_HOSTNAMES must contain only valid hostnames'],
     'monitoring enabled without destination' => [['monitoring.alerts_enabled' => true], 'Monitoring alerts require a valid email recipient or HTTPS webhook'],
+    'backup readiness gate disabled' => [['infrastructure.require_backup_ready' => false], 'INFRA_REQUIRE_BACKUP_READY must be true in deployed environments'],
 ]);
 
 test('deployed environments accept the complete captcha contract', function () {
     $originalEnvironment = $this->app->environment();
+    $originalDatabase = config('database.default');
     $this->app->detectEnvironment(fn (): string => 'production');
     config()->set([
         'app.env' => 'production',
@@ -199,6 +219,7 @@ test('deployed environments accept the complete captcha contract', function () {
         'rikms.dev_seed_accounts.allow_outside_safe_environments' => false,
         'trustedproxy.hosts' => ['^rikms\\.example\\.test$'],
         'queue.default' => 'database',
+        'database.default' => 'mysql',
         'security_headers.csp.mode' => 'enforce',
         'security_headers.csp.production_validated' => true,
         'security_headers.csp.report_uri' => '/api/security/csp-reports',
@@ -209,6 +230,7 @@ test('deployed environments accept the complete captcha contract', function () {
         'rikms.uploads.clamav_timeout_seconds' => 10,
         'rikms.uploads.quarantine_disk' => 'upload_quarantine',
         'rikms.uploads.storage_disk' => 'private_uploads',
+        'infrastructure.require_backup_ready' => true,
         'rikms.public_access_requests.captcha.enabled' => true,
         'rikms.public_access_requests.captcha.frontend_enabled' => true,
         'rikms.public_access_requests.captcha.provider' => 'turnstile',
@@ -224,6 +246,7 @@ test('deployed environments accept the complete captcha contract', function () {
     try {
         $method->invoke($provider);
     } finally {
+        config()->set('database.default', $originalDatabase);
         $this->app->detectEnvironment(fn (): string => $originalEnvironment);
     }
 
@@ -264,6 +287,7 @@ test('an unrecognized environment cannot disable captcha', function () {
 
 test('deployed environments reject inconsistent captcha configuration', function (array $override, string $violation) {
     $originalEnvironment = $this->app->environment();
+    $originalDatabase = config('database.default');
     $this->app->detectEnvironment(fn (): string => 'production');
     config()->set([
         'app.env' => 'production',
@@ -278,6 +302,7 @@ test('deployed environments reject inconsistent captcha configuration', function
         'rikms.dev_seed_accounts.allow_outside_safe_environments' => false,
         'trustedproxy.hosts' => ['^rikms\\.example\\.test$'],
         'queue.default' => 'database',
+        'database.default' => 'mysql',
         'security_headers.csp.mode' => 'enforce',
         'security_headers.csp.production_validated' => true,
         'security_headers.csp.report_uri' => '/api/security/csp-reports',
@@ -307,6 +332,7 @@ test('deployed environments reject inconsistent captcha configuration', function
     } catch (RuntimeException $caught) {
         $exception = $caught;
     } finally {
+        config()->set('database.default', $originalDatabase);
         $this->app->detectEnvironment(fn (): string => $originalEnvironment);
     }
 

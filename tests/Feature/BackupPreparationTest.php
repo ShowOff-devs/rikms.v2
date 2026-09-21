@@ -67,14 +67,17 @@ test('a writable external path and dedicated key become ready only for a test ba
             'backup.require_separate_filesystem' => false,
         ]);
 
-        $status = app(BackupReadinessService::class)->inspect();
+        $status = app(BackupReadinessService::class)->inspect(true);
 
         expect($status['status'])->toBe('ready_for_test_backup')
             ->and($status['ready_for_test_backup'])->toBeTrue()
             ->and($status['execution_enabled'])->toBeFalse()
             ->and($status['destination']['display'])->not->toBe($destination)
             ->and($status['destination']['writable'])->toBeTrue()
-            ->and($status['encryption_key_configured'])->toBeTrue();
+            ->and($status['encryption_key_configured'])->toBeTrue()
+            ->and($status['write_probe']['performed'])->toBeTrue()
+            ->and($status['write_probe']['succeeded'])->toBeTrue()
+            ->and(glob($destination.DIRECTORY_SEPARATOR.'.rikms-backup-health-*'))->toBe([]);
     } finally {
         rmdir($destination);
     }

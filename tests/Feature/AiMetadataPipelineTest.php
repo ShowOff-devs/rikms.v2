@@ -12,6 +12,7 @@ use App\Services\AI\OpenAiResearchMetadataExtractor;
 use App\Services\AI\PdfTextExtractionService;
 use App\Services\AiPipelineResultWriter;
 use App\Services\PlatformSettingsService;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use OpenAI\Responses\Chat\CreateResponse;
 use OpenAI\Testing\ClientFake;
@@ -154,6 +155,7 @@ test('failed pdf parsing produces failed parser result payload', function () {
     $user = createAiPipelineUser($agency);
     $research = createAiPipelineResearch($agency, $user);
     $file = createAiPipelineFile($research, $agency, $user);
+    Storage::disk('local')->put($file->path, '%PDF-1.4 test document %%EOF');
 
     $parserResult = [
         'success' => false,
@@ -175,6 +177,37 @@ test('failed pdf parsing produces failed parser result payload', function () {
             && $userId === $user->id
             && $result['success'] === false
             && $result['error'] === $parserResult['error']);
+
+    (new ParsePdfDocumentJob($research->id, $file->id, $agency->id, $user->id))->handle($writer, $extractor);
+});
+
+test('parser materializes non-local storage objects into a temporary workspace', function () {
+    Storage::fake('remote-documents');
+    config()->set('filesystems.disks.remote-documents.driver', 's3');
+    $agency = createAiPipelineAgency('ai-parser-remote');
+    $user = createAiPipelineUser($agency);
+    $research = createAiPipelineResearch($agency, $user);
+    $file = createAiPipelineFile($research, $agency, $user);
+    $file->forceFill(['disk' => 'remote-documents'])->save();
+    Storage::disk('remote-documents')->put($file->path, '%PDF-1.4 remote document %%EOF');
+    $parserResult = [
+        'success' => true,
+        'text' => 'Remote document text',
+        'method' => 'smalot/pdfparser',
+        'error' => null,
+        'page_count' => 1,
+    ];
+
+    $extractor = Mockery::mock(PdfTextExtractionService::class);
+    $extractor->shouldReceive('extract')
+        ->once()
+        ->withArgs(fn (string $path): bool => is_file($path)
+            && file_get_contents($path) === '%PDF-1.4 remote document %%EOF')
+        ->andReturn($parserResult);
+    $writer = Mockery::mock(AiPipelineResultWriter::class);
+    $writer->shouldReceive('writePdfParsingResult')
+        ->once()
+        ->with($research->id, $file->id, $agency->id, $user->id, $parserResult);
 
     (new ParsePdfDocumentJob($research->id, $file->id, $agency->id, $user->id))->handle($writer, $extractor);
 });
@@ -300,6 +333,8 @@ test('openai metadata extractor requests strict json schema response format', fu
         ]),
     ]);
 
+    Log::spy();
+
     $result = (new OpenAiResearchMetadataExtractor($client))->extract(str_repeat('Research text. ', 200));
 
     expect($result['title'])->toBe('Water Security in Davao Region')
@@ -307,6 +342,8 @@ test('openai metadata extractor requests strict json schema response format', fu
         ->and($result['review_of_related_literature'])->toBeNull()
         ->and($result['publication_year'])->toBe(2026)
         ->and($result['confidence_score'])->toBe(0.91);
+
+    Log::shouldNotHaveReceived('debug');
 
     $client->chat()->assertSent(function (string $method, array $parameters): bool {
         return $method === 'create'

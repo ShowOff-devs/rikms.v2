@@ -8,6 +8,7 @@ Type=oneshot
 User=www-data
 Group=www-data
 WorkingDirectory=/var/www/rikms
+EnvironmentFile=-/etc/rikms/rikms.env
 ExecStart=/usr/bin/php artisan rikms:monitor-check --alert --no-interaction
 TimeoutStartSec=45
 UMask=0027

@@ -10,6 +10,7 @@ use App\Models\ResearchFile;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\PlatformSettingsService;
+use Illuminate\Support\Facades\Storage;
 
 function enablePhase5AiProcessing(): void
 {
@@ -505,6 +506,7 @@ test('admin can list archived agencies users and files and export them', functio
 });
 
 test('admin can restore and delete archived agencies users and files', function () {
+    Storage::fake('local');
     $agency = createPhase5Agency('phase-five-admin-archive-actions');
     $agencyAdmin = createPhase5User('agency_admin', $agency);
     $superAdmin = createPhase5User('super_admin');
@@ -519,6 +521,7 @@ test('admin can restore and delete archived agencies users and files', function 
     ]);
 
     foreach ([$file, $deletedFile] as $archivedFile) {
+        Storage::disk('local')->put($archivedFile->path, 'phase 5 PDF');
         $archivedFile->forceFill([
             'status' => 'archived',
             'archived_at' => now(),
@@ -526,6 +529,7 @@ test('admin can restore and delete archived agencies users and files', function 
             'archive_reason' => 'File archive action test.',
         ])->save();
     }
+    $file->delete();
 
     foreach ([$archivedAgency, $deletedAgency] as $agencyRecord) {
         $agencyRecord->forceFill([
@@ -560,6 +564,7 @@ test('admin can restore and delete archived agencies users and files', function 
         ->postJson("/api/admin/research-files/{$file->id}/restore")
         ->assertOk()
         ->assertJsonPath('data.status', 'active');
+    $this->assertNotSoftDeleted('research_files', ['id' => $file->id]);
 
     $this->actingAs($superAdmin)
         ->postJson("/api/admin/agencies/{$archivedAgency->id}/restore")
@@ -585,6 +590,7 @@ test('admin can restore and delete archived agencies users and files', function 
         ->assertOk();
 
     $this->assertSoftDeleted('research_files', ['id' => $deletedFile->id]);
+    Storage::disk('local')->assertExists($deletedFile->path);
     $this->assertSoftDeleted('agencies', ['id' => $deletedAgency->id]);
     $this->assertSoftDeleted('users', ['id' => $deletedUser->id]);
     $this->assertDatabaseHas('audit_logs', ['event' => 'admin.file.restored']);

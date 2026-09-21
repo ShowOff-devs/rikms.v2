@@ -2,9 +2,11 @@
 
 use App\Models\Agency;
 use App\Models\Research;
+use App\Models\ResearchFile;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\Reports\PerformanceCalculationService;
+use App\Services\ResearchFileStorage;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Storage;
@@ -221,7 +223,50 @@ test('highlight supporting files are scanned associated restored removable and a
         ->deleteJson("/api/agency/research/{$researchId}/files/{$fileId}")
         ->assertOk();
 
-    $this->assertSoftDeleted('research_files', ['id' => $fileId]);
+    $this->assertDatabaseHas('research_files', [
+        'id' => $fileId,
+        'status' => 'archived',
+        'deleted_at' => null,
+    ]);
+    Storage::disk('local')->assertExists(
+        ResearchFile::query()->findOrFail($fileId)->path,
+    );
+});
+
+test('report revisions receive independent physical supporting files', function () {
+    Storage::fake('local');
+    $agency = terminalWizardAgency('wizard-revision-files');
+    $user = terminalWizardUser($agency);
+    $researchId = $this->actingAs($user)
+        ->postJson('/api/agency/research', terminalWizardPayload())
+        ->assertCreated()
+        ->json('data.id');
+    $research = Research::query()->findOrFail($researchId);
+    $highlight = $research->reportHighlights()->firstOrFail();
+
+    $sourceFileId = $this->actingAs($user)
+        ->postJson("/api/agency/research/{$research->id}/highlights/{$highlight->id}/files", [
+            'file' => UploadedFile::fake()->image('revision-evidence.png', 500, 500),
+        ])
+        ->assertCreated()
+        ->json('data.id');
+
+    $research->forceFill(['status' => 'published', 'published_at' => now()])->save();
+    $revisionId = $this->actingAs($user)
+        ->postJson("/api/agency/research/{$research->id}/revision")
+        ->assertCreated()
+        ->json('data.id');
+
+    $sourceFile = ResearchFile::query()->findOrFail($sourceFileId);
+    $revisionFile = ResearchFile::query()->where('research_id', $revisionId)->firstOrFail();
+
+    expect($revisionFile->path)->not->toBe($sourceFile->path);
+    Storage::disk('local')->assertExists($sourceFile->path);
+    Storage::disk('local')->assertExists($revisionFile->path);
+
+    expect(app(ResearchFileStorage::class)->deleteIfUnreferenced($sourceFile))->toBeTrue();
+    Storage::disk('local')->assertMissing($sourceFile->path);
+    Storage::disk('local')->assertExists($revisionFile->path);
 });
 
 test('performance calculation strictly handles commas units zero targets and overachievement', function () {

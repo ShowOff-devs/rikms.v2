@@ -79,5 +79,7 @@ return [
         'clamav_timeout_seconds' => (float) env('CLAMAV_TIMEOUT_SECONDS', 0),
         'clamav_stream_max_length_mb' => (int) env('CLAMAV_STREAM_MAX_LENGTH_MB', 100),
         'pdf_max_text_chars' => (int) env('AI_PDF_MAX_TEXT_CHARS', 200000),
+        'agency_quota_mb' => (int) env('UPLOAD_AGENCY_QUOTA_MB', 10240),
+        'reconciliation_repair_enabled' => filter_var(env('STORAGE_RECONCILIATION_REPAIR_ENABLED', false), FILTER_VALIDATE_BOOL),
     ],
 ];

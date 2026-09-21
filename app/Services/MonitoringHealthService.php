@@ -14,6 +14,7 @@ class MonitoringHealthService
         private readonly RuntimeHeartbeat $heartbeat,
         private readonly ClamAvReadinessService $clamAv,
         private readonly BackupReadinessService $backup,
+        private readonly QueueHealthService $queueHealth,
     ) {}
 
     /** @return array{status: string, checks: array<int, array<string, mixed>>, checked_at: string} */
@@ -58,26 +59,25 @@ class MonitoringHealthService
     /** @param array<int, array<string, mixed>> $checks */
     private function queueChecks(array &$checks): void
     {
-        if (! Schema::hasTable('jobs') || ! Schema::hasTable('failed_jobs')) {
-            $this->add($checks, 'queue_storage', 'Queue storage', 'critical', 'Required queue tables are missing.');
+        try {
+            $snapshot = $this->queueHealth->snapshot();
+        } catch (Throwable) {
+            $this->add($checks, 'queue_storage', 'Queue storage', 'critical', 'Queue backend or failed-job storage is unavailable.');
 
             return;
         }
 
-        $pending = DB::table('jobs')->count();
-        $failed = DB::table('failed_jobs')->count();
-        $oldestCreatedAt = $pending > 0 ? DB::table('jobs')->min('created_at') : null;
-        $oldestMinutes = is_numeric($oldestCreatedAt)
-            ? max(0, (int) floor((now()->timestamp - (int) $oldestCreatedAt) / 60))
-            : 0;
+        $pending = $snapshot['pending_jobs'];
+        $failed = $snapshot['failed_jobs'];
+        $oldestMinutes = $snapshot['oldest_pending_job_age_minutes'];
         $pendingWarning = max(1, (int) config('monitoring.thresholds.pending_jobs_warning', 100));
         $pendingCritical = max($pendingWarning, (int) config('monitoring.thresholds.pending_jobs_critical', 500));
         $oldestWarning = max(1, (int) config('monitoring.thresholds.oldest_job_warning_minutes', 5));
         $oldestCritical = max($oldestWarning, (int) config('monitoring.thresholds.oldest_job_critical_minutes', 60));
 
         $queueStatus = match (true) {
-            $pending >= $pendingCritical || $oldestMinutes >= $oldestCritical => 'critical',
-            $pending >= $pendingWarning || $oldestMinutes >= $oldestWarning => 'warning',
+            $pending >= $pendingCritical || ($oldestMinutes !== null && $oldestMinutes >= $oldestCritical) => 'critical',
+            $pending >= $pendingWarning || ($oldestMinutes !== null && $oldestMinutes >= $oldestWarning) => 'warning',
             default => 'healthy',
         };
 
@@ -86,7 +86,9 @@ class MonitoringHealthService
             'queue_backlog',
             'Queue backlog',
             $queueStatus,
-            "{$pending} pending; oldest {$oldestMinutes} minute(s).",
+            $oldestMinutes === null
+                ? "{$pending} pending; oldest age is not exposed by this queue driver."
+                : "{$pending} pending; oldest {$oldestMinutes} minute(s).",
             ['pending_jobs' => $pending, 'oldest_job_age_minutes' => $oldestMinutes],
         );
 

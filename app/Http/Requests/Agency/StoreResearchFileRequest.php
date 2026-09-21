@@ -4,6 +4,7 @@ namespace App\Http\Requests\Agency;
 
 use App\Models\Research;
 use App\Services\UploadLimitService;
+use App\Services\UploadQuotaService;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\UploadedFile;
@@ -38,6 +39,19 @@ class StoreResearchFileRequest extends FormRequest
                 function (string $attribute, mixed $value, Closure $fail): void {
                     if (! $value instanceof UploadedFile || ! $this->hasPdfEnvelope($value)) {
                         $fail('Upload a valid PDF document.');
+                    }
+                },
+                function (string $attribute, mixed $value, Closure $fail): void {
+                    $research = $this->route('research');
+
+                    if (! $value instanceof UploadedFile || ! $research instanceof Research) {
+                        return;
+                    }
+
+                    $quota = app(UploadQuotaService::class);
+
+                    if (! $quota->canStore((int) $research->agency_id, (int) $value->getSize())) {
+                        $fail($quota->message());
                     }
                 },
             ],

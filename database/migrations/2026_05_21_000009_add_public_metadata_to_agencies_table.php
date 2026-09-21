@@ -35,12 +35,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('agencies', function (Blueprint $table) {
-            foreach (['slug', 'full_name', 'type', 'website'] as $column) {
-                if (Schema::hasColumn('agencies', $column)) {
-                    $table->dropColumn($column);
-                }
-            }
-        });
+        // Compatibility-only migration. The base agencies migration owns these
+        // columns, so rolling this guard back must never remove them.
     }
 };

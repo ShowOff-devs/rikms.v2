@@ -8,6 +8,7 @@ Type=oneshot
 User=www-data
 Group=www-data
 WorkingDirectory=/var/www/rikms
+EnvironmentFile=-/etc/rikms/rikms.env
 ExecStart=/usr/bin/php artisan schedule:run --no-interaction
 UMask=0027
 NoNewPrivileges=true
