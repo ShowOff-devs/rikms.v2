@@ -1,5 +1,6 @@
-import { Head } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
 import { MonitorCog } from 'lucide-react';
+import { SuperAdminAppearancePage } from '@/components/admin/account-settings/SuperAdminAppearancePage';
 import AppearanceTabs from '@/components/appearance-tabs';
 import SettingsSection from '@/components/settings/settings-section';
 import AppLayout from '@/layouts/app-layout';
@@ -15,6 +16,17 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function Appearance() {
+    const { auth } = usePage().props;
+
+    if (auth.adminPermissions?.includes('*')) {
+        return (
+            <>
+                <Head title="Appearance" />
+                <SuperAdminAppearancePage />
+            </>
+        );
+    }
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Appearance settings" />

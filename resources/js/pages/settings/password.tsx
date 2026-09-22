@@ -1,8 +1,9 @@
 import { Transition } from '@headlessui/react';
-import { Form, Head } from '@inertiajs/react';
+import { Form, Head, usePage } from '@inertiajs/react';
 import { CheckCircle2, KeyRound } from 'lucide-react';
 import { useRef } from 'react';
 import PasswordController from '@/actions/App/Http/Controllers/Settings/PasswordController';
+import { SuperAdminPasswordPage } from '@/components/admin/account-settings/SuperAdminPasswordPage';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
 import SettingsSection from '@/components/settings/settings-section';
@@ -23,6 +24,16 @@ const breadcrumbs: BreadcrumbItem[] = [
 export default function Password() {
     const passwordInput = useRef<HTMLInputElement>(null);
     const currentPasswordInput = useRef<HTMLInputElement>(null);
+    const { auth } = usePage().props;
+
+    if (auth.adminPermissions?.includes('*')) {
+        return (
+            <>
+                <Head title="Password" />
+                <SuperAdminPasswordPage />
+            </>
+        );
+    }
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
