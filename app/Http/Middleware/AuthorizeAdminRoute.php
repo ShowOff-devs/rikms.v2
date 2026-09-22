@@ -70,6 +70,7 @@ class AuthorizeAdminRoute
             Str::is('api.admin.research-files.*', $name) => $write ? ($method === 'POST' ? 'archive.restore' : 'archive.manage') : 'archive.view',
             Str::is('api.admin.access-monitoring.*', $name),
             Str::is('api.admin.access-requests.*', $name) => $write ? 'access_monitoring.manage' : 'access_monitoring.view',
+            Str::is('api.admin.analytics.project-reports.export', $name) => 'analytics.export',
             Str::is('api.admin.analytics.*', $name) => 'analytics.view',
             Str::is('api.admin.reports.*', $name) => 'analytics.export',
             Str::is('api.admin.security.*', $name),

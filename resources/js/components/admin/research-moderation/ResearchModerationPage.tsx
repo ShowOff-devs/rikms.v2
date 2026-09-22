@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AdminLayout } from '@/components/admin/layout/AdminLayout';
-import { moderationIssueTypeLabels } from '@/data/research-moderation-options';
 import { getAllowedResearchModerationActions } from '@/lib/admin/research-moderation-actions';
 import type { ResearchModerationAction } from '@/lib/admin/research-moderation-actions';
 import {
@@ -8,6 +7,7 @@ import {
     approveAndPublishResearchRecord,
     dismissDuplicateResearchMatch,
     exportModerationReport,
+    flagDuplicateResearchMatch,
     flagResearchForReview,
     getDuplicateResearchMatches,
     getFlaggedResearchRecords,
@@ -16,7 +16,7 @@ import {
     publishResearchRecord,
     returnResearchToDraft,
 } from '@/lib/admin/research-moderation-service';
-import { ApiError } from '@/lib/api-client';
+import { apiMessage, ApiError } from '@/lib/api-client';
 import type {
     DuplicateResearchMatch,
     FlaggedResearchRecord,
@@ -54,10 +54,6 @@ const initialFilters: ModerationFilters = {
     status: 'all',
 };
 
-function normalize(value: string | number | undefined) {
-    return String(value ?? '').toLowerCase();
-}
-
 function createActivity(
     type: ModerationActivity['type'],
     action: string,
@@ -73,56 +69,6 @@ function createActivity(
     };
 }
 
-function getSearchableRecordText(record: FlaggedResearchRecord) {
-    return [
-        record.title,
-        record.agency,
-        record.uploadedBy,
-        record.uploaderRole,
-        moderationIssueTypeLabels[record.issueType],
-        record.issueType,
-        record.year,
-        record.status,
-        record.officialStatus,
-    ]
-        .map(normalize)
-        .join(' ');
-}
-
-function filterRecords(
-    records: FlaggedResearchRecord[],
-    filters: ModerationFilters,
-    topbarSearch: string,
-) {
-    const queries = [filters.search, topbarSearch]
-        .map((value) => value.trim().toLowerCase())
-        .filter(Boolean);
-
-    return records.filter((record) => {
-        const searchableText = getSearchableRecordText(record);
-        const searchMatches = queries.every((query) =>
-            searchableText.includes(query),
-        );
-        const agencyMatches =
-            filters.agency === 'all' || record.agency === filters.agency;
-        const issueMatches =
-            filters.issueType === 'all' ||
-            record.issueType === filters.issueType;
-        const yearMatches =
-            filters.year === 'all' || String(record.year) === filters.year;
-        const statusMatches =
-            filters.status === 'all' || record.status === filters.status;
-
-        return (
-            searchMatches &&
-            agencyMatches &&
-            issueMatches &&
-            yearMatches &&
-            statusMatches
-        );
-    });
-}
-
 function makeDuplicateModerationRecord(
     match: DuplicateResearchMatch,
 ): FlaggedResearchRecord {
@@ -135,6 +81,7 @@ function makeDuplicateModerationRecord(
         issueType: 'possible_duplicate',
         year: match.matchingYear ?? new Date(match.detectedAt).getFullYear(),
         status: 'pending-review',
+        officialStatus: match.matchingStatus,
         dateFlagged: new Date().toISOString().slice(0, 10),
         authors: match.matchingAuthors,
         abstract: match.matchingAbstract,
@@ -169,33 +116,85 @@ export function ResearchModerationPage() {
     const [isActionLoading, setIsActionLoading] = useState(false);
     const [isExportOpen, setIsExportOpen] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
+    const [summaryCounts, setSummaryCounts] = useState({
+        flaggedResearchRecords: 0,
+        pendingReview: 0,
+        resolvedIssues: 0,
+    });
+    const [agencies, setAgencies] = useState<string[]>([]);
+    const [years, setYears] = useState<string[]>([]);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalResults, setTotalResults] = useState(0);
+    const [reloadVersion, setReloadVersion] = useState(0);
+
+    useEffect(() => {
+        let isCurrent = true;
+        const search = [filters.search, topbarSearch]
+            .filter(Boolean)
+            .join(' ')
+            .trim();
+        const timeout = window.setTimeout(() => {
+            setIsLoading(true);
+
+            getFlaggedResearchRecords(
+                { ...filters, search },
+                currentPage,
+                rowsPerPage,
+            )
+                .then((result) => {
+                    if (!isCurrent) {
+                        return;
+                    }
+
+                    setRecords(result.records);
+                    setSummaryCounts(result.summary);
+                    setAgencies(result.filterOptions.agencies);
+                    setYears(result.filterOptions.years);
+                    setTotalPages(Math.max(1, result.pagination.last_page));
+                    setTotalResults(result.pagination.total);
+                    setError(null);
+                })
+                .catch((caughtError: unknown) => {
+                    if (isCurrent) {
+                        setError(
+                            apiMessage(
+                                caughtError,
+                                'Unable to load research moderation data.',
+                            ),
+                        );
+                    }
+                })
+                .finally(() => {
+                    if (isCurrent) {
+                        setIsLoading(false);
+                    }
+                });
+        }, 250);
+
+        return () => {
+            isCurrent = false;
+            window.clearTimeout(timeout);
+        };
+    }, [currentPage, filters, reloadVersion, topbarSearch]);
 
     useEffect(() => {
         let isCurrent = true;
 
-        Promise.all([
-            getFlaggedResearchRecords(),
-            getDuplicateResearchMatches(),
-            getModerationActivityLog(),
-        ])
-            .then(([loadedRecords, loadedDuplicates, loadedActivities]) => {
-                if (!isCurrent) {
-                    return;
-                }
-
-                setRecords(loadedRecords);
-                setDuplicates(loadedDuplicates);
-                setActivities(loadedActivities);
-                setError(null);
-            })
-            .catch(() => {
+        Promise.all([getDuplicateResearchMatches(), getModerationActivityLog()])
+            .then(([loadedDuplicates, loadedActivities]) => {
                 if (isCurrent) {
-                    setError('Unable to load research moderation data.');
+                    setDuplicates(loadedDuplicates);
+                    setActivities(loadedActivities);
                 }
             })
-            .finally(() => {
+            .catch((caughtError: unknown) => {
                 if (isCurrent) {
-                    setIsLoading(false);
+                    setError(
+                        apiMessage(
+                            caughtError,
+                            'Unable to load moderation alerts and activity.',
+                        ),
+                    );
                 }
             });
 
@@ -218,57 +217,11 @@ export function ResearchModerationPage() {
         return () => window.clearTimeout(timeout);
     }, [feedback]);
 
-    const summary = useMemo<ModerationSummary>(
-        () => ({
-            flaggedResearchRecords: records.filter(
-                (record) => record.status !== 'resolved',
-            ).length,
-            pendingReview: records.filter(
-                (record) => record.status === 'pending-review',
-            ).length,
-            resolvedIssues: records.filter(
-                (record) => record.status === 'resolved',
-            ).length,
-            duplicateResearchAlerts: duplicates.length,
-        }),
-        [duplicates.length, records],
-    );
-
-    const agencies = useMemo(
-        () =>
-            Array.from(new Set(records.map((record) => record.agency))).sort(
-                (left, right) => left.localeCompare(right),
-            ),
-        [records],
-    );
-
-    const years = useMemo(
-        () =>
-            Array.from(
-                new Set(
-                    records
-                        .map((record) => record.year)
-                        .filter((year): year is number => year !== undefined)
-                        .map(String),
-                ),
-            ).sort((left, right) => Number(right) - Number(left)),
-        [records],
-    );
-
-    const filteredRecords = useMemo(
-        () => filterRecords(records, filters, topbarSearch),
-        [filters, records, topbarSearch],
-    );
-
-    const totalPages = Math.max(
-        1,
-        Math.ceil(filteredRecords.length / rowsPerPage),
-    );
+    const summary: ModerationSummary = {
+        ...summaryCounts,
+        duplicateResearchAlerts: duplicates.length,
+    };
     const effectiveCurrentPage = Math.min(currentPage, totalPages);
-    const paginatedRecords = filteredRecords.slice(
-        (effectiveCurrentPage - 1) * rowsPerPage,
-        effectiveCurrentPage * rowsPerPage,
-    );
 
     const closeConfirmation = (force = false) => {
         if (isActionLoading && !force) {
@@ -286,19 +239,33 @@ export function ResearchModerationPage() {
         }
 
         try {
-            const [loadedRecords, loadedDuplicates, loadedActivities] =
+            const [researchResult, loadedDuplicates, loadedActivities] =
                 await Promise.all([
-                    getFlaggedResearchRecords(),
+                    getFlaggedResearchRecords(
+                        {
+                            ...filters,
+                            search: [filters.search, topbarSearch]
+                                .filter(Boolean)
+                                .join(' ')
+                                .trim(),
+                        },
+                        currentPage,
+                        rowsPerPage,
+                    ),
                     getDuplicateResearchMatches(),
                     getModerationActivityLog(),
                 ]);
 
-            setRecords(loadedRecords);
+            setRecords(researchResult.records);
+            setSummaryCounts(researchResult.summary);
+            setTotalPages(Math.max(1, researchResult.pagination.last_page));
+            setTotalResults(researchResult.pagination.total);
             setDuplicates(loadedDuplicates);
             setActivities(loadedActivities);
             setSelectedDetailsRecord(null);
             setSelectedReviewRecord(null);
             closeConfirmation(true);
+            setReloadVersion((version) => version + 1);
             setError(null);
         } catch {
             setError(
@@ -367,6 +334,7 @@ export function ResearchModerationPage() {
             });
             setSelectedReviewRecord(null);
             closeConfirmation(true);
+            setReloadVersion((version) => version + 1);
         } catch (caught) {
             await refreshAfterModerationConflict(caught);
             setFeedback({
@@ -406,6 +374,7 @@ export function ResearchModerationPage() {
             });
             setSelectedReviewRecord(null);
             closeConfirmation(true);
+            setReloadVersion((version) => version + 1);
         } catch (caught) {
             await refreshAfterModerationConflict(caught);
             setFeedback({
@@ -445,6 +414,7 @@ export function ResearchModerationPage() {
             });
             setSelectedReviewRecord(null);
             closeConfirmation(true);
+            setReloadVersion((version) => version + 1);
         } catch (caught) {
             await refreshAfterModerationConflict(caught);
             setFeedback({
@@ -507,6 +477,7 @@ export function ResearchModerationPage() {
             });
             setSelectedReviewRecord(null);
             closeConfirmation(true);
+            setReloadVersion((version) => version + 1);
         } catch (caught) {
             await refreshAfterModerationConflict(caught);
             setFeedback({
@@ -515,6 +486,47 @@ export function ResearchModerationPage() {
                     caught instanceof Error
                         ? caught.message
                         : 'Unable to complete moderation action.',
+            });
+        } finally {
+            setIsActionLoading(false);
+        }
+    };
+
+    const flagDuplicateRecord = async (
+        record: FlaggedResearchRecord,
+        duplicate: DuplicateResearchMatch,
+        note: string,
+    ) => {
+        setIsActionLoading(true);
+
+        try {
+            await flagDuplicateResearchMatch(duplicate, note);
+            setDuplicates((current) =>
+                current.filter((item) => item.id !== duplicate.id),
+            );
+            setComparisonMatch(null);
+            setActivities((current) => [
+                createActivity(
+                    'revision-requested',
+                    'Flagged duplicate for review:',
+                    record.title,
+                ),
+                ...current,
+            ]);
+            setFeedback({
+                type: 'success',
+                message: `${record.title} was flagged for duplicate review.`,
+            });
+            closeConfirmation(true);
+            setReloadVersion((version) => version + 1);
+        } catch (caught) {
+            await refreshAfterModerationConflict(caught);
+            setFeedback({
+                type: 'error',
+                message:
+                    caught instanceof Error
+                        ? caught.message
+                        : 'Unable to flag duplicate match for review.',
             });
         } finally {
             setIsActionLoading(false);
@@ -542,6 +554,7 @@ export function ResearchModerationPage() {
             });
             setSelectedReviewRecord(null);
             closeConfirmation(true);
+            setReloadVersion((version) => version + 1);
         } catch (caught) {
             await refreshAfterModerationConflict(caught);
             setFeedback({
@@ -581,6 +594,7 @@ export function ResearchModerationPage() {
             });
             setSelectedReviewRecord(null);
             closeConfirmation(true);
+            setReloadVersion((version) => version + 1);
         } catch (caught) {
             await refreshAfterModerationConflict(caught);
             setFeedback({
@@ -657,12 +671,20 @@ export function ResearchModerationPage() {
         }
 
         if (confirmationAction === 'flag') {
-            await flagRecord(
-                confirmationRecord,
-                confirmationDuplicate,
-                note,
-                issueType ?? 'other_manual_review',
-            );
+            if (confirmationDuplicate) {
+                await flagDuplicateRecord(
+                    confirmationRecord,
+                    confirmationDuplicate,
+                    note ?? '',
+                );
+            } else {
+                await flagRecord(
+                    confirmationRecord,
+                    null,
+                    note,
+                    issueType ?? 'other_manual_review',
+                );
+            }
         }
 
         if (confirmationAction === 'return_to_draft') {
@@ -675,7 +697,9 @@ export function ResearchModerationPage() {
     };
 
     const handleDuplicateFlag = (match: DuplicateResearchMatch) => {
-        openConfirmation(makeDuplicateModerationRecord(match), 'flag', match);
+        setConfirmationRecord(makeDuplicateModerationRecord(match));
+        setConfirmationAction('flag');
+        setConfirmationDuplicate(match);
     };
 
     const handleMarkNotDuplicate = async (match: DuplicateResearchMatch) => {
@@ -717,7 +741,13 @@ export function ResearchModerationPage() {
         setIsExporting(true);
 
         try {
-            const result = await exportModerationReport(options, filters);
+            const result = await exportModerationReport(options, {
+                ...filters,
+                search: [filters.search, topbarSearch]
+                    .filter(Boolean)
+                    .join(' ')
+                    .trim(),
+            });
             setFeedback({
                 type: 'success',
                 message: `${result.fileName} was downloaded.`,
@@ -774,11 +804,11 @@ export function ResearchModerationPage() {
                             onFiltersChange={setFilters}
                         />
                         <FlaggedResearchTable
-                            records={paginatedRecords}
+                            records={records}
                             isLoading={isLoading}
                             currentPage={effectiveCurrentPage}
                             totalPages={totalPages}
-                            totalResults={filteredRecords.length}
+                            totalResults={totalResults}
                             rowsPerPage={rowsPerPage}
                             onPageChange={(page) =>
                                 setCurrentPage(
@@ -857,6 +887,7 @@ export function ResearchModerationPage() {
                 action={confirmationAction}
                 open={Boolean(confirmationRecord && confirmationAction)}
                 isSaving={isActionLoading}
+                duplicateReview={Boolean(confirmationDuplicate)}
                 onOpenChange={(open) => {
                     if (!open) {
                         closeConfirmation();

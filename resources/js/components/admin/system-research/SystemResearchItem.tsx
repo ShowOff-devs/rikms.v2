@@ -18,8 +18,12 @@ const numberFormatter = new Intl.NumberFormat('en-US');
 const statusStyles: Record<SystemResearchStatus, string> = {
     published: 'border-[#b9f8cf] bg-[#f0fdf4] text-[#008236]',
     'under-review': 'border-[#fee685] bg-[#fffbeb] text-[#bb4d00]',
+    submitted: 'border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8]',
+    approved: 'border-[#a7f3d0] bg-[#ecfdf5] text-[#047857]',
+    rejected: 'border-[#fecaca] bg-[#fef2f2] text-[#b91c1c]',
     draft: 'border-[#e5e7eb] bg-[#f9fafb] text-[#6a7282]',
     archived: 'border-[#fecaca] bg-[#fef2f2] text-[#b91c1c]',
+    superseded: 'border-[#ddd6fe] bg-[#f5f3ff] text-[#6d28d9]',
 };
 
 export function SystemResearchStatusBadge({
@@ -63,7 +67,7 @@ export function SystemResearchItem({
                                 className="size-3"
                                 aria-hidden="true"
                             />
-                            {record.year}
+                            {record.year ?? 'Year unavailable'}
                         </span>
                     </div>
 

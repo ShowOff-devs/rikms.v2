@@ -1,16 +1,17 @@
 import { router } from '@inertiajs/react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AdminLayout } from '@/components/admin/layout/AdminLayout';
 import {
-    createSystemResearchSummary,
     exportSystemResearchRecords,
-    filterSystemResearchRecords,
     getSystemResearchRecords,
 } from '@/lib/admin/system-research-service';
+import { apiMessage } from '@/lib/api-client';
 import type {
     SystemResearchExportOptions,
+    SystemResearchFilterOptions,
     SystemResearchFilters,
     SystemResearchRecord,
+    SystemResearchSummary,
 } from '@/types/system-research';
 import { ExportRecordsModal } from './ExportRecordsModal';
 import { SystemResearchHeader } from './SystemResearchHeader';
@@ -50,11 +51,19 @@ function initialFiltersFromLocation(): SystemResearchFilters {
     };
 }
 
-function uniqueSorted(values: string[]) {
-    return Array.from(new Set(values)).sort((left, right) =>
-        left.localeCompare(right),
-    );
-}
+const emptySummary: SystemResearchSummary = {
+    totalRecords: 0,
+    published: 0,
+    underReview: 0,
+    totalViews: 0,
+};
+
+const emptyFilterOptions: SystemResearchFilterOptions = {
+    agencies: [],
+    years: [],
+    categories: [],
+    sdgs: [],
+};
 
 export function SystemResearchPage() {
     const [topbarSearch, setTopbarSearch] = useState('');
@@ -70,34 +79,60 @@ export function SystemResearchPage() {
         useState<SystemResearchRecord | null>(null);
     const [isExportOpen, setIsExportOpen] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalResults, setTotalResults] = useState(0);
+    const [summary, setSummary] = useState<SystemResearchSummary>(emptySummary);
+    const [filterOptions, setFilterOptions] =
+        useState<SystemResearchFilterOptions>(emptyFilterOptions);
 
     useEffect(() => {
         let isCurrent = true;
+        const search = [filters.search, topbarSearch]
+            .filter(Boolean)
+            .join(' ')
+            .trim();
+        const timeout = window.setTimeout(() => {
+            setIsLoading(true);
 
-        getSystemResearchRecords()
-            .then((loadedRecords) => {
-                if (!isCurrent) {
-                    return;
-                }
+            getSystemResearchRecords(
+                { ...filters, search },
+                currentPage,
+                rowsPerPage,
+            )
+                .then((result) => {
+                    if (!isCurrent) {
+                        return;
+                    }
 
-                setRecords(loadedRecords);
-                setError(null);
-            })
-            .catch(() => {
-                if (isCurrent) {
-                    setError('Unable to load system research records.');
-                }
-            })
-            .finally(() => {
-                if (isCurrent) {
-                    setIsLoading(false);
-                }
-            });
+                    setRecords(result.records);
+                    setTotalPages(Math.max(1, result.pagination.last_page));
+                    setTotalResults(result.pagination.total);
+                    setSummary(result.summary);
+                    setFilterOptions(result.filterOptions);
+                    setError(null);
+                })
+                .catch((caughtError: unknown) => {
+                    if (isCurrent) {
+                        setError(
+                            apiMessage(
+                                caughtError,
+                                'Unable to load system research records.',
+                            ),
+                        );
+                    }
+                })
+                .finally(() => {
+                    if (isCurrent) {
+                        setIsLoading(false);
+                    }
+                });
+        }, 250);
 
         return () => {
             isCurrent = false;
+            window.clearTimeout(timeout);
         };
-    }, []);
+    }, [currentPage, filters, topbarSearch]);
 
     useEffect(() => {
         setCurrentPage(1);
@@ -113,58 +148,7 @@ export function SystemResearchPage() {
         return () => window.clearTimeout(timeout);
     }, [feedback]);
 
-    const agencies = useMemo(
-        () => uniqueSorted(records.map((record) => record.agencyShortName)),
-        [records],
-    );
-
-    const years = useMemo(
-        () =>
-            uniqueSorted(records.map((record) => String(record.year))).sort(
-                (left, right) => Number(right) - Number(left),
-            ),
-        [records],
-    );
-
-    const categories = useMemo(
-        () => uniqueSorted(records.map((record) => record.category)),
-        [records],
-    );
-
-    const sdgs = useMemo(
-        () => uniqueSorted(records.flatMap((record) => record.sdgs)),
-        [records],
-    );
-
-    const filteredRecords = useMemo(() => {
-        const filteredByControls = filterSystemResearchRecords(
-            records,
-            filters,
-        );
-
-        if (!topbarSearch.trim()) {
-            return filteredByControls;
-        }
-
-        return filterSystemResearchRecords(filteredByControls, {
-            search: topbarSearch,
-        });
-    }, [filters, records, topbarSearch]);
-
-    const summary = useMemo(
-        () => createSystemResearchSummary(filteredRecords),
-        [filteredRecords],
-    );
-
-    const totalPages = Math.max(
-        1,
-        Math.ceil(filteredRecords.length / rowsPerPage),
-    );
     const effectiveCurrentPage = Math.min(currentPage, totalPages);
-    const paginatedRecords = filteredRecords.slice(
-        (effectiveCurrentPage - 1) * rowsPerPage,
-        effectiveCurrentPage * rowsPerPage,
-    );
 
     const hasActiveFilters =
         Boolean(filters.search?.trim()) ||
@@ -194,6 +178,14 @@ export function SystemResearchPage() {
             });
             setFeedback(`${result.fileName} was downloaded.`);
             setIsExportOpen(false);
+            setError(null);
+        } catch (caughtError: unknown) {
+            setError(
+                apiMessage(
+                    caughtError,
+                    'Unable to export system research records.',
+                ),
+            );
         } finally {
             setIsExporting(false);
         }
@@ -228,17 +220,17 @@ export function SystemResearchPage() {
                     />
 
                     <SystemResearchList
-                        records={paginatedRecords}
+                        records={records}
                         isLoading={isLoading}
                         currentPage={effectiveCurrentPage}
                         totalPages={totalPages}
-                        totalResults={filteredRecords.length}
+                        totalResults={totalResults}
                         rowsPerPage={rowsPerPage}
                         filters={filters}
-                        agencies={agencies}
-                        years={years}
-                        categories={categories}
-                        sdgs={sdgs}
+                        agencies={filterOptions.agencies}
+                        years={filterOptions.years}
+                        categories={filterOptions.categories}
+                        sdgs={filterOptions.sdgs}
                         hasActiveFilters={hasActiveFilters}
                         onFiltersChange={setFilters}
                         onResetFilters={resetFilters}

@@ -20,7 +20,7 @@ export function SecurityStatusPanel({
     const statusItems = status
         ? [
               {
-                  label: 'MFA-enabled accounts',
+                  label: 'MFA-enabled admin accounts',
                   value: status.mfaEligibleAccounts
                       ? `${status.mfaEnabledAccounts} / ${status.mfaEligibleAccounts}`
                       : String(status.mfaEnabledAccounts),
@@ -28,13 +28,13 @@ export function SecurityStatusPanel({
                   className: 'bg-[#ecfdf5] text-[#047857]',
               },
               {
-                  label: 'Recent failed logins',
+                  label: 'Failed logins (24h)',
                   value: String(status.recentFailedLogins),
                   icon: ShieldAlert,
                   className: 'bg-[#fff7ed] text-[#c2410c]',
               },
               {
-                  label: 'Locked accounts',
+                  label: 'Locked accounts (unresolved)',
                   value: String(status.lockedAccounts),
                   icon: UserX,
                   className: 'bg-[#fef2f2] text-[#b91c1c]',

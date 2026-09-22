@@ -52,10 +52,15 @@ export function AccessRequestActionsMenu({
                         <Eye className="size-4" aria-hidden="true" />
                         View Request Details
                     </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => onAudit(record)}>
-                        <ClipboardCheck className="size-4" aria-hidden="true" />
-                        Audit Decision
-                    </DropdownMenuItem>
+                    {record.status !== 'pending' ? (
+                        <DropdownMenuItem onSelect={() => onAudit(record)}>
+                            <ClipboardCheck
+                                className="size-4"
+                                aria-hidden="true"
+                            />
+                            Audit Decision
+                        </DropdownMenuItem>
+                    ) : null}
                     {record.status === 'approved' ? (
                         <>
                             <DropdownMenuSeparator />

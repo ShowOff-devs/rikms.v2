@@ -5,9 +5,11 @@ import type {
     AccessRequestAuditPayload,
     AccessRequestExportResult,
     AccessRequestMonitorFilters,
+    AccessRequestMonitorFilterOptions,
     AccessRequestMonitorRecord,
     AccessRequestMonitorSummary,
     AccessRequestOverridePayload,
+    AccessRequestsByAgency,
 } from '@/types/access-request-monitor';
 
 type ApiAccessRequest = {
@@ -27,6 +29,18 @@ type ApiAccessRequest = {
     internal_review_notes?: string;
     access_expires_at?: string;
     reviewed_at?: string;
+    audit_status?: 'reviewed' | 'unreviewed';
+    audit_reviewed_at?: string;
+    processing_duration_seconds?: number;
+    reviewer_ip_address?: string;
+    reviewer_device?: string;
+    audit_trail?: Array<{
+        id: string;
+        action: string;
+        actor: string;
+        timestamp: string;
+        notes?: string;
+    }>;
     research?: {
         id: number;
         title: string;
@@ -45,8 +59,42 @@ type ApiAccessRequest = {
 };
 
 type AccessMonitoringMeta = {
-    summary?: AccessRequestMonitorSummary;
+    summary: AccessRequestMonitorSummary;
+    pagination: {
+        current_page: number;
+        per_page: number;
+        total: number;
+        last_page: number;
+    };
+    requests_by_agency: AccessRequestsByAgency[];
+    filter_options: AccessRequestMonitorFilterOptions;
 };
+
+function formatDuration(seconds?: number) {
+    if (seconds === undefined || seconds === null) {
+        return undefined;
+    }
+
+    if (seconds < 60) {
+        return `${seconds} ${seconds === 1 ? 'second' : 'seconds'}`;
+    }
+
+    if (seconds < 3600) {
+        const minutes = Math.round(seconds / 60);
+
+        return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
+    }
+
+    if (seconds < 86400) {
+        const hours = Math.round(seconds / 3600);
+
+        return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+    }
+
+    const days = Math.round(seconds / 86400);
+
+    return `${days} ${days === 1 ? 'day' : 'days'}`;
+}
 
 function toRecord(request: ApiAccessRequest): AccessRequestMonitorRecord {
     const agency = request.research?.agency;
@@ -71,8 +119,11 @@ function toRecord(request: ApiAccessRequest): AccessRequestMonitorRecord {
         researchAccessPolicy: request.research?.access_level,
         decisionReason: request.public_denial_reason ?? request.review_notes,
         reviewerNotes: request.internal_review_notes ?? request.review_notes,
-        auditStatus: request.reviewed_at ? 'reviewed' : 'unreviewed',
-        auditTrail: [],
+        processingDuration: formatDuration(request.processing_duration_seconds),
+        reviewerIpAddress: request.reviewer_ip_address,
+        reviewerDevice: request.reviewer_device,
+        auditStatus: request.audit_status ?? 'unreviewed',
+        auditTrail: request.audit_trail ?? [],
     };
 }
 
@@ -103,7 +154,11 @@ function dateRangeParams(
     return params;
 }
 
-function filterParams(filters?: Partial<AccessRequestMonitorFilters>) {
+function filterParams(
+    filters?: Partial<AccessRequestMonitorFilters>,
+    page = 1,
+    perPage = 8,
+) {
     const params = dateRangeParams(filters?.dateRange ?? 'all');
 
     if (filters?.search) {
@@ -115,13 +170,15 @@ function filterParams(filters?: Partial<AccessRequestMonitorFilters>) {
     }
 
     if (filters?.agency && filters.agency !== 'all') {
-        params.set(
-            'search',
-            [params.get('search'), filters.agency].filter(Boolean).join(' '),
-        );
+        params.set('agency', filters.agency);
     }
 
-    params.set('per_page', '100');
+    if (filters?.organization && filters.organization !== 'all') {
+        params.set('organization', filters.organization);
+    }
+
+    params.set('page', String(page));
+    params.set('per_page', String(perPage));
 
     return params;
 }
@@ -179,27 +236,32 @@ export function buildAccessRequestMonitorSummary(
 
 export async function getAccessRequestMonitorRecords(
     filters?: Partial<AccessRequestMonitorFilters>,
+    page = 1,
+    perPage = 8,
 ) {
-    const params = filterParams(filters);
-    const response = await fetchApi<ApiAccessRequest[]>(
+    const params = filterParams(filters, page, perPage);
+    const response = await fetchApi<ApiAccessRequest[], AccessMonitoringMeta>(
         `/api/admin/access-monitoring?${params.toString()}`,
     );
 
-    return response.data.map(toRecord);
+    return {
+        records: response.data.map(toRecord),
+        pagination: response.meta.pagination,
+        summary: response.meta.summary,
+        requestsByAgency: response.meta.requests_by_agency,
+        filterOptions: response.meta.filter_options,
+    };
 }
 
 export async function getAccessRequestMonitorSummary(
     filters?: Partial<AccessRequestMonitorFilters>,
 ) {
-    const params = filterParams(filters);
+    const params = filterParams(filters, 1, 1);
     const response = await fetchApi<ApiAccessRequest[], AccessMonitoringMeta>(
         `/api/admin/access-monitoring?${params.toString()}`,
     );
 
-    return (
-        response.meta.summary ??
-        buildAccessRequestMonitorSummary(response.data.map(toRecord))
-    );
+    return response.meta.summary;
 }
 
 export async function getAccessRequestById(id: string) {
@@ -268,7 +330,7 @@ export async function exportAccessRequestReport(
 
     if (options.includeCurrentFilters && filters) {
         filterParams(filters).forEach((value, key) => {
-            if (key !== 'per_page' && !params.has(key)) {
+            if (key !== 'page' && key !== 'per_page' && !params.has(key)) {
                 params.set(key, value);
             }
         });

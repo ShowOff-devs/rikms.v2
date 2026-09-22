@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Api\Concerns\RespondsWithApiPagination;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
+use App\Models\Agency;
 use App\Models\Role;
 use App\Models\User;
 use App\Support\ApiResponse;
@@ -12,10 +13,12 @@ use App\Support\AuditLogger;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Exists;
 use Throwable;
 
 class AdminAgencyAdminUserController extends Controller
@@ -24,33 +27,55 @@ class AdminAgencyAdminUserController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $query = User::query()
-            ->with(['agency', 'roles'])
+        $agencyAdminScope = fn (Builder $query) => $query
             ->whereNull('archived_at')
             ->where(function (Builder $query): void {
                 $query->where('role', 'agency_admin')
                     ->orWhereHas('roles', fn (Builder $query) => $query->where('slug', 'agency_admin'));
-            })
+            });
+        $summaryQuery = $agencyAdminScope(User::query());
+        $summary = [
+            'total_users' => (clone $summaryQuery)->count(),
+            'active_users' => (clone $summaryQuery)->where('status', 'active')->count(),
+            'inactive_users' => (clone $summaryQuery)->where('status', 'inactive')->count(),
+            'recently_created' => (clone $summaryQuery)->where('created_at', '>=', now()->subDays(30))->count(),
+        ];
+        $query = $agencyAdminScope(User::query()->with(['agency', 'roles']))
             ->when($request->filled('agency_id'), fn (Builder $query) => $query->where('agency_id', $request->integer('agency_id')))
             ->when($request->filled('status'), fn (Builder $query) => $query->where('status', $request->string('status')))
             ->when($request->filled('keyword'), function (Builder $query) use ($request): void {
-                $keyword = '%'.$request->string('keyword')->trim().'%';
+                $keywords = preg_split('/\s+/', $request->string('keyword')->trim()->toString()) ?: [];
 
-                $query->where(function (Builder $query) use ($keyword): void {
-                    $query->where('name', 'like', $keyword)
-                        ->orWhere('first_name', 'like', $keyword)
-                        ->orWhere('last_name', 'like', $keyword)
-                        ->orWhere('email', 'like', $keyword)
-                        ->orWhereHas('agency', fn (Builder $query) => $query->where('name', 'like', $keyword)->orWhere('short_name', 'like', $keyword));
-                });
+                foreach ($keywords as $value) {
+                    $keyword = '%'.$value.'%';
+
+                    $query->where(function (Builder $query) use ($keyword): void {
+                        $query->where('name', 'like', $keyword)
+                            ->orWhere('first_name', 'like', $keyword)
+                            ->orWhere('last_name', 'like', $keyword)
+                            ->orWhere('email', 'like', $keyword)
+                            ->orWhereHas('agency', fn (Builder $query) => $query->where('name', 'like', $keyword)->orWhere('short_name', 'like', $keyword));
+                    });
+                }
             })
             ->orderBy('created_at', $this->sortDirection($request));
 
-        return $this->paginatedResponse(
+        $paginator = $query->paginate($this->perPage($request));
+
+        return ApiResponse::success(
             'Agency admin users retrieved.',
-            $query->paginate($this->perPage($request)),
-            UserResource::class,
-            $request,
+            UserResource::collection($paginator->getCollection())->resolve($request),
+            [
+                'pagination' => [
+                    'current_page' => $paginator->currentPage(),
+                    'per_page' => $paginator->perPage(),
+                    'total' => $paginator->total(),
+                    'last_page' => $paginator->lastPage(),
+                    'from' => $paginator->firstItem(),
+                    'to' => $paginator->lastItem(),
+                ],
+                'summary' => $summary,
+            ],
         );
     }
 
@@ -69,40 +94,40 @@ class AdminAgencyAdminUserController extends Controller
         $validated = $request->validate([
             'full_name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')],
-            'agency_id' => ['required', 'integer', Rule::exists('agencies', 'id')],
+            'agency_id' => ['required', 'integer', $this->activeAgencyRule()],
             'status' => ['required', Rule::in(['active', 'inactive'])],
             'temporary_password' => ['nullable', 'string', 'min:8', 'max:255'],
             'send_invite' => ['sometimes', 'boolean'],
         ]);
 
-        [$firstName, $lastName] = $this->splitName($validated['full_name']);
-        $role = $this->agencyAdminRole();
+        $user = DB::transaction(function () use ($request, $validated): User {
+            Agency::query()->whereKey($validated['agency_id'])->whereNull('archived_at')->where('status', 'active')->lockForUpdate()->firstOrFail();
+            [$firstName, $lastName] = $this->splitName($validated['full_name']);
+            $role = $this->agencyAdminRole();
+            $user = User::query()->create([
+                'agency_id' => $validated['agency_id'],
+                'first_name' => $firstName,
+                'last_name' => $lastName,
+                'name' => trim($validated['full_name']),
+                'email' => str($validated['email'])->lower()->toString(),
+                'password' => Hash::make($validated['temporary_password'] ?? Str::random(24)),
+                'role' => 'agency_admin',
+                'status' => $validated['status'],
+            ]);
 
-        $user = User::query()->create([
-            'agency_id' => $validated['agency_id'],
-            'first_name' => $firstName,
-            'last_name' => $lastName,
-            'name' => trim($validated['full_name']),
-            'email' => str($validated['email'])->lower()->toString(),
-            'password' => Hash::make($validated['temporary_password'] ?? Str::random(24)),
-            'role' => 'agency_admin',
-            'status' => $validated['status'],
-        ]);
+            $user->roles()->syncWithoutDetaching([
+                $role->id => [
+                    'assigned_by' => $request->user()?->id,
+                    'assigned_at' => now(),
+                ],
+            ]);
 
-        $user->roles()->syncWithoutDetaching([
-            $role->id => [
-                'assigned_by' => $request->user()?->id,
-                'assigned_at' => now(),
-            ],
-        ]);
+            AuditLogger::record($request, 'agency_admin_user.created', $user, null, $user->only([
+                'id', 'agency_id', 'name', 'email', 'role', 'status',
+            ]));
 
-        AuditLogger::record(
-            $request,
-            'agency_admin_user.created',
-            $user,
-            null,
-            $user->only(['id', 'agency_id', 'name', 'email', 'role', 'status']),
-        );
+            return $user;
+        });
 
         $inviteSent = false;
         $inviteMessage = null;
@@ -137,37 +162,39 @@ class AdminAgencyAdminUserController extends Controller
         $validated = $request->validate([
             'full_name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
-            'agency_id' => ['required', 'integer', Rule::exists('agencies', 'id')],
+            'agency_id' => ['required', 'integer', $this->activeAgencyRule()],
             'status' => ['required', Rule::in(['active', 'inactive'])],
         ]);
 
-        $oldValues = $user->only(['agency_id', 'name', 'email', 'status']);
-        [$firstName, $lastName] = $this->splitName($validated['full_name']);
+        $user = DB::transaction(function () use ($request, $validated, $user): User {
+            Agency::query()->whereKey($validated['agency_id'])->whereNull('archived_at')->where('status', 'active')->lockForUpdate()->firstOrFail();
+            $user = User::query()->lockForUpdate()->findOrFail($user->id);
+            $oldValues = $user->only(['agency_id', 'name', 'email', 'status']);
+            [$firstName, $lastName] = $this->splitName($validated['full_name']);
 
-        $user->forceFill([
-            'agency_id' => $validated['agency_id'],
-            'first_name' => $firstName,
-            'last_name' => $lastName,
-            'name' => trim($validated['full_name']),
-            'email' => str($validated['email'])->lower()->toString(),
-            'role' => 'agency_admin',
-            'status' => $validated['status'],
-        ])->save();
+            $user->forceFill([
+                'agency_id' => $validated['agency_id'],
+                'first_name' => $firstName,
+                'last_name' => $lastName,
+                'name' => trim($validated['full_name']),
+                'email' => str($validated['email'])->lower()->toString(),
+                'role' => 'agency_admin',
+                'status' => $validated['status'],
+            ])->save();
 
-        $user->roles()->syncWithoutDetaching([
-            $this->agencyAdminRole()->id => [
-                'assigned_by' => $request->user()?->id,
-                'assigned_at' => now(),
-            ],
-        ]);
+            $user->roles()->syncWithoutDetaching([
+                $this->agencyAdminRole()->id => [
+                    'assigned_by' => $request->user()?->id,
+                    'assigned_at' => now(),
+                ],
+            ]);
 
-        AuditLogger::record(
-            $request,
-            'agency_admin_user.updated',
-            $user,
-            $oldValues,
-            $user->only(['agency_id', 'name', 'email', 'status']),
-        );
+            AuditLogger::record($request, 'agency_admin_user.updated', $user, $oldValues, $user->only([
+                'agency_id', 'name', 'email', 'status',
+            ]));
+
+            return $user;
+        });
 
         return ApiResponse::success(
             'Agency admin user updated.',
@@ -217,29 +244,35 @@ class AdminAgencyAdminUserController extends Controller
     {
         $this->abortUnlessAgencyAdmin($user);
 
-        $oldValues = $user->only(['agency_id', 'name', 'email', 'role', 'status']);
-        $role = Role::query()->where('slug', 'agency_admin')->first();
+        $user = DB::transaction(function () use ($request, $user): User {
+            $user = User::query()->lockForUpdate()->findOrFail($user->id);
+            $this->abortUnlessAgencyAdmin($user);
+            $oldValues = $user->only(['agency_id', 'name', 'email', 'role', 'status']);
+            $role = Role::query()->where('slug', 'agency_admin')->first();
 
-        if ($role) {
-            $user->roles()->detach($role->id);
-        }
+            if ($role) {
+                $user->roles()->detach($role->id);
+            }
 
-        $user->forceFill([
-            'agency_id' => null,
-            'role' => 'archived_agency_admin',
-            'status' => 'inactive',
-            'archived_at' => now(),
-            'archived_by' => $request->user()?->id,
-            'archive_reason' => 'Removed from Agency Admin Users by super admin.',
-        ])->save();
+            $user->forceFill([
+                'agency_id' => null,
+                'role' => 'archived_agency_admin',
+                'status' => 'inactive',
+                'archived_at' => now(),
+                'archived_by' => $request->user()?->id,
+                'archive_reason' => 'Removed from Agency Admin Users by super admin.',
+            ])->save();
 
-        AuditLogger::record(
-            $request,
-            'agency_admin_user.removed',
-            $user,
-            $oldValues,
-            $user->only(['agency_id', 'name', 'email', 'role', 'status', 'archived_at']),
-        );
+            AuditLogger::record(
+                $request,
+                'agency_admin_user.removed',
+                $user,
+                $oldValues,
+                $user->only(['agency_id', 'name', 'email', 'role', 'status', 'archived_at']),
+            );
+
+            return $user;
+        });
 
         return ApiResponse::success('Agency admin user removed.', [
             'id' => $user->id,
@@ -251,19 +284,25 @@ class AdminAgencyAdminUserController extends Controller
     {
         $this->abortUnlessAgencyAdmin($user);
 
-        $oldValues = $user->only(['status', 'deactivation_requested_at']);
-        $user->forceFill([
-            'status' => $status,
-            'deactivation_requested_at' => null,
-        ])->save();
+        $user = DB::transaction(function () use ($request, $status, $user): User {
+            $user = User::query()->lockForUpdate()->findOrFail($user->id);
+            $this->abortUnlessAgencyAdmin($user);
+            $oldValues = $user->only(['status', 'deactivation_requested_at']);
+            $user->forceFill([
+                'status' => $status,
+                'deactivation_requested_at' => null,
+            ])->save();
 
-        AuditLogger::record(
-            $request,
-            'agency_admin_user.status_updated',
-            $user,
-            $oldValues,
-            $user->fresh()->only(['status', 'deactivation_requested_at']),
-        );
+            AuditLogger::record(
+                $request,
+                'agency_admin_user.status_updated',
+                $user,
+                $oldValues,
+                $user->only(['status', 'deactivation_requested_at']),
+            );
+
+            return $user;
+        });
 
         return ApiResponse::success(
             'Agency admin user status updated.',
@@ -283,6 +322,14 @@ class AdminAgencyAdminUserController extends Controller
                 'is_active' => true,
             ],
         );
+    }
+
+    private function activeAgencyRule(): Exists
+    {
+        return Rule::exists('agencies', 'id')
+            ->whereNull('deleted_at')
+            ->whereNull('archived_at')
+            ->where('status', 'active');
     }
 
     /**

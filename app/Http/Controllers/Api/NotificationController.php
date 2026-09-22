@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\NotificationResource;
 use App\Models\Notification;
+use App\Models\NotificationUserState;
 use App\Support\ApiResponse;
 use App\Support\Statuses;
 use Illuminate\Database\Eloquent\Builder;
@@ -33,19 +34,12 @@ class NotificationController extends Controller
 
     public function agencyReadAll(Request $request): JsonResponse
     {
-        $updated = $this->agencyNotificationQuery($request)
-            ->whereNull('read_at')
-            ->update([
-                'read_at' => now(),
-                'status' => Statuses::NOTIFICATION_READ,
-                'updated_at' => now(),
-            ]);
+        $updated = $this->markQueryRead($this->agencyNotificationQuery($request), $request);
 
         return ApiResponse::success('Agency notifications marked as read.', [
             'updated_count' => $updated,
             'unread_count' => $this->agencyNotificationQuery($request)
-                ->whereNull('read_at')
-                ->where('status', Statuses::NOTIFICATION_UNREAD)
+                ->unreadBy($request->user()->id)
                 ->count(),
         ]);
     }
@@ -61,34 +55,31 @@ class NotificationController extends Controller
 
     public function adminReadAll(Request $request): JsonResponse
     {
-        $updated = $this->adminNotificationQuery($request)
-            ->whereNull('read_at')
-            ->update([
-                'read_at' => now(),
-                'status' => Statuses::NOTIFICATION_READ,
-                'updated_at' => now(),
-            ]);
+        $updated = $this->markQueryRead($this->adminNotificationQuery($request), $request);
 
         return ApiResponse::success('Admin notifications marked as read.', [
             'updated_count' => $updated,
             'unread_count' => $this->adminNotificationQuery($request)
-                ->whereNull('read_at')
-                ->where('status', Statuses::NOTIFICATION_UNREAD)
+                ->unreadBy($request->user()->id)
                 ->count(),
         ]);
     }
 
     private function markNotificationRead(Request $request, Notification $notification): JsonResponse
     {
-        $notification->update([
-            'read_at' => now(),
-            'status' => Statuses::NOTIFICATION_READ,
-        ]);
+        $readAt = now();
+        NotificationUserState::query()->updateOrCreate(
+            ['notification_id' => $notification->id, 'user_id' => $request->user()->id],
+            ['read_at' => $readAt, 'hidden_at' => null],
+        );
+        if ((int) $notification->user_id === (int) $request->user()->id) {
+            $notification->update(['read_at' => $readAt, 'status' => Statuses::NOTIFICATION_READ]);
+        }
 
         return ApiResponse::success(
             'Notification marked as read.',
             [
-                'notification' => (new NotificationResource($notification->refresh()))->resolve($request),
+                'notification' => (new NotificationResource($notification->refresh()->load(['userStates' => fn ($query) => $query->where('user_id', $request->user()->id)])))->resolve($request),
                 'unread_count' => $this->unreadCountForRequest($request),
             ],
         );
@@ -96,15 +87,18 @@ class NotificationController extends Controller
 
     private function markNotificationUnread(Request $request, Notification $notification): JsonResponse
     {
-        $notification->update([
-            'read_at' => null,
-            'status' => Statuses::NOTIFICATION_UNREAD,
-        ]);
+        NotificationUserState::query()->updateOrCreate(
+            ['notification_id' => $notification->id, 'user_id' => $request->user()->id],
+            ['read_at' => null, 'hidden_at' => null],
+        );
+        if ((int) $notification->user_id === (int) $request->user()->id) {
+            $notification->update(['read_at' => null, 'status' => Statuses::NOTIFICATION_UNREAD]);
+        }
 
         return ApiResponse::success(
             'Notification marked as unread.',
             [
-                'notification' => (new NotificationResource($notification->refresh()))->resolve($request),
+                'notification' => (new NotificationResource($notification->refresh()->load(['userStates' => fn ($query) => $query->where('user_id', $request->user()->id)])))->resolve($request),
                 'unread_count' => $this->unreadCountForRequest($request),
             ],
         );
@@ -128,7 +122,7 @@ class NotificationController extends Controller
             ->where(function (Builder $query) use ($request): void {
                 $query->where('user_id', $request->user()->id)
                     ->orWhere('agency_id', $request->user()->agency_id);
-            });
+            })->visibleTo($request->user()->id);
     }
 
     private function adminNotificationQuery(Request $request): Builder
@@ -139,7 +133,7 @@ class NotificationController extends Controller
                     ->orWhere(function (Builder $query): void {
                         $query->whereNull('user_id')->whereNull('agency_id');
                     });
-            });
+            })->visibleTo($request->user()->id);
     }
 
     private function unreadCountForRequest(Request $request): int
@@ -149,8 +143,28 @@ class NotificationController extends Controller
             : $this->agencyNotificationQuery($request);
 
         return $query
-            ->whereNull('read_at')
-            ->where('status', Statuses::NOTIFICATION_UNREAD)
+            ->unreadBy($request->user()->id)
             ->count();
+    }
+
+    private function markQueryRead(Builder $query, Request $request): int
+    {
+        $ids = $query->unreadBy($request->user()->id)->pluck('id');
+        $now = now();
+
+        foreach ($ids as $notificationId) {
+            NotificationUserState::query()->updateOrCreate(
+                ['notification_id' => $notificationId, 'user_id' => $request->user()->id],
+                ['read_at' => $now, 'hidden_at' => null],
+            );
+        }
+
+        Notification::query()->whereIn('id', $ids)->where('user_id', $request->user()->id)->update([
+            'read_at' => $now,
+            'status' => Statuses::NOTIFICATION_READ,
+            'updated_at' => $now,
+        ]);
+
+        return $ids->count();
     }
 }

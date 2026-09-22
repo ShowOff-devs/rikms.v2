@@ -33,6 +33,10 @@ class ResearchResource extends JsonResource
                 'latestModerationDecision',
                 fn (): ?string => $this->latestModerationDecision?->issue_type,
             ),
+            'moderation_decision_status' => $this->whenLoaded(
+                'latestModerationDecision',
+                fn (): ?string => $this->latestModerationDecision?->status,
+            ),
             'moderation_note' => $this->whenLoaded(
                 'latestModerationDecision',
                 fn (): ?string => $this->latestModerationDecision?->remarks,
@@ -54,6 +58,8 @@ class ResearchResource extends JsonResource
             ],
             'access_level' => $this->access_level,
             'downloads' => (int) $this->downloads,
+            'views' => (int) ($this->views_count ?? 0),
+            'document_type' => $this->documentType(),
             'embargo_until' => $this->embargo_until?->toDateString(),
             'external_url' => $this->external_url,
             'research_owner_name' => $this->research_owner_name,
@@ -80,5 +86,26 @@ class ResearchResource extends JsonResource
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
         ];
+    }
+
+    private function documentType(): string
+    {
+        $category = str((string) $this->category)->lower()->toString();
+        $fileTypes = $this->resource->relationLoaded('files')
+            ? $this->files
+                ->where('status', '!=', 'deleted')
+                ->whereNull('archived_at')
+                ->pluck('file_type')
+            : collect();
+
+        if ($fileTypes->contains('terminal-report') || str_contains($category, 'terminal report')) {
+            return 'terminal-report';
+        }
+
+        if ($fileTypes->contains('project-accomplishment') || str_contains($category, 'project accomplishment')) {
+            return 'project-accomplishment';
+        }
+
+        return 'research-study';
     }
 }

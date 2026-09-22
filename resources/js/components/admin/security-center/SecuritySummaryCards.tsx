@@ -41,7 +41,7 @@ export function SecuritySummaryCards({
                   id: 'mfa',
                   label: 'MFA-Enabled Admins',
                   value: `${formatNumber(summary.mfaEnabledAdminAccounts)}/${formatNumber(summary.mfaEligibleAdminAccounts)}`,
-                  helperText: '85% coverage',
+                  helperText: `${summary.mfaEligibleAdminAccounts > 0 ? Math.round((summary.mfaEnabledAdminAccounts / summary.mfaEligibleAdminAccounts) * 100) : 0}% coverage`,
               },
               {
                   id: 'failed',
@@ -65,7 +65,7 @@ export function SecuritySummaryCards({
                   id: 'alerts',
                   label: 'Security Alerts',
                   value: formatNumber(summary.securityAlerts),
-                  helperText: '3 high priority',
+                  helperText: `${formatNumber(summary.highPriorityAlerts)} high priority`,
               },
           ]
         : [];

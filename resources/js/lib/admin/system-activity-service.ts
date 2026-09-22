@@ -47,12 +47,39 @@ type MarkReadResponse = {
     unread_count: number;
 };
 
-export async function getSystemNotifications() {
-    const { data } = await fetchApi<ApiNotification[]>(
-        '/api/admin/system-activity/notifications?per_page=100',
+type PaginationMeta = {
+    pagination?: {
+        current_page?: number;
+        last_page?: number;
+        per_page?: number;
+        total?: number;
+    };
+    filter_options?: { agencies?: string[]; actions?: string[] };
+};
+
+export async function getUnreadSystemNotificationCount() {
+    const response = await fetchApi<ApiNotification[], PaginationMeta>(
+        '/api/admin/system-activity/notifications?status=unread&per_page=1',
     );
 
-    return data.map(toNotification);
+    return response.meta.pagination?.total ?? 0;
+}
+
+export async function getSystemNotifications() {
+    const notifications: ApiNotification[] = [];
+    let page = 1;
+    let lastPage = 1;
+
+    do {
+        const response = await fetchApi<ApiNotification[], PaginationMeta>(
+            `/api/admin/system-activity/notifications?per_page=100&page=${page}`,
+        );
+        notifications.push(...response.data);
+        lastPage = response.meta.pagination?.last_page ?? 1;
+        page += 1;
+    } while (page <= lastPage);
+
+    return notifications.map(toNotification);
 }
 
 export async function markNotificationAsRead(id: string) {
@@ -62,6 +89,10 @@ export async function markNotificationAsRead(id: string) {
     );
 
     return toNotification(data.notification);
+}
+
+export async function markAllSystemNotificationsAsRead() {
+    await fetchApi('/api/admin/notifications/read-all', { method: 'POST' });
 }
 
 export async function clearSystemNotifications(
@@ -83,10 +114,15 @@ export async function clearSystemNotifications(
     };
 }
 
-export async function getActivityLogs(filters: ActivityLogFilters = {}) {
+export async function getActivityLogs(
+    filters: ActivityLogFilters = {},
+    page = 1,
+    perPage = 8,
+) {
     const params = new URLSearchParams();
 
-    params.set('per_page', '100');
+    params.set('per_page', String(perPage));
+    params.set('page', String(page));
 
     if (filters.query) {
         params.set('query', filters.query);
@@ -96,26 +132,34 @@ export async function getActivityLogs(filters: ActivityLogFilters = {}) {
         params.set('agency', filters.agency);
     }
 
-    const { data } = await fetchApi<ApiAuditLog[]>(
+    if (filters.status && filters.status !== 'all') {
+        params.set('status', filters.status);
+    }
+
+    if (filters.role && filters.role !== 'all') {
+        params.set('role', filters.role);
+    }
+
+    if (filters.action && filters.action !== 'all') {
+        params.set('action', filters.action);
+    }
+
+    const { data, meta } = await fetchApi<ApiAuditLog[], PaginationMeta>(
         `/api/admin/system-activity/logs?${params.toString()}`,
     );
 
-    return data.map(toActivityLog).filter((log) => {
-        const statusMatches =
-            !filters.status ||
-            filters.status === 'all' ||
-            log.status === filters.status;
-        const roleMatches =
-            !filters.role ||
-            filters.role === 'all' ||
-            log.role === filters.role;
-        const actionMatches =
-            !filters.action ||
-            filters.action === 'all' ||
-            log.action === filters.action;
-
-        return statusMatches && roleMatches && actionMatches;
-    });
+    return {
+        logs: data.map(toActivityLog),
+        pagination: {
+            currentPage: meta.pagination?.current_page ?? page,
+            totalPages: meta.pagination?.last_page ?? 1,
+            total: meta.pagination?.total ?? data.length,
+        },
+        filterOptions: {
+            agencies: meta.filter_options?.agencies ?? [],
+            actions: meta.filter_options?.actions ?? [],
+        },
+    };
 }
 
 export async function getActivityTimeline() {

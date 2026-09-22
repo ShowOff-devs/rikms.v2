@@ -598,6 +598,80 @@ test('admin can restore and delete archived agencies users and files', function 
     $this->assertDatabaseHas('audit_logs', ['event' => 'admin.user.restored']);
 });
 
+test('archive recovery preserves the original user role instead of granting agency admin', function () {
+    $superAdmin = createPhase5User('super_admin');
+    $publicUser = createPhase5User('public_user');
+
+    $publicUser->forceFill([
+        'status' => 'inactive',
+        'archived_at' => now(),
+        'archived_by' => $superAdmin->id,
+        'archive_reason' => 'Recovery role regression test.',
+    ])->save();
+
+    AuditLog::create([
+        'user_id' => $superAdmin->id,
+        'event' => 'agency_admin_user.removed',
+        'auditable_type' => $publicUser->getMorphClass(),
+        'auditable_id' => $publicUser->id,
+        'old_values' => [
+            'role' => 'public_user',
+            'agency_id' => null,
+        ],
+        'new_values' => ['status' => 'inactive'],
+        'created_at' => now(),
+    ]);
+
+    $this->actingAs($superAdmin)
+        ->postJson("/api/admin/users/{$publicUser->id}/restore")
+        ->assertOk()
+        ->assertJsonPath('data.role', 'public_user')
+        ->assertJsonPath('data.roles.0', 'public_user');
+
+    expect($publicUser->fresh()->role)->toBe('public_user')
+        ->and($publicUser->fresh()->roles()->pluck('slug')->all())->toBe(['public_user']);
+});
+
+test('records deleted from the archive cannot be restored through direct endpoints', function () {
+    $superAdmin = createPhase5User('super_admin');
+    $agency = createPhase5Agency('phase-five-terminal-archive-delete');
+    $user = createPhase5User('agency_admin', $agency);
+
+    $agency->forceFill([
+        'status' => 'archived',
+        'archived_at' => now(),
+        'archived_by' => $superAdmin->id,
+    ])->save();
+
+    $user->forceFill([
+        'status' => 'inactive',
+        'archived_at' => now(),
+        'archived_by' => $superAdmin->id,
+    ])->save();
+    $user->delete();
+
+    $this->actingAs($superAdmin)
+        ->deleteJson("/api/admin/agencies/{$agency->id}/archive")
+        ->assertOk();
+    $this->actingAs($superAdmin)
+        ->postJson("/api/admin/agencies/{$agency->id}/restore")
+        ->assertStatus(410);
+
+    $this->actingAs($superAdmin)
+        ->deleteJson("/api/admin/users/{$user->id}/archive")
+        ->assertOk();
+    $this->actingAs($superAdmin)
+        ->postJson("/api/admin/users/{$user->id}/restore")
+        ->assertStatus(410);
+
+    $this->actingAs($superAdmin)
+        ->getJson('/api/admin/archive/users')
+        ->assertOk()
+        ->assertJsonPath('meta.pagination.total', 0);
+
+    expect($user->fresh()->roles()->exists())->toBeFalse();
+});
+
 test('notification mark read endpoints only update notifications in scope', function () {
     $agency = createPhase5Agency('phase-five-notifications');
     $agencyAdmin = createPhase5User('agency_admin', $agency);
@@ -645,9 +719,13 @@ test('notification mark read endpoints only update notifications in scope', func
         ->assertOk()
         ->assertJsonPath('data.unread_count', 0);
 
+    $this->assertDatabaseHas('notification_user_states', [
+        'notification_id' => $agencyNotification->id,
+        'user_id' => $agencyAdmin->id,
+    ]);
     $this->assertDatabaseHas('notifications', [
         'id' => $agencyNotification->id,
-        'status' => 'read',
+        'status' => 'unread',
     ]);
 
     $this->actingAs($agencyAdmin)

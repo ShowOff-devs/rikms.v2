@@ -11,6 +11,7 @@ use App\Models\Research;
 use App\Services\Analytics\ProjectReportAnalyticsService;
 use App\Services\Analytics\ReportTypeResolver;
 use App\Support\ApiResponse;
+use App\Support\AuditLogger;
 use App\Support\CsvExport;
 use App\Support\Statuses;
 use Dompdf\Dompdf;
@@ -86,15 +87,19 @@ class AdminProjectReportAnalyticsController extends Controller
         $request->validate(['format' => ['nullable', 'in:csv,pdf']]);
         $filters = $this->reportAnalyticsFilters($request, allowAgencyFilter: true);
         $format = $request->string('format', 'pdf')->toString();
-        $records = $this->analytics->exportRecords($filters, allowAgencyFilter: true)
-            ->map(fn (Research $research): array => (new ProjectReportAnalyticsRecordResource($research))->resolve($request));
+
+        AuditLogger::record($request, 'project_report_analytics.exported', null, null, null, [
+            'format' => $format,
+            'filters' => collect($filters)->except(['page', 'per_page'])->all(),
+        ]);
 
         if ($format === 'csv') {
-            return response()->streamDownload(function () use ($records): void {
+            return response()->streamDownload(function () use ($filters, $request): void {
                 $handle = fopen('php://output', 'w');
                 fputcsv($handle, ['ID', 'Title', 'Agency', 'Report Type', 'Reporting Period', 'Year', 'Workflow Status', 'Completeness', 'Allotted Budget', 'Utilized Amount', 'Utilization %', 'Physical Accomplishment %']);
 
-                foreach ($records as $record) {
+                foreach ($this->analytics->lazyExportRecords($filters, allowAgencyFilter: true) as $research) {
+                    $record = (new ProjectReportAnalyticsRecordResource($research))->resolve($request);
                     fputcsv($handle, CsvExport::row([
                         $record['research_id'], $record['title'], $record['agency']['name'] ?? '', $record['report_type'],
                         $record['reporting_period'], $record['publication_year'], $record['workflow_status'],
@@ -107,6 +112,9 @@ class AdminProjectReportAnalyticsController extends Controller
                 fclose($handle);
             }, 'project-report-analytics-'.now()->format('Y-m-d').'.csv', ['Content-Type' => 'text/csv']);
         }
+
+        $records = $this->analytics->exportRecords($filters, allowAgencyFilter: true)
+            ->map(fn (Research $research): array => (new ProjectReportAnalyticsRecordResource($research))->resolve($request));
 
         $options = new Options;
         $options->set('defaultFont', 'DejaVu Sans');

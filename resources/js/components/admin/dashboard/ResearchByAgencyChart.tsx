@@ -1,3 +1,7 @@
+import {
+    chartPosition,
+    chartScale,
+} from '@/components/admin/dashboard/dashboard-chart-utils';
 import type { ResearchByAgency } from '@/types/admin-dashboard';
 
 export function ResearchByAgencyChart({
@@ -7,8 +11,7 @@ export function ResearchByAgencyChart({
     data: ResearchByAgency[];
     isLoading: boolean;
 }) {
-    const max = Math.max(...data.map((item) => item.count), 0);
-    const yAxisTicks = [240, 180, 120, 60, 0];
+    const scale = chartScale(data.map((item) => item.count));
 
     return (
         <article className="rounded-[10px] border border-[#e5e7eb] bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_-1px_rgba(0,0,0,0.1)]">
@@ -24,13 +27,13 @@ export function ResearchByAgencyChart({
             ) : (
                 <div className="mt-6 grid h-[240px] grid-cols-[36px_1fr] gap-2">
                     <div className="flex h-[208px] flex-col justify-between pt-0 text-right text-[10px] leading-3 text-[#99a1af]">
-                        {yAxisTicks.map((tick) => (
+                        {scale.ticks.map((tick) => (
                             <span key={tick}>{tick}</span>
                         ))}
                     </div>
                     <div className="relative h-[240px]">
                         <div className="absolute inset-x-0 top-0 h-[208px] border-b border-[#eef2f7]">
-                            {yAxisTicks.slice(0, -1).map((tick, index) => (
+                            {scale.ticks.slice(0, -1).map((tick, index) => (
                                 <div
                                     key={tick}
                                     className="absolute inset-x-0 border-t border-dashed border-[#eef2f7]"
@@ -40,8 +43,11 @@ export function ResearchByAgencyChart({
                         </div>
                         <div className="absolute inset-x-0 top-0 flex h-[208px] items-end justify-between gap-3 px-2">
                             {data.map((item) => {
-                                const height =
-                                    max === 0 ? 0 : (item.count / 240) * 208;
+                                const height = chartPosition(
+                                    item.count,
+                                    scale.maximum,
+                                    208,
+                                );
 
                                 return (
                                     <div
@@ -51,7 +57,7 @@ export function ResearchByAgencyChart({
                                         <div
                                             className="w-full max-w-[28px] rounded-t-[4px] bg-[#1e3a8a]"
                                             style={{
-                                                height: `${Math.max(height, 6)}px`,
+                                                height: `${item.count === 0 ? 0 : Math.max(height, 6)}px`,
                                             }}
                                             title={`${item.count} research records`}
                                         />
@@ -59,6 +65,13 @@ export function ResearchByAgencyChart({
                                 );
                             })}
                         </div>
+                        <ul className="sr-only">
+                            {data.map((item) => (
+                                <li key={item.agency}>
+                                    {item.agency}: {item.count} research records
+                                </li>
+                            ))}
+                        </ul>
                         <div className="absolute inset-x-0 bottom-0 flex h-8 items-start justify-between gap-3 px-2 pt-2">
                             {data.map((item) => (
                                 <span

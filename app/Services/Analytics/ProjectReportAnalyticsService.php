@@ -7,6 +7,7 @@ use App\Support\Statuses;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\LazyCollection;
 
 class ProjectReportAnalyticsService
 {
@@ -215,6 +216,20 @@ class ProjectReportAnalyticsService
         $this->applySorting($query, $filters);
 
         return $this->withAnalyticsRelations($query)->get();
+    }
+
+    /**
+     * Stream export records in bounded chunks so CSV exports do not retain the
+     * complete report dataset in application memory.
+     *
+     * @param  array<string, mixed>  $filters
+     */
+    public function lazyExportRecords(array $filters, ?int $agencyScope = null, bool $allowAgencyFilter = false): LazyCollection
+    {
+        $query = $this->filteredQuery($filters, $agencyScope, $allowAgencyFilter);
+        $this->applySorting($query, $filters);
+
+        return $this->withAnalyticsRelations($query)->lazy(200);
     }
 
     /**

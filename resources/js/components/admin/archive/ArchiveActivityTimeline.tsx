@@ -1,4 +1,5 @@
 import { Clock3 } from 'lucide-react';
+import { useState } from 'react';
 import { archiveRecordTypeLabels } from '@/data/admin-archive-options';
 import { cn } from '@/lib/utils';
 import type {
@@ -9,6 +10,9 @@ import type {
 type ArchiveActivityTimelineProps = {
     activities: ArchiveActivity[];
     isLoading: boolean;
+    hasMore?: boolean;
+    isLoadingMore?: boolean;
+    onLoadMore?: () => void;
 };
 
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
@@ -72,7 +76,13 @@ function formatTimestamp(value: string) {
 export function ArchiveActivityTimeline({
     activities,
     isLoading,
+    hasMore = false,
+    isLoadingMore = false,
+    onLoadMore,
 }: ArchiveActivityTimelineProps) {
+    const [showAll, setShowAll] = useState(false);
+    const visibleActivities = showAll ? activities : activities.slice(0, 8);
+
     return (
         <section className="mt-6 overflow-hidden rounded-[10px] border border-[#e5e7eb] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_-1px_rgba(0,0,0,0.1)]">
             <div className="flex h-[65px] items-center justify-between border-b border-[#f3f4f6] px-6">
@@ -85,12 +95,15 @@ export function ArchiveActivityTimeline({
                     </h2>
                 </div>
 
-                <button
-                    type="button"
-                    className="text-xs font-medium text-[#1e3a8a] hover:text-[#172554]"
-                >
-                    View All Activity
-                </button>
+                {activities.length > 8 ? (
+                    <button
+                        type="button"
+                        onClick={() => setShowAll((current) => !current)}
+                        className="text-xs font-medium text-[#1e3a8a] hover:text-[#172554]"
+                    >
+                        {showAll ? 'Show Recent Activity' : 'View All Activity'}
+                    </button>
+                ) : null}
             </div>
 
             <div>
@@ -114,12 +127,12 @@ export function ArchiveActivityTimeline({
                             No archive activity yet
                         </p>
                         <p className="mt-1 text-xs text-[#6a7282]">
-                            Restore and permanent delete actions will appear
+                            Restore and archive deletion actions will appear
                             here.
                         </p>
                     </div>
                 ) : (
-                    activities.slice(0, 8).map((activity, index) => {
+                    visibleActivities.map((activity, index) => {
                         const styles = activityStyles[activity.type];
 
                         return (
@@ -134,7 +147,7 @@ export function ArchiveActivityTimeline({
                                             styles.dot,
                                         )}
                                     />
-                                    {index < activities.length - 1 ? (
+                                    {index < visibleActivities.length - 1 ? (
                                         <span className="absolute top-[31px] bottom-[-12px] w-px bg-[#e5e7eb]" />
                                     ) : null}
                                 </div>
@@ -181,6 +194,18 @@ export function ArchiveActivityTimeline({
                     })
                 )}
             </div>
+            {showAll && hasMore ? (
+                <div className="border-t border-[#f3f4f6] px-6 py-4 text-center">
+                    <button
+                        type="button"
+                        onClick={onLoadMore}
+                        disabled={isLoadingMore}
+                        className="rounded-[8px] border border-[#e5e7eb] px-4 py-2 text-xs font-semibold text-[#1e3a8a] transition hover:bg-[#f8fafc] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        {isLoadingMore ? 'Loading…' : 'Load older activity'}
+                    </button>
+                </div>
+            ) : null}
         </section>
     );
 }

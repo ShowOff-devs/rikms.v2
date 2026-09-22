@@ -13,13 +13,14 @@ use App\Http\Requests\Admin\ReturnResearchRequest;
 use App\Http\Resources\ResearchResource;
 use App\Models\AuditLog;
 use App\Models\Research;
+use App\Models\ResearchApproval;
 use App\Services\ResearchModerationTransitionService;
 use App\Support\ApiResponse;
-use App\Support\AuditLogger;
 use App\Support\Statuses;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class AdminResearchModerationController extends Controller
 {
@@ -33,6 +34,7 @@ class AdminResearchModerationController extends Controller
         'research.restored',
         'research.superseded',
         'research.duplicate.dismissed',
+        'research.duplicate.flagged',
     ];
 
     public function __construct(private readonly ResearchModerationTransitionService $transitions) {}
@@ -82,15 +84,15 @@ class AdminResearchModerationController extends Controller
             ->limit(200)
             ->get();
 
-        $dismissedPairKeys = AuditLog::query()
-            ->where('event', 'research.duplicate.dismissed')
+        $handledPairKeys = AuditLog::query()
+            ->whereIn('event', ['research.duplicate.dismissed', 'research.duplicate.flagged'])
             ->get()
             ->map(fn (AuditLog $log): ?string => $log->metadata['pair_key'] ?? null)
             ->filter()
             ->values()
             ->all();
 
-        $matches = $this->detectDuplicateMatches($records, $dismissedPairKeys);
+        $matches = $this->detectDuplicateMatches($records, $handledPairKeys);
 
         return ApiResponse::success('Duplicate research matches retrieved.', array_slice($matches, 0, 20));
     }
@@ -102,25 +104,139 @@ class AdminResearchModerationController extends Controller
             'matching_research_id' => ['required', 'integer', 'different:original_research_id', 'exists:research,id'],
         ]);
 
-        $matchingResearch = Research::query()->findOrFail($validated['matching_research_id']);
-        $pairKey = $this->duplicatePairKey((int) $validated['original_research_id'], (int) $validated['matching_research_id']);
+        $pairKey = DB::transaction(function () use ($request, $validated): string {
+            $records = Research::query()
+                ->whereIn('id', collect([$validated['original_research_id'], $validated['matching_research_id']])->sort()->values())
+                ->whereIn('status', [
+                    Statuses::RESEARCH_SUBMITTED,
+                    Statuses::RESEARCH_UNDER_REVIEW,
+                    'approved',
+                    'rejected',
+                    Statuses::RESEARCH_PUBLISHED,
+                ])
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+            $originalResearch = $records->get($validated['original_research_id']);
+            $matchingResearch = $records->get($validated['matching_research_id']);
 
-        AuditLogger::record(
-            $request,
-            'research.duplicate.dismissed',
-            $matchingResearch,
-            null,
-            null,
-            [
-                'pair_key' => $pairKey,
-                'original_research_id' => (int) $validated['original_research_id'],
-                'matching_research_id' => (int) $validated['matching_research_id'],
-            ],
-        );
+            abort_unless($originalResearch && $matchingResearch, 422, 'Both research records must be eligible for duplicate review.');
+            abort_if($this->isRevisionPair($originalResearch, $matchingResearch), 422, 'Revisions of the same research record cannot be dismissed as duplicates.');
+            abort_if($this->duplicateScore($originalResearch, $matchingResearch) < 85, 422, 'These records do not meet the duplicate-alert threshold.');
+
+            $pairKey = $this->duplicatePairKey((int) $validated['original_research_id'], (int) $validated['matching_research_id']);
+            $alreadyHandled = AuditLog::query()
+                ->whereIn('event', ['research.duplicate.dismissed', 'research.duplicate.flagged'])
+                ->where('metadata->pair_key', $pairKey)
+                ->exists();
+
+            abort_if($alreadyHandled, 409, 'This duplicate match has already been reviewed.');
+
+            AuditLog::query()->create([
+                'user_id' => $request->user()?->id,
+                'agency_id' => $request->user()?->agency_id,
+                'event' => 'research.duplicate.dismissed',
+                'auditable_type' => $matchingResearch->getMorphClass(),
+                'auditable_id' => $matchingResearch->id,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'metadata' => [
+                    'pair_key' => $pairKey,
+                    'original_research_id' => (int) $validated['original_research_id'],
+                    'matching_research_id' => (int) $validated['matching_research_id'],
+                ],
+                'created_at' => now(),
+            ]);
+
+            return $pairKey;
+        });
 
         return ApiResponse::success('Duplicate match dismissed.', [
             'pair_key' => $pairKey,
         ]);
+    }
+
+    public function flagDuplicate(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'original_research_id' => ['required', 'integer', 'exists:research,id'],
+            'matching_research_id' => ['required', 'integer', 'different:original_research_id', 'exists:research,id'],
+            'notes' => ['required', 'string', 'min:10', 'max:2000'],
+        ]);
+
+        $result = DB::transaction(function () use ($request, $validated): array {
+            $records = Research::query()
+                ->whereIn('id', collect([$validated['original_research_id'], $validated['matching_research_id']])->sort()->values())
+                ->whereIn('status', [
+                    Statuses::RESEARCH_SUBMITTED,
+                    Statuses::RESEARCH_UNDER_REVIEW,
+                    'approved',
+                    'rejected',
+                    Statuses::RESEARCH_PUBLISHED,
+                ])
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+            $originalResearch = $records->get($validated['original_research_id']);
+            $matchingResearch = $records->get($validated['matching_research_id']);
+
+            abort_unless($originalResearch && $matchingResearch, 422, 'Both research records must be eligible for duplicate review.');
+            abort_if($this->isRevisionPair($originalResearch, $matchingResearch), 422, 'Revisions of the same research record cannot be flagged as duplicates.');
+
+            $score = $this->duplicateScore($originalResearch, $matchingResearch);
+            abort_if($score < 85, 422, 'These records do not meet the duplicate-alert threshold.');
+
+            $pairKey = $this->duplicatePairKey((int) $validated['original_research_id'], (int) $validated['matching_research_id']);
+            $alreadyHandled = AuditLog::query()
+                ->whereIn('event', ['research.duplicate.dismissed', 'research.duplicate.flagged'])
+                ->where('metadata->pair_key', $pairKey)
+                ->exists();
+
+            abort_if($alreadyHandled, 409, 'This duplicate match has already been reviewed.');
+
+            $decision = ResearchApproval::query()->create([
+                'research_id' => $matchingResearch->id,
+                'reviewed_by' => $request->user()->id,
+                'status' => 'flagged',
+                'issue_type' => 'possible_duplicate',
+                'remarks' => sprintf(
+                    'Potential duplicate of "%s" (%d%% similarity). Moderator rationale: %s',
+                    $originalResearch->title,
+                    $score,
+                    $validated['notes'],
+                ),
+                'reviewed_at' => now(),
+            ]);
+
+            AuditLog::query()->create([
+                'user_id' => $request->user()->id,
+                'agency_id' => $request->user()->agency_id,
+                'event' => 'research.duplicate.flagged',
+                'auditable_type' => $matchingResearch->getMorphClass(),
+                'auditable_id' => $matchingResearch->id,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'metadata' => [
+                    'pair_key' => $pairKey,
+                    'original_research_id' => (int) $validated['original_research_id'],
+                    'matching_research_id' => (int) $validated['matching_research_id'],
+                    'similarity_score' => $score,
+                    'decision_id' => $decision->id,
+                    'issue_type' => 'possible_duplicate',
+                    'notes' => $validated['notes'],
+                ],
+                'created_at' => now(),
+            ]);
+
+            return [
+                'pair_key' => $pairKey,
+                'matching_research_id' => $matchingResearch->id,
+            ];
+        });
+
+        return ApiResponse::success('Duplicate match flagged for review.', $result);
     }
 
     public function activity(Request $request): JsonResponse
@@ -163,13 +279,13 @@ class AdminResearchModerationController extends Controller
 
     /**
      * @param  EloquentCollection<int, Research>  $records
-     * @param  array<int, string>  $dismissedPairKeys
+     * @param  array<int, string>  $handledPairKeys
      * @return array<int, array<string, mixed>>
      */
-    private function detectDuplicateMatches(EloquentCollection $records, array $dismissedPairKeys): array
+    private function detectDuplicateMatches(EloquentCollection $records, array $handledPairKeys): array
     {
         $matches = [];
-        $dismissed = array_flip($dismissedPairKeys);
+        $handled = array_flip($handledPairKeys);
 
         for ($leftIndex = 0; $leftIndex < $records->count(); $leftIndex++) {
             for ($rightIndex = $leftIndex + 1; $rightIndex < $records->count(); $rightIndex++) {
@@ -189,7 +305,7 @@ class AdminResearchModerationController extends Controller
                 [$original, $matching] = $this->orderedDuplicatePair($left, $right);
                 $pairKey = $this->duplicatePairKey((int) $original->id, (int) $matching->id);
 
-                if (isset($dismissed[$pairKey])) {
+                if (isset($handled[$pairKey])) {
                     continue;
                 }
 
@@ -201,6 +317,8 @@ class AdminResearchModerationController extends Controller
                     'matchingTitle' => $matching->title,
                     'originalAgency' => $original->agency?->short_name ?? $original->agency?->name ?? 'Agency',
                     'matchingAgency' => $matching->agency?->short_name ?? $matching->agency?->name ?? 'Agency',
+                    'originalStatus' => $original->status,
+                    'matchingStatus' => $matching->status,
                     'similarityScore' => $score,
                     'detectedAt' => ($matching->created_at ?? now())->toISOString(),
                     'originalAuthors' => $original->authors ?? [],
@@ -330,6 +448,7 @@ class AdminResearchModerationController extends Controller
             'research.restored' => 'Restored research:',
             'research.superseded' => 'Superseded previous version:',
             'research.duplicate.dismissed' => 'Marked not duplicate:',
+            'research.duplicate.flagged' => 'Flagged duplicate for review:',
             default => 'Updated moderation status:',
         };
     }
@@ -343,6 +462,7 @@ class AdminResearchModerationController extends Controller
             'research.published', 'research.superseded' => 'version-approved',
             'research.archived' => 'archived',
             'research.duplicate.dismissed' => 'duplicate-resolved',
+            'research.duplicate.flagged' => 'revision-requested',
             default => 'issue-resolved',
         };
     }

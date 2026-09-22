@@ -8,6 +8,7 @@ use App\Models\Permission;
 use App\Models\PlatformSetting;
 use App\Models\Research;
 use App\Models\ResearchAnalyticsEvent;
+use App\Models\ResearchApproval;
 use App\Models\ResearchFile;
 use App\Models\Role;
 use App\Models\SecurityEvent;
@@ -177,6 +178,76 @@ test('admin access monitoring APIs are protected and filtered from relational ac
         ->assertJsonPath('data.0.requester_email', 'phase8@example.test');
 });
 
+test('access monitoring tracks independent audits and safely revokes overridden approvals', function () {
+    $agency = createPhase8Agency('access-monitor-integrity');
+    $agencyAdmin = createPhase8User('agency_admin', $agency);
+    $superAdmin = createPhase8User('super_admin');
+    $research = createPhase8Research($agency, $agencyAdmin);
+    $approved = AccessRequest::query()->create([
+        'research_id' => $research->id,
+        'agency_id' => $agency->id,
+        'requester_name' => 'Audited Requester',
+        'requester_email' => 'audited@example.test',
+        'requester_affiliation' => 'Policy Institute',
+        'status' => 'approved',
+        'requested_at' => now()->subHours(2),
+        'reviewed_by' => $agencyAdmin->id,
+        'reviewed_at' => now()->subHour(),
+        'access_token_hash' => hash('sha256', 'active-token'),
+        'access_token_generated_at' => now()->subHour(),
+        'access_expires_at' => now()->addDay(),
+    ]);
+    $pending = AccessRequest::query()->create([
+        'research_id' => $research->id,
+        'agency_id' => $agency->id,
+        'requester_name' => 'Pending Requester',
+        'requester_email' => 'pending-audit@example.test',
+        'status' => 'pending',
+        'requested_at' => now(),
+    ]);
+
+    $this->actingAs($superAdmin)
+        ->getJson('/api/admin/access-monitoring?organization=Policy%20Institute&per_page=1')
+        ->assertOk()
+        ->assertJsonPath('data.0.id', $approved->id)
+        ->assertJsonPath('data.0.audit_status', 'unreviewed')
+        ->assertJsonPath('meta.pagination.total', 1)
+        ->assertJsonPath('meta.summary.approved', 1)
+        ->assertJsonPath('meta.requests_by_agency.0.count', 1)
+        ->assertJsonFragment(['organizations' => ['Policy Institute']]);
+
+    $this->actingAs($superAdmin)
+        ->postJson("/api/admin/access-requests/{$pending->id}/audit-reviewed")
+        ->assertConflict();
+
+    $this->actingAs($superAdmin)
+        ->postJson("/api/admin/access-requests/{$approved->id}/audit-reviewed", ['notes' => 'Decision verified.'])
+        ->assertOk()
+        ->assertJsonPath('data.audit_status', 'reviewed')
+        ->assertJsonPath('data.audit_trail.0.notes', 'Decision verified.');
+
+    $this->actingAs($superAdmin)
+        ->postJson("/api/admin/access-requests/{$approved->id}/audit-reviewed")
+        ->assertConflict();
+
+    $this->actingAs($superAdmin)
+        ->postJson("/api/admin/access-requests/{$approved->id}/override-deny", ['reason' => 'Approval violated the documented access policy.'])
+        ->assertOk()
+        ->assertJsonPath('data.status', 'denied')
+        ->assertJsonPath('data.public_denial_reason', 'Approval violated the documented access policy.');
+
+    $approved->refresh();
+    expect($approved->access_token_hash)->toBeNull()
+        ->and($approved->access_token_generated_at)->toBeNull()
+        ->and($approved->access_expires_at)->toBeNull()
+        ->and($approved->access_revoked_at)->not->toBeNull()
+        ->and(AuditLog::query()->where('event', 'access_request.override_denied')->where('auditable_id', $approved->id)->count())->toBe(1);
+
+    $this->actingAs($superAdmin)
+        ->postJson("/api/admin/access-requests/{$approved->id}/override-deny", ['reason' => 'Repeated override.'])
+        ->assertConflict();
+});
+
 test('rbac writes assign remove permissions and protect the last super admin', function () {
     $superRole = createPhase8Role('super_admin');
     $agencyRole = createPhase8Role('agency_admin');
@@ -226,6 +297,7 @@ test('rbac writes assign remove permissions and protect the last super admin', f
 test('rbac custom role deletion is backend connected and audited in history', function () {
     $superAdmin = createPhase8User('super_admin');
     $agencyAdmin = createPhase8User('agency_admin', createPhase8Agency('phase8-rbac-delete'));
+    $agencyRole = createPhase8Role('agency_admin');
     $permission = Permission::query()->create([
         'name' => 'Delete Connected Permission',
         'slug' => 'delete.connected',
@@ -244,6 +316,14 @@ test('rbac custom role deletion is backend connected and audited in history', fu
 
     $this->actingAs($superAdmin)
         ->postJson("/api/admin/rbac/users/{$agencyAdmin->id}/roles", ['role_id' => $createdRoleId])
+        ->assertOk();
+
+    $this->actingAs($superAdmin)
+        ->deleteJson("/api/admin/rbac/roles/{$createdRoleId}")
+        ->assertUnprocessable();
+
+    $this->actingAs($superAdmin)
+        ->putJson("/api/admin/rbac/users/{$agencyAdmin->id}/role", ['role_id' => $agencyRole->id])
         ->assertOk();
 
     $this->actingAs($superAdmin)
@@ -347,6 +427,52 @@ test('agency admin user management APIs use relational users instead of mock rec
     expect($removedUser->archived_at)->not->toBeNull()
         ->and($removedUser->isAgencyAdmin())->toBeFalse()
         ->and(AuditLog::query()->where('event', 'agency_admin_user.removed')->exists())->toBeTrue();
+});
+
+test('agency admin users reject inactive or archived agency assignments and expose complete summary metadata', function () {
+    $activeAgency = createPhase8Agency('agency-admin-valid-assignment');
+    $inactiveAgency = createPhase8Agency('agency-admin-inactive-assignment');
+    $archivedAgency = createPhase8Agency('agency-admin-archived-assignment');
+    $inactiveAgency->forceFill(['status' => 'inactive'])->save();
+    $archivedAgency->forceFill(['archived_at' => now()])->save();
+    $superAdmin = createPhase8User('super_admin');
+    $existingAdmin = createPhase8User('agency_admin', $activeAgency);
+    createPhase8User('agency_admin', $activeAgency)->forceFill(['status' => 'inactive'])->save();
+
+    foreach ([$inactiveAgency, $archivedAgency] as $agency) {
+        $this->actingAs($superAdmin)
+            ->postJson('/api/admin/agency-admin-users', [
+                'full_name' => 'Invalid Agency Assignment',
+                'email' => "invalid-{$agency->id}@example.test",
+                'agency_id' => $agency->id,
+                'status' => 'active',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('agency_id');
+    }
+
+    $this->actingAs($superAdmin)
+        ->patchJson("/api/admin/agency-admin-users/{$existingAdmin->id}", [
+            'full_name' => 'Should Not Change',
+            'email' => 'should-not-change@example.test',
+            'agency_id' => $inactiveAgency->id,
+            'status' => 'inactive',
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('agency_id');
+
+    expect($existingAdmin->fresh()->agency_id)->toBe($activeAgency->id)
+        ->and($existingAdmin->fresh()->email)->toBe($existingAdmin->email)
+        ->and(User::query()->where('email', 'should-not-change@example.test')->exists())->toBeFalse();
+
+    $this->actingAs($superAdmin)
+        ->getJson('/api/admin/agency-admin-users?per_page=1')
+        ->assertOk()
+        ->assertJsonPath('meta.pagination.per_page', 1)
+        ->assertJsonPath('meta.pagination.total', 2)
+        ->assertJsonPath('meta.summary.total_users', 2)
+        ->assertJsonPath('meta.summary.active_users', 1)
+        ->assertJsonPath('meta.summary.inactive_users', 1);
 });
 
 test('admin can send agency admin password reset instructions and audit the send', function () {
@@ -529,6 +655,107 @@ test('agency management create update status and archive write relational agenci
         ->assertJsonPath('data.short_name', 'RAMOU');
 });
 
+test('agency management rejects ineligible admins without partial agency writes', function () {
+    $superAdmin = createPhase8User('super_admin');
+    $agency = createPhase8Agency('atomic-agency');
+    $existingAdmin = createPhase8User('agency_admin', $agency);
+    $inactiveAdmin = createPhase8User('agency_admin');
+    $inactiveAdmin->forceFill(['status' => 'inactive'])->save();
+    $agencyCount = Agency::query()->count();
+
+    $this->actingAs($superAdmin)
+        ->postJson('/api/admin/agencies', [
+            'name' => 'Should Not Be Created',
+            'short_name' => 'SNBC',
+            'type' => 'government-agency',
+            'status' => 'active',
+            'agency_admin_id' => $inactiveAdmin->id,
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('agency_admin_id');
+
+    expect(Agency::query()->count())->toBe($agencyCount)
+        ->and(Agency::query()->where('short_name', 'SNBC')->exists())->toBeFalse();
+
+    $this->actingAs($superAdmin)
+        ->patchJson("/api/admin/agencies/{$agency->id}", [
+            'name' => 'Partially Updated Name',
+            'short_name' => $agency->short_name,
+            'type' => 'research-consortium',
+            'status' => 'inactive',
+            'agency_admin_id' => $inactiveAdmin->id,
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('agency_admin_id');
+
+    expect($agency->fresh()->name)->not->toBe('Partially Updated Name')
+        ->and($agency->fresh()->status)->toBe('active')
+        ->and($existingAdmin->fresh()->agency_id)->toBe($agency->id);
+
+    $this->actingAs($superAdmin)
+        ->postJson("/api/admin/agencies/{$agency->id}/assign-admin", [
+            'admin_user_id' => $inactiveAdmin->id,
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('admin_user_id');
+
+    expect($existingAdmin->fresh()->agency_id)->toBe($agency->id)
+        ->and($inactiveAdmin->fresh()->agency_id)->toBeNull();
+});
+
+test('agency management list provides complete server pagination filters and summary', function () {
+    $superAdmin = createPhase8User('super_admin');
+
+    foreach (range(1, 12) as $index) {
+        $agency = createPhase8Agency("pagination-agency-{$index}");
+
+        if ($index === 12) {
+            $agency->forceFill(['status' => 'inactive'])->save();
+        }
+    }
+
+    $this->actingAs($superAdmin)
+        ->getJson('/api/admin/agencies?per_page=3&page=2&keyword=pagination&type=government-agency&status=active')
+        ->assertOk()
+        ->assertJsonCount(3, 'data')
+        ->assertJsonPath('meta.pagination.current_page', 2)
+        ->assertJsonPath('meta.pagination.per_page', 3)
+        ->assertJsonPath('meta.pagination.total', 11)
+        ->assertJsonPath('meta.pagination.last_page', 4)
+        ->assertJsonPath('meta.summary.total_agencies', 12)
+        ->assertJsonPath('meta.summary.active_agencies', 11)
+        ->assertJsonPath('meta.summary.inactive_agencies', 1);
+});
+
+test('admin notification list can return an exact unread total for the shared dashboard badge', function () {
+    $superAdmin = createPhase8User('super_admin');
+
+    SystemNotification::query()->create([
+        'user_id' => $superAdmin->id,
+        'type' => 'system.update',
+        'title' => 'Unread notification',
+        'message' => 'Unread.',
+        'priority' => 'normal',
+        'status' => 'unread',
+    ]);
+    SystemNotification::query()->create([
+        'user_id' => $superAdmin->id,
+        'type' => 'system.update',
+        'title' => 'Read notification',
+        'message' => 'Read.',
+        'priority' => 'normal',
+        'status' => 'read',
+        'read_at' => now(),
+    ]);
+
+    $this->actingAs($superAdmin)
+        ->getJson('/api/admin/system-activity/notifications?status=unread&per_page=1')
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.title', 'Unread notification')
+        ->assertJsonPath('meta.pagination.total', 1);
+});
+
 test('system activity and security session APIs read relational data', function () {
     config(['session.driver' => 'database']);
 
@@ -607,8 +834,8 @@ test('system activity and security session APIs read relational data', function 
         ->assertJsonPath('data.mfa_enabled_admin_accounts', 1)
         ->assertJsonPath('data.mfa_eligible_admin_accounts', 2)
         ->assertJsonPath('data.failed_login_attempts', 1)
-        ->assertJsonPath('data.locked_accounts', 1)
-        ->assertJsonPath('data.active_admin_sessions', 2)
+        ->assertJsonPath('data.locked_accounts', 0)
+        ->assertJsonPath('data.active_admin_sessions', 1)
         ->assertJsonPath('data.security_alerts', 1);
 
     $this->actingAs($superAdmin)
@@ -673,6 +900,142 @@ test('admin research moderation duplicate and activity APIs are database backed'
         ->assertJsonCount(0, 'data');
 
     $this->assertDatabaseHas('audit_logs', ['event' => 'research.duplicate.dismissed']);
+
+    $this->actingAs($superAdmin)
+        ->postJson('/api/admin/research-moderation/duplicates/dismiss', [
+            'original_research_id' => $original->id,
+            'matching_research_id' => $matching->id,
+        ])
+        ->assertConflict();
+});
+
+test('published duplicate research can be flagged without changing publication status', function () {
+    $agency = createPhase8Agency('duplicate-flag-agency');
+    $agencyAdmin = createPhase8User('agency_admin', $agency);
+    $superAdmin = createPhase8User('super_admin');
+    $original = createPhase8Research($agency, $agencyAdmin);
+    $matching = createPhase8Research($agency, $agencyAdmin);
+
+    $original->forceFill([
+        'title' => 'Blockchain Technology Security and Healthcare Applications',
+        'authors' => ['Research Author'],
+        'publication_year' => 2026,
+        'status' => 'published',
+    ])->save();
+    $matching->forceFill([
+        'title' => 'Blockchain Technology Security and Healthcare Applications',
+        'authors' => ['Research Author'],
+        'publication_year' => 2026,
+        'status' => 'published',
+    ])->save();
+
+    $this->actingAs($superAdmin)
+        ->getJson('/api/admin/research-moderation/duplicates')
+        ->assertOk()
+        ->assertJsonPath('data.0.originalStatus', 'published')
+        ->assertJsonPath('data.0.matchingStatus', 'published');
+
+    $this->actingAs($superAdmin)
+        ->postJson('/api/admin/research-moderation/duplicates/flag', [
+            'original_research_id' => $original->id,
+            'matching_research_id' => $matching->id,
+            'notes' => 'The exact-title match requires a manual authorship review.',
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.pair_key', "{$original->id}:{$matching->id}")
+        ->assertJsonPath('data.matching_research_id', $matching->id);
+
+    expect($original->fresh()->status)->toBe('published')
+        ->and($matching->fresh()->status)->toBe('published');
+
+    $this->assertDatabaseHas('research_approvals', [
+        'research_id' => $matching->id,
+        'reviewed_by' => $superAdmin->id,
+        'status' => 'flagged',
+        'issue_type' => 'possible_duplicate',
+    ]);
+    $this->assertDatabaseHas('audit_logs', [
+        'event' => 'research.duplicate.flagged',
+        'auditable_id' => $matching->id,
+    ]);
+
+    $this->actingAs($superAdmin)
+        ->getJson('/api/admin/research-moderation/duplicates')
+        ->assertOk()
+        ->assertJsonCount(0, 'data');
+
+    $this->actingAs($superAdmin)
+        ->getJson('/api/admin/research?moderation=1&moderation_status=flagged&issue_type=possible_duplicate')
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.id', $matching->id)
+        ->assertJsonPath('data.0.status', 'published')
+        ->assertJsonPath('data.0.moderation_decision_status', 'flagged')
+        ->assertJsonPath('data.0.moderation_issue_type', 'possible_duplicate');
+
+    $this->actingAs($superAdmin)
+        ->postJson('/api/admin/research-moderation/duplicates/flag', [
+            'original_research_id' => $original->id,
+            'matching_research_id' => $matching->id,
+            'notes' => 'This duplicate pair should not be reviewed twice.',
+        ])
+        ->assertConflict();
+});
+
+test('research moderation list and export apply complete server-side filters', function () {
+    $agency = createPhase8Agency('moderation-filter-agency');
+    $otherAgency = createPhase8Agency('moderation-filter-other');
+    $agencyAdmin = createPhase8User('agency_admin', $agency);
+    $otherAdmin = createPhase8User('agency_admin', $otherAgency);
+    $superAdmin = createPhase8User('super_admin');
+    $matching = createPhase8Research($agency, $agencyAdmin);
+    $matching->forceFill([
+        'title' => 'Sensitive Records Policy Review',
+        'status' => 'rejected',
+        'publication_year' => 2025,
+    ])->save();
+    ResearchApproval::query()->create([
+        'research_id' => $matching->id,
+        'reviewed_by' => $superAdmin->id,
+        'status' => 'rejected',
+        'issue_type' => 'policy_noncompliance',
+        'remarks' => 'Policy evidence is incomplete.',
+        'reviewed_at' => now(),
+    ]);
+    $excluded = createPhase8Research($otherAgency, $otherAdmin);
+    $excluded->forceFill([
+        'title' => 'Unrelated Approved Research',
+        'status' => 'approved',
+        'publication_year' => 2026,
+    ])->save();
+
+    $this->actingAs($superAdmin)
+        ->getJson('/api/admin/research?moderation=1&per_page=1&moderation_status=flagged&issue_type=policy_noncompliance&agency='.$agency->id.'&year=2025&keyword=Sensitive%20Records')
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.id', $matching->id)
+        ->assertJsonPath('data.0.moderation_issue_type', 'policy_noncompliance')
+        ->assertJsonPath('meta.pagination.total', 1)
+        ->assertJsonPath('meta.summary.flagged_research_records', 1)
+        ->assertJsonPath('meta.summary.pending_review', 0)
+        ->assertJsonPath('meta.summary.resolved_issues', 0);
+
+    $export = $this->actingAs($superAdmin)
+        ->get('/api/admin/reports/moderation/export?search=Sensitive%20Records&agency='.$agency->id.'&publicationYear=2025&moderation_status=flagged&issue_type=policy_noncompliance');
+
+    $export->assertOk();
+    expect($export->streamedContent())->toContain('Sensitive Records Policy Review')
+        ->not->toContain('Unrelated Approved Research');
+
+    $unrelated = createPhase8Research($agency, $agencyAdmin);
+    $unrelated->forceFill(['title' => 'Entirely Different Record', 'status' => 'submitted'])->save();
+
+    $this->actingAs($superAdmin)
+        ->postJson('/api/admin/research-moderation/duplicates/dismiss', [
+            'original_research_id' => $matching->id,
+            'matching_research_id' => $unrelated->id,
+        ])
+        ->assertUnprocessable();
 });
 
 test('platform setting writes validate update mask encrypted values and audit changes', function () {
@@ -801,6 +1164,74 @@ test('security center actions resolve reopen and audit security events', functio
     expect(AuditLog::query()->where('event', 'security_event.reopened')->exists())->toBeTrue();
 });
 
+test('system research uses server filters pagination view counts and matching exports', function () {
+    $agency = createPhase8Agency('system-research-agency');
+    $otherAgency = createPhase8Agency('system-research-other-agency');
+    $agencyAdmin = createPhase8User('agency_admin', $agency);
+    $otherAdmin = createPhase8User('agency_admin', $otherAgency);
+    $superAdmin = createPhase8User('super_admin');
+    $matching = createPhase8Research($agency, $agencyAdmin);
+    $matching->forceFill([
+        'title' => 'Distinctive Climate Terminal Report',
+        'publication_year' => null,
+        'status' => 'submitted',
+    ])->save();
+    $excluded = createPhase8Research($otherAgency, $otherAdmin);
+    $excluded->forceFill(['title' => 'Unrelated Agricultural Study'])->save();
+
+    ResearchFile::query()->create([
+        'research_id' => $matching->id,
+        'agency_id' => $agency->id,
+        'uploaded_by' => $agencyAdmin->id,
+        'original_name' => 'terminal-report.pdf',
+        'stored_name' => 'terminal-report.pdf',
+        'disk' => 'local',
+        'path' => "research/{$matching->id}/terminal-report.pdf",
+        'mime_type' => 'application/pdf',
+        'extension' => 'pdf',
+        'size_bytes' => 1024,
+        'checksum' => hash('sha256', 'system-research-terminal-report'),
+        'file_type' => 'terminal-report',
+        'visibility' => 'private',
+        'access_level' => 'restricted',
+        'status' => 'active',
+        'uploaded_at' => now(),
+    ]);
+
+    foreach (range(1, 2) as $index) {
+        ResearchAnalyticsEvent::query()->create([
+            'research_id' => $matching->id,
+            'agency_id' => $agency->id,
+            'user_id' => $superAdmin->id,
+            'event_type' => 'view',
+            'source' => 'admin',
+            'session_hash' => "system-research-view-{$index}",
+            'occurred_at' => now(),
+        ]);
+    }
+
+    $this->actingAs($superAdmin)
+        ->getJson("/api/admin/research?per_page=1&agency={$agency->id}&status=submitted&document_type=terminal-report&keyword=Distinctive%20Climate")
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.id', $matching->id)
+        ->assertJsonPath('data.0.publication_year', null)
+        ->assertJsonPath('data.0.document_type', 'terminal-report')
+        ->assertJsonPath('data.0.views', 2)
+        ->assertJsonPath('meta.pagination.total', 1)
+        ->assertJsonPath('meta.summary.total_records', 1)
+        ->assertJsonPath('meta.summary.under_review', 1)
+        ->assertJsonPath('meta.summary.total_views', 2)
+        ->assertJsonFragment(['years' => ['2026']]);
+
+    $export = $this->actingAs($superAdmin)
+        ->get("/api/admin/reports/research/export?search=Distinctive%20Climate&agency={$agency->id}&status=submitted&documentType=terminal-report");
+
+    $export->assertOk();
+    expect($export->streamedContent())->toContain('Distinctive Climate Terminal Report')
+        ->not->toContain('Unrelated Agricultural Study');
+});
+
 test('admin analytics use relational counts and protected exports write audit logs', function () {
     $agency = createPhase8Agency('analytics-agency');
     $agencyAdmin = createPhase8User('agency_admin', $agency);
@@ -888,4 +1319,185 @@ test('admin analytics use relational counts and protected exports write audit lo
     expect($pdf->getContent())->toStartWith('%PDF-');
 
     expect(AuditLog::query()->where('event', 'report.exported')->exists())->toBeTrue();
+});
+
+test('shared admin notification state is isolated per user and cleared notifications stay hidden', function () {
+    $firstAdmin = createPhase8User('super_admin');
+    $secondAdmin = createPhase8User('super_admin');
+    $notification = SystemNotification::query()->create([
+        'type' => 'research.moderation_required',
+        'title' => 'Shared moderation notice',
+        'message' => 'Review this research record.',
+        'priority' => 'high',
+        'status' => 'unread',
+    ]);
+
+    $this->actingAs($firstAdmin)
+        ->postJson("/api/admin/notifications/{$notification->id}/read")
+        ->assertOk()
+        ->assertJsonPath('data.notification.status', 'read');
+
+    $this->actingAs($secondAdmin)
+        ->getJson('/api/admin/system-activity/notifications?status=unread')
+        ->assertOk()
+        ->assertJsonFragment(['title' => 'Shared moderation notice']);
+
+    $this->actingAs($firstAdmin)
+        ->postJson('/api/admin/system-activity/notifications/clear', [
+            'scope' => 'current-category',
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('category');
+
+    $this->actingAs($firstAdmin)
+        ->postJson('/api/admin/system-activity/notifications/clear', [
+            'scope' => 'current-category',
+            'category' => 'research-updates',
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.updated_count', 1);
+
+    $this->actingAs($firstAdmin)
+        ->getJson('/api/admin/system-activity/notifications')
+        ->assertOk()
+        ->assertJsonCount(0, 'data');
+
+    $this->actingAs($secondAdmin)
+        ->getJson('/api/admin/system-activity/notifications')
+        ->assertOk()
+        ->assertJsonFragment(['title' => 'Shared moderation notice']);
+});
+
+test('system activity applies role action and status filters before pagination', function () {
+    $superAdmin = createPhase8User('super_admin');
+    AuditLog::query()->create(['user_id' => $superAdmin->id, 'event' => 'research.import.failed', 'created_at' => now()]);
+    AuditLog::query()->create(['user_id' => $superAdmin->id, 'event' => 'research.import.completed', 'created_at' => now()->subMinute()]);
+
+    $this->actingAs($superAdmin)
+        ->getJson('/api/admin/system-activity/logs?per_page=1&role=Super%20Admin&status=failed&action=research.import.failed')
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.event', 'research.import.failed')
+        ->assertJsonPath('meta.pagination.total', 1)
+        ->assertJsonFragment(['actions' => ['research.import.completed', 'research.import.failed']]);
+});
+
+test('system analytics date range and agency filter scope all summary metrics', function () {
+    $currentAgency = createPhase8Agency('current-analytics-agency');
+    $oldAgency = createPhase8Agency('old-analytics-agency');
+    $currentAdmin = createPhase8User('agency_admin', $currentAgency);
+    $oldAdmin = createPhase8User('agency_admin', $oldAgency);
+    $superAdmin = createPhase8User('super_admin');
+    $currentResearch = createPhase8Research($currentAgency, $currentAdmin);
+    $oldResearch = createPhase8Research($oldAgency, $oldAdmin);
+    $oldResearch->forceFill(['created_at' => now()->subYears(2), 'updated_at' => now()->subYears(2)])->saveQuietly();
+
+    AccessRequest::query()->create([
+        'research_id' => $currentResearch->id,
+        'agency_id' => $currentAgency->id,
+        'requester_email' => 'current-analytics@example.test',
+        'status' => 'approved',
+    ]);
+    AccessRequest::query()->create([
+        'research_id' => $oldResearch->id,
+        'agency_id' => $oldAgency->id,
+        'requester_email' => 'old-analytics@example.test',
+        'status' => 'pending',
+    ]);
+
+    $this->actingAs($superAdmin)
+        ->getJson('/api/admin/analytics/overview?date_range=this-year')
+        ->assertOk()
+        ->assertJsonPath('data.metrics.0.value', 1)
+        ->assertJsonPath('data.metrics.1.value', 1)
+        ->assertJsonPath('data.metrics.4.value', 1)
+        ->assertJsonPath('data.accessRequestStatus.approved', 1)
+        ->assertJsonPath('data.accessRequestStatus.pending', 0);
+});
+
+test('delegated security managers cannot revoke super admin sessions', function () {
+    config(['session.driver' => 'database']);
+    $managerRole = createPhase8Role('delegated_security_manager');
+    $managerRole->forceFill(['is_system' => false])->save();
+    $managerRole->permissions()->sync([
+        Permission::query()->firstOrCreate(['slug' => 'security.view'], ['name' => 'Security View', 'display_name' => 'Security View', 'module' => 'security'])->id,
+        Permission::query()->firstOrCreate(['slug' => 'security.manage'], ['name' => 'Security Manage', 'display_name' => 'Security Manage', 'module' => 'security'])->id,
+    ]);
+    $manager = createPhase8User('delegated_security_manager');
+    $superAdmin = createPhase8User('super_admin');
+
+    DB::table('sessions')->insert([
+        'id' => 'protected-super-admin-session',
+        'user_id' => $superAdmin->id,
+        'ip_address' => '127.0.0.10',
+        'user_agent' => 'Protected browser',
+        'payload' => '',
+        'last_activity' => now()->timestamp,
+    ]);
+    DB::table('sessions')->insert([
+        'id' => 'custom-admin-session',
+        'user_id' => $manager->id,
+        'ip_address' => '127.0.0.11',
+        'user_agent' => 'Custom admin browser',
+        'payload' => '',
+        'last_activity' => now()->timestamp,
+    ]);
+
+    $this->actingAs($manager)
+        ->getJson('/api/admin/security/sessions')
+        ->assertOk()
+        ->assertJsonFragment(['id' => 'custom-admin-session', 'role' => 'Custom Admin']);
+
+    $this->actingAs($manager)
+        ->deleteJson('/api/admin/security/sessions/protected-super-admin-session')
+        ->assertForbidden();
+
+    $this->assertDatabaseHas('sessions', ['id' => 'protected-super-admin-session']);
+});
+
+test('security event state transitions reject stale repeated actions', function () {
+    $superAdmin = createPhase8User('super_admin');
+    $event = SecurityEvent::query()->create([
+        'event_type' => 'login.failed',
+        'severity' => 'high',
+        'created_at' => now(),
+    ]);
+
+    $this->actingAs($superAdmin)->postJson("/api/admin/security/events/{$event->id}/acknowledge")->assertOk();
+    $this->actingAs($superAdmin)->postJson("/api/admin/security/events/{$event->id}/acknowledge")->assertUnprocessable();
+    $this->actingAs($superAdmin)->postJson("/api/admin/security/events/{$event->id}/resolve")->assertOk();
+    $this->actingAs($superAdmin)->postJson("/api/admin/security/events/{$event->id}/resolve")->assertUnprocessable();
+    $this->actingAs($superAdmin)->postJson("/api/admin/security/events/{$event->id}/reopen")->assertOk();
+    $this->actingAs($superAdmin)->postJson("/api/admin/security/events/{$event->id}/reopen")->assertUnprocessable();
+
+    expect(AuditLog::query()->where('event', 'security_event.acknowledged')->count())->toBe(1)
+        ->and(AuditLog::query()->where('event', 'security_event.resolved')->count())->toBe(1)
+        ->and(AuditLog::query()->where('event', 'security_event.reopened')->count())->toBe(1);
+});
+
+test('security reports require security access and honor selected sections', function () {
+    $analyticsRole = createPhase8Role('analytics_exporter');
+    $analyticsRole->forceFill(['is_system' => false])->save();
+    $analyticsRole->permissions()->sync([
+        Permission::query()->firstOrCreate(['slug' => 'analytics.export'], ['name' => 'Analytics Export', 'display_name' => 'Analytics Export', 'module' => 'analytics'])->id,
+    ]);
+    $analyticsUser = createPhase8User('analytics_exporter');
+
+    $this->actingAs($analyticsUser)
+        ->get('/api/admin/reports/security/export?format=csv')
+        ->assertForbidden();
+
+    $securityRole = createPhase8Role('security_report_viewer');
+    $securityRole->forceFill(['is_system' => false])->save();
+    $securityRole->permissions()->sync([
+        Permission::query()->firstOrCreate(['slug' => 'security.view'], ['name' => 'Security View', 'display_name' => 'Security View', 'module' => 'security'])->id,
+    ]);
+    $securityUser = createPhase8User('security_report_viewer');
+
+    $response = $this->actingAs($securityUser)
+        ->get('/api/admin/security/export?format=csv&date_range=last-7-days&include_summary=1');
+
+    $response->assertOk()->assertHeader('content-type', 'text/csv; charset=UTF-8');
+    expect($response->streamedContent())->toContain('SECURITY SUMMARY')
+        ->not->toContain('SECURITY EVENTS');
 });

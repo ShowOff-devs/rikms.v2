@@ -63,10 +63,7 @@ type DashboardModerationItem = {
 
 type AdminDashboardApiData = {
     metrics: AdminDashboardMetrics;
-    recent_research: Array<Record<string, unknown>>;
-    recent_agencies: Array<Record<string, unknown>>;
     recent_audit_logs: DashboardAuditLog[];
-    recent_security_events: Array<Record<string, unknown>>;
     pending_moderation_items: DashboardModerationItem[];
     research_by_agency: ResearchByAgency[];
     research_uploads_by_year: ResearchUploadByYear[];
@@ -121,9 +118,15 @@ const quickManagementActions: QuickManagementAction[] = [
 ];
 
 async function getAdminDashboardApiData() {
-    dashboardRequest ??= fetchApi<AdminDashboardApiData>(
-        '/api/admin/dashboard',
-    ).then(({ data }) => data);
+    if (!dashboardRequest) {
+        dashboardRequest = fetchApi<AdminDashboardApiData>(
+            '/api/admin/dashboard',
+        )
+            .then(({ data }) => data)
+            .finally(() => {
+                dashboardRequest = null;
+            });
+    }
 
     return dashboardRequest;
 }
@@ -255,6 +258,12 @@ export async function getSecurityStatus() {
     };
 
     return status;
+}
+
+export async function getUnreadNotificationCount() {
+    const data = await getAdminDashboardApiData();
+
+    return data.metrics.unread_notifications_count;
 }
 
 export async function getQuickManagementActions() {

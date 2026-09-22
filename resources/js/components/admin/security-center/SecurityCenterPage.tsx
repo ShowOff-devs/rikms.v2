@@ -23,6 +23,7 @@ import {
     resolveSecurityAlert,
     revokeAdminSession,
 } from '@/lib/admin/security-center-service';
+import { apiMessage } from '@/lib/api-client';
 import type {
     AdminSession,
     LoginActivity,
@@ -203,22 +204,6 @@ export function SecurityCenterPage() {
         [securityEvents, searchQuery],
     );
 
-    const displayedSummary = useMemo(() => {
-        if (!summary) {
-            return null;
-        }
-
-        return {
-            ...summary,
-            failedLoginAttempts: loginActivity.filter(
-                (activity) => activity.status === 'failed',
-            ).length,
-            activeAdminSessions: activeSessions.length,
-            securityAlerts: alerts.filter((alert) => alert.status === 'open')
-                .length,
-        };
-    }, [activeSessions.length, alerts, loginActivity, summary]);
-
     const handleViewAlertDetails = (alert: SecurityAlert) => {
         setSelectedAlert(alert);
         setIsAlertDetailsOpen(true);
@@ -231,39 +216,72 @@ export function SecurityCenterPage() {
     };
 
     const handleAcknowledgeAlert = async (id: string) => {
-        const updatedAlert = await acknowledgeSecurityAlert(id);
+        try {
+            const updatedAlert = await acknowledgeSecurityAlert(id);
 
-        setAlerts((currentAlerts) =>
-            currentAlerts.map((alert) =>
-                alert.id === id ? { ...alert, ...updatedAlert } : alert,
-            ),
-        );
-        syncSelectedAlert(updatedAlert);
-        setFeedback('Security alert acknowledged.');
+            setAlerts((currentAlerts) =>
+                currentAlerts.map((alert) =>
+                    alert.id === id ? { ...alert, ...updatedAlert } : alert,
+                ),
+            );
+            syncSelectedAlert(updatedAlert);
+            setSummary(await getSecuritySummary());
+            setError(null);
+            setFeedback('Security alert acknowledged.');
+        } catch (caughtError) {
+            setError(
+                apiMessage(
+                    caughtError,
+                    'Unable to acknowledge the security alert. Refresh and try again.',
+                ),
+            );
+        }
     };
 
     const handleResolveAlert = async (id: string) => {
-        const updatedAlert = await resolveSecurityAlert(id);
+        try {
+            const updatedAlert = await resolveSecurityAlert(id);
 
-        setAlerts((currentAlerts) =>
-            currentAlerts.map((alert) =>
-                alert.id === id ? { ...alert, ...updatedAlert } : alert,
-            ),
-        );
-        syncSelectedAlert(updatedAlert);
-        setFeedback('Security alert marked resolved.');
+            setAlerts((currentAlerts) =>
+                currentAlerts.map((alert) =>
+                    alert.id === id ? { ...alert, ...updatedAlert } : alert,
+                ),
+            );
+            syncSelectedAlert(updatedAlert);
+            setSummary(await getSecuritySummary());
+            setError(null);
+            setFeedback('Security alert marked resolved.');
+        } catch (caughtError) {
+            setError(
+                apiMessage(
+                    caughtError,
+                    'Unable to resolve the security alert. Refresh and try again.',
+                ),
+            );
+        }
     };
 
     const handleReopenAlert = async (id: string) => {
-        const updatedAlert = await reopenSecurityAlert(id);
+        try {
+            const updatedAlert = await reopenSecurityAlert(id);
 
-        setAlerts((currentAlerts) =>
-            currentAlerts.map((alert) =>
-                alert.id === id ? { ...alert, ...updatedAlert } : alert,
-            ),
-        );
-        syncSelectedAlert(updatedAlert);
-        setFeedback('Security alert reopened.');
+            setAlerts((currentAlerts) =>
+                currentAlerts.map((alert) =>
+                    alert.id === id ? { ...alert, ...updatedAlert } : alert,
+                ),
+            );
+            syncSelectedAlert(updatedAlert);
+            setSummary(await getSecuritySummary());
+            setError(null);
+            setFeedback('Security alert reopened.');
+        } catch (caughtError) {
+            setError(
+                apiMessage(
+                    caughtError,
+                    'Unable to reopen the security alert. Refresh and try again.',
+                ),
+            );
+        }
     };
 
     const handleOpenRevokeSession = (session: AdminSession) => {
@@ -288,6 +306,15 @@ export function SecurityCenterPage() {
             setFeedback(`${selectedSession.user}'s session was revoked.`);
             setIsRevokeModalOpen(false);
             setSelectedSession(null);
+            setSummary(await getSecuritySummary());
+            setError(null);
+        } catch (caughtError) {
+            setError(
+                apiMessage(
+                    caughtError,
+                    'Unable to revoke the selected session.',
+                ),
+            );
         } finally {
             setIsRevoking(false);
         }
@@ -300,6 +327,14 @@ export function SecurityCenterPage() {
             const exportResult = await exportSecurityReport(options);
             setFeedback(`${exportResult.fileName} is ready for download.`);
             setIsExportModalOpen(false);
+            setError(null);
+        } catch (caughtError) {
+            setError(
+                apiMessage(
+                    caughtError,
+                    'Unable to export the security report.',
+                ),
+            );
         } finally {
             setIsExporting(false);
         }
@@ -324,10 +359,7 @@ export function SecurityCenterPage() {
                     </div>
                 )}
 
-                <SecuritySummaryCards
-                    summary={displayedSummary}
-                    isLoading={isLoading}
-                />
+                <SecuritySummaryCards summary={summary} isLoading={isLoading} />
 
                 <QueueHealthPanel health={queueHealth} isLoading={isLoading} />
 

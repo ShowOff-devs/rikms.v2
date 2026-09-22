@@ -55,8 +55,8 @@ export function DeleteArchivedRecordModal({
                         Permanently Delete Record?
                     </DialogTitle>
                     <DialogDescription className="text-[#6a7282]">
-                        This action cannot be undone. The archived record will
-                        be permanently removed from the system.
+                        This action cannot be undone. The record can no longer
+                        be restored; required audit history may be retained.
                     </DialogDescription>
                 </DialogHeader>
 

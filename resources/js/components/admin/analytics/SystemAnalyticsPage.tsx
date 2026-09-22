@@ -100,7 +100,7 @@ export function SystemAnalyticsPage() {
 
         setIsLoading(true);
 
-        getSystemAnalytics(filters)
+        getSystemAnalytics(filters, headerRange)
             .then((payload) => {
                 if (!isCurrent) {
                     return;
@@ -125,7 +125,7 @@ export function SystemAnalyticsPage() {
         return () => {
             isCurrent = false;
         };
-    }, [activeView, filters]);
+    }, [activeView, filters, headerRange]);
 
     useEffect(() => {
         if (!feedback) {
@@ -154,6 +154,10 @@ export function SystemAnalyticsPage() {
 
             setFeedback(`${result.fileName} was downloaded.`);
             setIsExportOpen(false);
+        } catch {
+            setError(
+                'Unable to export the analytics report. Please try again.',
+            );
         } finally {
             setIsExporting(false);
         }

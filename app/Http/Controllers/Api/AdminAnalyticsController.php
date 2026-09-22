@@ -75,6 +75,7 @@ class AdminAnalyticsController extends Controller
     public function export(Request $request, string $report): Response
     {
         abort_unless(in_array($report, ['research', 'access-requests', 'moderation', 'security'], true), 404);
+        abort_if($report === 'security' && ! $request->user()->hasPermission('security.view'), 403, 'Security report access is required.');
 
         $format = $request->string('format', 'csv')->lower()->toString();
         abort_unless(in_array($format, ['csv', 'pdf'], true), 422, 'Unsupported report format.');
@@ -115,7 +116,7 @@ class AdminAnalyticsController extends Controller
                 });
             } else {
                 fputcsv($handle, ['ID', 'Title', 'Agency ID', 'Status', 'Publication Year', 'Downloads']);
-                $this->researchExportQuery($request)->orderByDesc('created_at')->chunk(200, function ($records) use ($handle): void {
+                $this->researchExportQuery($request, $report === 'moderation')->orderByDesc('created_at')->chunk(200, function ($records) use ($handle): void {
                     foreach ($records as $research) {
                         fputcsv($handle, CsvExport::row([$research->id, $research->title, $research->agency_id, $research->status, $research->publication_year, $research->downloads]));
                     }
@@ -130,7 +131,7 @@ class AdminAnalyticsController extends Controller
     {
         abort_unless($report === 'research', 422, 'PDF export is currently available for research reports only.');
 
-        $records = $this->researchExportQuery($request)
+        $records = $this->researchExportQuery($request, $report === 'moderation')
             ->with('agency:id,name')
             ->orderByDesc('created_at')
             ->get();
@@ -142,7 +143,7 @@ class AdminAnalyticsController extends Controller
         $pdf->loadHtml(view('reports.admin.research', [
             'records' => $records,
             'generatedAt' => now(),
-            'filters' => $request->only(['date_range', 'start_date', 'end_date', 'agency', 'publicationYear', 'category', 'status']),
+            'filters' => $request->only(['date_range', 'start_date', 'end_date', 'search', 'agency', 'publicationYear', 'researchCategory', 'sdg', 'documentType', 'status']),
         ])->render());
         $pdf->setPaper('a4', 'landscape');
         $pdf->render();
@@ -169,9 +170,13 @@ class AdminAnalyticsController extends Controller
         };
     }
 
-    private function researchExportQuery(Request $request): Builder
+    private function researchExportQuery(Request $request, bool $moderation = false): Builder
     {
         $query = $this->researchQuery($request);
+
+        if ($moderation) {
+            $query->whereIn('status', ['submitted', 'under_review', 'approved', 'rejected']);
+        }
 
         if ($request->filled('statuses')) {
             $statuses = collect(explode(',', $request->string('statuses')->toString()))
@@ -187,7 +192,6 @@ class AdminAnalyticsController extends Controller
             'last-30-days' => $query->where('created_at', '>=', now()->subDays(30)->startOfDay()),
             'this-month' => $query->whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()]),
             'this-year' => $query->whereBetween('created_at', [now()->startOfYear(), now()->endOfYear()]),
-            'this-year' => $query->whereYear('created_at', now()->year),
             'custom' => $query
                 ->when($request->date('start_date'), fn (Builder $query, $date) => $query->where('created_at', '>=', $date->startOfDay()))
                 ->when($request->date('end_date'), fn (Builder $query, $date) => $query->where('created_at', '<=', $date->endOfDay())),
@@ -198,18 +202,19 @@ class AdminAnalyticsController extends Controller
     private function analyticsPayload(Request $request): array
     {
         $filteredResearchIds = $this->researchQuery($request)->pluck('id');
+        $filteredAgencyIds = $this->researchQuery($request)->whereNotNull('agency_id')->distinct()->pluck('agency_id');
 
         return [
             'metrics' => [
                 ['id' => 'total-records', 'label' => 'Total Research Records', 'value' => $filteredResearchIds->count(), 'icon' => 'database'],
-                ['id' => 'participating-agencies', 'label' => 'Total Participating Agencies', 'value' => Agency::query()->count(), 'icon' => 'building'],
+                ['id' => 'participating-agencies', 'label' => 'Total Participating Agencies', 'value' => $filteredAgencyIds->count(), 'icon' => 'building'],
                 ['id' => 'downloads', 'label' => 'Total Downloads', 'value' => (int) $this->researchQuery($request)->sum('downloads'), 'icon' => 'download'],
                 ['id' => 'views', 'label' => 'Total Views', 'value' => $this->analyticsEventCount($filteredResearchIds, 'view'), 'icon' => 'eye'],
-                ['id' => 'access-requests', 'label' => 'Total Access Requests', 'value' => AccessRequest::query()->count(), 'icon' => 'file'],
+                ['id' => 'access-requests', 'label' => 'Total Access Requests', 'value' => AccessRequest::query()->whereIn('research_id', $filteredResearchIds)->count(), 'icon' => 'file'],
                 ['id' => 'agency-admins', 'label' => 'Active Agency Admin Users', 'value' => User::query()->where('status', 'active')->where(function (Builder $query): void {
                     $query->where('role', 'agency_admin')->orWhereHas('roles', fn (Builder $query) => $query->where('slug', 'agency_admin'));
-                })->count(), 'icon' => 'users'],
-                ['id' => 'uploads', 'label' => 'Uploaded Files', 'value' => ResearchFile::query()->whereIn('research_id', $filteredResearchIds)->count(), 'icon' => 'file'],
+                })->whereIn('agency_id', $filteredAgencyIds)->count(), 'icon' => 'users'],
+                ['id' => 'uploads', 'label' => 'Uploaded Files', 'value' => ResearchFile::query()->whereIn('research_id', $filteredResearchIds)->where('status', '!=', 'deleted')->whereNull('archived_at')->count(), 'icon' => 'file'],
             ],
             'uploadTrends' => $this->researchUploadTrends($request),
             'researchByAgency' => $this->researchByAgency($request),
@@ -321,7 +326,9 @@ class AdminAnalyticsController extends Controller
 
     private function accessRequestStatus(Request $request): array
     {
+        $researchIds = $this->researchQuery($request)->pluck('id');
         $counts = AccessRequest::query()
+            ->whereIn('research_id', $researchIds)
             ->selectRaw('status, count(*) as aggregate')
             ->groupBy('status')
             ->pluck('aggregate', 'status');
@@ -392,22 +399,132 @@ class AdminAnalyticsController extends Controller
 
     private function applyResearchFilters(Builder $query, Request $request): Builder
     {
-        return $query
-            ->when($request->filled('agency'), fn (Builder $query) => $query->whereHas('agency', fn (Builder $query) => $query->where('short_name', $request->string('agency'))->orWhere('name', $request->string('agency'))))
-            ->when($request->filled('publicationYear'), fn (Builder $query) => $query->where('publication_year', $request->integer('publicationYear')))
-            ->when($request->filled('researchCategory'), fn (Builder $query) => $query->where('category', $request->string('researchCategory')))
-            ->when($request->filled('sdg'), fn (Builder $query) => $query->whereJsonContains('sdgs', $request->string('sdg')->toString()))
-            ->when($request->filled('documentType'), function (Builder $query) use ($request): void {
-                $documentType = $request->string('documentType')->toString();
+        $agency = $request->query('agency');
+        $year = $request->query('publicationYear', $request->query('year'));
+        $category = $request->query('researchCategory', $request->query('category'));
 
-                $query->whereHas('files', function (Builder $query) use ($documentType): void {
-                    $query->where('file_type', $documentType)
-                        ->orWhere('extension', $documentType)
-                        ->orWhere('mime_type', $documentType);
-                });
+        return $query
+            ->when($request->filled('search'), function (Builder $query) use ($request): void {
+                $keywords = preg_split('/\s+/', $request->string('search')->trim()->toString()) ?: [];
+
+                foreach ($keywords as $value) {
+                    $keyword = '%'.$value.'%';
+                    $query->where(function (Builder $query) use ($keyword): void {
+                        $query->where('title', 'like', $keyword)
+                            ->orWhere('abstract', 'like', $keyword)
+                            ->orWhere('authors', 'like', $keyword)
+                            ->orWhere('category', 'like', $keyword)
+                            ->orWhereHas('agency', fn (Builder $query) => $query->where('short_name', 'like', $keyword)->orWhere('name', 'like', $keyword));
+                    });
+                }
             })
+            ->when($agency !== null && $agency !== '' && $agency !== 'all', function (Builder $query) use ($agency): void {
+                if (is_numeric($agency)) {
+                    $query->where('agency_id', (int) $agency);
+
+                    return;
+                }
+
+                $query->whereHas('agency', fn (Builder $query) => $query->where('short_name', $agency)->orWhere('name', $agency));
+            })
+            ->when($year !== null && $year !== '' && $year !== 'all', fn (Builder $query) => $query->where('publication_year', (int) $year))
+            ->when($category !== null && $category !== '' && $category !== 'all', fn (Builder $query) => $query->where('category', $category))
+            ->when($request->filled('sdg'), fn (Builder $query) => $query->whereJsonContains('sdgs', $request->string('sdg')->toString()))
+            ->when($request->filled('documentType'), fn (Builder $query) => $this->applyResearchDocumentTypeFilter($query, $request->string('documentType')->toString()))
             ->when($request->filled('accessType'), fn (Builder $query) => $query->where('access_level', $request->string('accessType')))
-            ->when($request->filled('status'), fn (Builder $query) => $query->where('status', $request->string('status')));
+            ->when($request->filled('status'), fn (Builder $query) => $query->where('status', str_replace('-', '_', $request->string('status')->toString())))
+            ->when($request->filled('moderation_status'), function (Builder $query) use ($request): void {
+                $statuses = match ($request->string('moderation_status')->toString()) {
+                    'pending-review' => ['submitted'],
+                    'needs-review' => ['under_review'],
+                    'flagged' => ['rejected'],
+                    'resolved' => ['approved'],
+                    default => [],
+                };
+
+                if ($statuses !== []) {
+                    $query->whereIn('status', $statuses);
+                }
+            })
+            ->when($request->filled('issue_type'), fn (Builder $query) => $this->applyModerationIssueTypeFilter($query, $request->string('issue_type')->toString()))
+            ->when($request->query('date_range') === 'this-year', fn (Builder $query) => $query->whereBetween('created_at', [now()->startOfYear(), now()->endOfYear()]))
+            ->when($request->query('date_range') === 'last-30-days', fn (Builder $query) => $query->where('created_at', '>=', now()->subDays(30)->startOfDay()))
+            ->when($request->query('date_range') === 'last-7-days', fn (Builder $query) => $query->where('created_at', '>=', now()->subDays(7)->startOfDay()))
+            ->when($request->query('date_range') === 'this-month', fn (Builder $query) => $query->whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()]))
+            ->when($request->query('date_range') === 'custom', fn (Builder $query) => $query
+                ->when($request->date('start_date'), fn (Builder $query, $date) => $query->where('created_at', '>=', $date->startOfDay()))
+                ->when($request->date('end_date'), fn (Builder $query, $date) => $query->where('created_at', '<=', $date->endOfDay())));
+    }
+
+    private function applyModerationIssueTypeFilter(Builder $query, string $issueType): void
+    {
+        if ($issueType === 'incomplete_metadata') {
+            $query->where(function (Builder $query): void {
+                $query->where(function (Builder $query): void {
+                    $query->where('status', 'rejected')
+                        ->whereHas('latestModerationDecision', fn (Builder $query) => $query->where('issue_type', 'incomplete_metadata'));
+                })->orWhere(function (Builder $query): void {
+                    $query->where('status', '!=', 'rejected')
+                        ->where(function (Builder $query): void {
+                            $query->whereNull('abstract')->orWhere('abstract', '')
+                                ->orWhereNull('publication_year')
+                                ->orWhereNull('category')->orWhere('category', '')
+                                ->orWhereNull('authors')->orWhere('authors', '[]')
+                                ->orWhereNull('keywords')->orWhere('keywords', '[]');
+                        });
+                });
+            });
+
+            return;
+        }
+
+        if ($issueType === 'other_manual_review') {
+            $query->where(function (Builder $query): void {
+                $query->where(function (Builder $query): void {
+                    $query->where('status', 'rejected')
+                        ->whereHas('latestModerationDecision', fn (Builder $query) => $query->where('issue_type', 'other_manual_review'));
+                })->orWhere(function (Builder $query): void {
+                    $query->where('status', '!=', 'rejected')
+                        ->whereNotNull('abstract')->where('abstract', '!=', '')
+                        ->whereNotNull('publication_year')
+                        ->whereNotNull('category')->where('category', '!=', '')
+                        ->whereNotNull('authors')->where('authors', '!=', '[]')
+                        ->whereNotNull('keywords')->where('keywords', '!=', '[]');
+                });
+            });
+
+            return;
+        }
+
+        $query->where('status', 'rejected')
+            ->whereHas('latestModerationDecision', fn (Builder $query) => $query->where('issue_type', $issueType));
+    }
+
+    private function applyResearchDocumentTypeFilter(Builder $query, string $documentType): void
+    {
+        if (in_array($documentType, ['terminal-report', 'project-accomplishment'], true)) {
+            $query->where(function (Builder $query) use ($documentType): void {
+                $query->whereHas('files', fn (Builder $query) => $query->where('file_type', $documentType)->where('status', '!=', 'deleted')->whereNull('archived_at'))
+                    ->orWhere('category', 'like', $documentType === 'terminal-report' ? '%terminal report%' : '%project accomplishment%');
+            });
+
+            return;
+        }
+
+        if ($documentType === 'research-study') {
+            $query->whereDoesntHave('files', fn (Builder $query) => $query->whereIn('file_type', ['terminal-report', 'project-accomplishment'])->where('status', '!=', 'deleted')->whereNull('archived_at'))
+                ->where(function (Builder $query): void {
+                    $query->whereNull('category')
+                        ->orWhere(function (Builder $query): void {
+                            $query->where('category', 'not like', '%terminal report%')
+                                ->where('category', 'not like', '%project accomplishment%');
+                        });
+                });
+
+            return;
+        }
+
+        $query->whereHas('files', fn (Builder $query) => $query->where('file_type', $documentType)->where('status', '!=', 'deleted')->whereNull('archived_at'));
     }
 
     private function analyticsEventCount($researchIds, string $eventType): int

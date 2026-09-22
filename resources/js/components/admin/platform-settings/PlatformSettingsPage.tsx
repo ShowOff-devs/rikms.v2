@@ -22,6 +22,7 @@ import type {
 
 function cloneSettings(settings: PlatformSettings): PlatformSettings {
     return {
+        versions: { ...settings.versions },
         general: { ...settings.general },
         repository: {
             ...settings.repository,
@@ -126,6 +127,8 @@ export function PlatformSettingsPage() {
     const [error, setError] = useState<string | null>(null);
     const [feedback, setFeedback] = useState<string | null>(null);
     const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
+    const [maintenanceEnableConfirmed, setMaintenanceEnableConfirmed] =
+        useState(false);
 
     useEffect(() => {
         let isCurrent = true;
@@ -250,10 +253,12 @@ export function PlatformSettingsPage() {
         }
 
         updateSection('maintenance', { maintenanceModeEnabled: false });
+        setMaintenanceEnableConfirmed(false);
     };
 
     const handleConfirmMaintenanceMode = () => {
         updateSection('maintenance', { maintenanceModeEnabled: true });
+        setMaintenanceEnableConfirmed(true);
         setIsMaintenanceModalOpen(false);
     };
 
@@ -270,6 +275,7 @@ export function PlatformSettingsPage() {
         setLogoPreviewUrl(null);
         setSettings(cloneSettings(initialSettings));
         setErrors({});
+        setMaintenanceEnableConfirmed(false);
         setFeedback('Unsaved changes have been reset.');
     };
 
@@ -304,11 +310,15 @@ export function PlatformSettingsPage() {
                 };
             }
 
-            const savedSettings = await updatePlatformSettings(payload);
+            const savedSettings = await updatePlatformSettings(
+                payload,
+                maintenanceEnableConfirmed,
+            );
 
             setSettings(savedSettings);
             setInitialSettings(cloneSettings(savedSettings));
             setLogoFile(null);
+            setMaintenanceEnableConfirmed(false);
 
             if (logoPreviewUrl) {
                 URL.revokeObjectURL(logoPreviewUrl);

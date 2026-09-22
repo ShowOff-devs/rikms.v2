@@ -40,6 +40,8 @@ export type DuplicateResearchMatch = {
     matchingTitle: string;
     originalAgency: string;
     matchingAgency: string;
+    originalStatus: string;
+    matchingStatus: string;
     similarityScore: number;
     detectedAt: string;
     originalAuthors?: string[];

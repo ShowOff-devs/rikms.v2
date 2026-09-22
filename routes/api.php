@@ -149,6 +149,7 @@ Route::prefix('admin')
         Route::get('/users', [AdminReadController::class, 'users'])->name('users.index');
         Route::get('/users/{user}', [AdminReadController::class, 'userShow'])->name('users.show');
         Route::get('/research-moderation/duplicates', [AdminResearchModerationController::class, 'duplicates'])->name('research-moderation.duplicates');
+        Route::post('/research-moderation/duplicates/flag', [AdminResearchModerationController::class, 'flagDuplicate'])->name('research-moderation.duplicates.flag');
         Route::post('/research-moderation/duplicates/dismiss', [AdminResearchModerationController::class, 'dismissDuplicate'])->name('research-moderation.duplicates.dismiss');
         Route::get('/research-moderation/activity', [AdminResearchModerationController::class, 'activity'])->name('research-moderation.activity');
         Route::get('/research', [AdminReadController::class, 'research'])->name('research.index');
@@ -171,6 +172,7 @@ Route::prefix('admin')
         Route::get('/archive/agencies', [AdminArchiveController::class, 'agencies'])->name('archive.agencies');
         Route::get('/archive/users', [AdminArchiveController::class, 'users'])->name('archive.users');
         Route::get('/archive/activity', [AdminArchiveController::class, 'activity'])->name('archive.activity');
+        Route::get('/archive/filter-options', [AdminArchiveController::class, 'filterOptions'])->name('archive.filter-options');
         Route::get('/archive/export', [AdminArchiveController::class, 'export'])->name('archive.export');
         Route::post('/research-files/{file}/restore', [AdminArchiveController::class, 'restoreFile'])->name('research-files.restore')->withTrashed();
         Route::delete('/research-files/{file}/archive', [AdminArchiveController::class, 'destroyFile'])->name('research-files.archive.destroy')->withTrashed();
@@ -206,6 +208,7 @@ Route::prefix('admin')
         Route::post('/security/events/{securityEvent}/resolve', [AdminSecurityController::class, 'resolve'])->name('security.events.resolve');
         Route::post('/security/events/{securityEvent}/reopen', [AdminSecurityController::class, 'reopen'])->name('security.events.reopen');
         Route::get('/security/summary', [AdminSecurityController::class, 'summary'])->name('security.summary');
+        Route::get('/security/export', [AdminSecurityController::class, 'export'])->name('security.export');
         Route::get('/security/queue-health', [AdminSecurityController::class, 'queueHealth'])->middleware('permission:security.view')->name('security.queue-health');
         Route::get('/security/csp-reports', [CspReportController::class, 'index'])->middleware('permission:security.view')->name('security.csp-reports.index');
         Route::get('/security/sessions', [AdminSecurityController::class, 'sessions'])->name('security.sessions');
@@ -221,10 +224,11 @@ Route::prefix('admin')
         Route::post('/platform-settings/bulk-update', [AdminPlatformSettingController::class, 'bulkUpdate'])->middleware('permission:platform_settings.manage')->name('platform-settings.bulk-update');
         Route::post('/platform-settings/logo', [AdminPlatformSettingController::class, 'uploadLogo'])->middleware('permission:platform_settings.manage')->name('platform-settings.logo.upload');
         Route::get('/rbac/roles', [AdminRbacController::class, 'roles'])->middleware('permission:rbac.view')->name('rbac.roles.index');
+        Route::get('/rbac/roles/{role}', [AdminRbacController::class, 'role'])->middleware('permission:rbac.view')->name('rbac.roles.show');
         Route::post('/rbac/roles', [AdminRbacController::class, 'createRole'])->middleware('permission:roles.manage')->name('rbac.roles.store');
         Route::patch('/rbac/roles/{role}', [AdminRbacController::class, 'updateRole'])->middleware('permission:roles.manage')->name('rbac.roles.update');
         Route::delete('/rbac/roles/{role}', [AdminRbacController::class, 'deleteRole'])->middleware('permission:roles.manage')->name('rbac.roles.destroy');
-        Route::match(['put', 'patch'], '/rbac/roles/{role}/permissions', [AdminRbacController::class, 'updateRolePermissions'])->middleware('permission:permissions.manage')->name('rbac.roles.permissions.update');
+        Route::match(['put', 'patch'], '/rbac/roles/{role}/permissions', [AdminRbacController::class, 'updateRolePermissions'])->middleware(['permission:roles.manage', 'permission:permissions.manage'])->name('rbac.roles.permissions.update');
         Route::get('/rbac/permissions', [AdminRbacController::class, 'permissions'])->middleware('permission:rbac.view')->name('rbac.permissions.index');
         Route::get('/rbac/history', [AdminRbacController::class, 'history'])->middleware('permission:rbac.view')->name('rbac.history.index');
         Route::get('/rbac/users', [AdminRbacController::class, 'users'])->middleware('permission:rbac.view')->name('rbac.users.index');

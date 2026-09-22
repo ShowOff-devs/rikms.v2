@@ -10,6 +10,7 @@ type ApiSetting = {
     type: 'string' | 'integer' | 'boolean' | 'json' | 'encrypted';
     is_encrypted?: boolean;
     effective_value?: string | number | boolean | null;
+    version?: string | null;
 };
 
 type LogoUploadResponse = {
@@ -17,6 +18,7 @@ type LogoUploadResponse = {
 };
 
 const defaultPlatformSettings: PlatformSettings = {
+    versions: {},
     general: {
         systemName: 'RIKMS v2',
         shortName: 'RIKMS',
@@ -106,6 +108,9 @@ function toPlatformSettings(settings: ApiSetting[]): PlatformSettings {
     const fallback = defaultPlatformSettings;
 
     return {
+        versions: Object.fromEntries(
+            settings.map((setting) => [setting.key, setting.version ?? null]),
+        ),
         general: {
             systemName: String(
                 parseValue(map.get('site.name'), fallback.general.systemName),
@@ -393,12 +398,17 @@ export async function getBackupReadiness(): Promise<BackupReadiness> {
 
 export async function updatePlatformSettings(
     payload: PlatformSettings,
+    confirmMaintenanceMode = false,
 ): Promise<PlatformSettings> {
     const response = await fetchApi<ApiSetting[]>(
         '/api/admin/platform-settings/bulk-update',
         {
             method: 'POST',
-            body: JSON.stringify({ settings: toApiSettings(payload) }),
+            body: JSON.stringify({
+                settings: toApiSettings(payload),
+                confirm_maintenance_mode: confirmMaintenanceMode,
+                expected_versions: payload.versions,
+            }),
         },
     );
 
@@ -406,8 +416,10 @@ export async function updatePlatformSettings(
 }
 
 export async function uploadPlatformLogo(file: File): Promise<string> {
-    if (!file.type.startsWith('image/')) {
-        throw new Error('Platform logo must be an image file.');
+    const allowedLogoTypes = ['image/png', 'image/jpeg', 'image/webp'];
+
+    if (!allowedLogoTypes.includes(file.type)) {
+        throw new Error('Platform logo must be a PNG, JPG, or WebP image.');
     }
 
     if (file.size > 2 * 1024 * 1024) {
@@ -433,13 +445,16 @@ export async function enableMaintenanceMode(
 ): Promise<PlatformSettings> {
     const settings = await getPlatformSettings();
 
-    return updatePlatformSettings({
-        ...settings,
-        maintenance: {
-            maintenanceModeEnabled: true,
-            maintenanceMessage: message,
+    return updatePlatformSettings(
+        {
+            ...settings,
+            maintenance: {
+                maintenanceModeEnabled: true,
+                maintenanceMessage: message,
+            },
         },
-    });
+        true,
+    );
 }
 
 export async function disableMaintenanceMode(): Promise<PlatformSettings> {

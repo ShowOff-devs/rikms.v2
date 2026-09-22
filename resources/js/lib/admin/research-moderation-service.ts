@@ -1,4 +1,3 @@
-import { moderationIssueTypeLabels } from '@/data/research-moderation-options';
 import {
     approveAdminResearch,
     approveAndPublishAdminResearch,
@@ -29,6 +28,8 @@ type ApiDuplicateResearchMatch = {
     matchingTitle: string;
     originalAgency: string;
     matchingAgency: string;
+    originalStatus: string;
+    matchingStatus: string;
     similarityScore: number;
     detectedAt: string;
     originalAuthors?: string[];
@@ -40,80 +41,21 @@ type ApiDuplicateResearchMatch = {
     matchingAbstract?: string | null;
 };
 
-function isFilterActive(value?: string) {
-    return Boolean(value && value !== 'all');
-}
-
-function matchesFilters(
-    record: FlaggedResearchRecord,
-    filters: Partial<ModerationFilters> = {},
-) {
-    const query = filters.search?.trim().toLowerCase();
-
-    if (query) {
-        const searchableText = [
-            record.title,
-            record.agency,
-            record.uploadedBy,
-            record.uploaderRole,
-            moderationIssueTypeLabels[record.issueType],
-            record.issueType,
-            record.year,
-            record.status,
-            record.officialStatus,
-        ]
-            .join(' ')
-            .toLowerCase();
-
-        if (!searchableText.includes(query)) {
-            return false;
-        }
-    }
-
-    if (isFilterActive(filters.agency) && record.agency !== filters.agency) {
-        return false;
-    }
-
-    if (
-        isFilterActive(filters.issueType) &&
-        record.issueType !== filters.issueType
-    ) {
-        return false;
-    }
-
-    if (isFilterActive(filters.year) && String(record.year) !== filters.year) {
-        return false;
-    }
-
-    if (isFilterActive(filters.status) && record.status !== filters.status) {
-        return false;
-    }
-
-    return true;
-}
-
 export async function getModerationSummary(): Promise<ModerationSummary> {
-    const records = await getAdminModerationResearchRecords();
+    const result = await getAdminModerationResearchRecords({}, 1, 1);
 
     return {
-        flaggedResearchRecords: records.filter(
-            (record) => record.status !== 'resolved',
-        ).length,
-        pendingReview: records.filter(
-            (record) => record.status === 'pending-review',
-        ).length,
-        resolvedIssues: records.filter((record) => record.status === 'resolved')
-            .length,
+        ...result.summary,
         duplicateResearchAlerts: 0,
     };
 }
 
 export async function getFlaggedResearchRecords(
     filters: Partial<ModerationFilters> = {},
-): Promise<FlaggedResearchRecord[]> {
-    const records = await getAdminModerationResearchRecords();
-
-    return records.filter((record) => matchesFilters(record, filters));
+    page = 1,
+    perPage = 8,
+) {
+    return getAdminModerationResearchRecords(filters, page, perPage);
 }
 
 export async function getDuplicateResearchMatches(): Promise<
@@ -131,6 +73,8 @@ export async function getDuplicateResearchMatches(): Promise<
         matchingTitle: match.matchingTitle,
         originalAgency: match.originalAgency,
         matchingAgency: match.matchingAgency,
+        originalStatus: match.originalStatus,
+        matchingStatus: match.matchingStatus,
         similarityScore: match.similarityScore,
         detectedAt: match.detectedAt,
         originalAuthors: match.originalAuthors,
@@ -163,6 +107,23 @@ export async function dismissDuplicateResearchMatch(
             body: JSON.stringify({
                 original_research_id: Number(match.originalResearchId),
                 matching_research_id: Number(match.matchingResearchId),
+            }),
+        },
+    );
+}
+
+export async function flagDuplicateResearchMatch(
+    match: DuplicateResearchMatch,
+    note: string,
+) {
+    return fetchApi<{ pair_key: string; matching_research_id: number }>(
+        '/api/admin/research-moderation/duplicates/flag',
+        {
+            method: 'POST',
+            body: JSON.stringify({
+                original_research_id: Number(match.originalResearchId),
+                matching_research_id: Number(match.matchingResearchId),
+                notes: note,
             }),
         },
     );
@@ -238,6 +199,10 @@ export async function exportModerationReport(
 
         if (filters.status && filters.status !== 'all') {
             params.set('moderation_status', filters.status);
+        }
+
+        if (filters.issueType && filters.issueType !== 'all') {
+            params.set('issue_type', filters.issueType);
         }
 
         if (filters.year && filters.year !== 'all') {

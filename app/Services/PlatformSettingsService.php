@@ -416,6 +416,18 @@ class PlatformSettingsService
             ]);
         }
 
+        if ($key === 'site.logo_url' && $value !== '') {
+            $isRelativeUpload = str_starts_with($value, '/storage/platform/logos/');
+            $isHttpsUrl = filter_var($value, FILTER_VALIDATE_URL)
+                && parse_url($value, PHP_URL_SCHEME) === 'https';
+
+            if (! $isRelativeUpload && ! $isHttpsUrl) {
+                throw ValidationException::withMessages([
+                    'settings.'.$key => 'Use an uploaded platform logo or a valid HTTPS image URL.',
+                ]);
+            }
+        }
+
         return $value;
     }
 

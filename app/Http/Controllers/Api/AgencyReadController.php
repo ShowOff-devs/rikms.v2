@@ -45,7 +45,7 @@ class AgencyReadController extends Controller
                 'access_requests' => (clone $accessRequestQuery)->count(),
                 'pending_access_requests' => (clone $accessRequestQuery)->where('status', Statuses::ACCESS_REQUEST_PENDING)->count(),
                 'notifications' => (clone $notificationQuery)->count(),
-                'unread_notifications' => (clone $notificationQuery)->where('status', Statuses::NOTIFICATION_UNREAD)->count(),
+                'unread_notifications' => (clone $notificationQuery)->unreadBy($request->user()->id)->count(),
             ],
             'research_status_counts' => $statusCounts,
             'research_by_year' => (clone $researchQuery)
@@ -139,8 +139,9 @@ class AgencyReadController extends Controller
     public function notifications(Request $request): JsonResponse
     {
         $query = $this->agencyNotificationQuery($request)
-            ->when($request->filled('status'), fn (Builder $query) => $query->where('status', $request->string('status')))
-            ->when($request->boolean('unread'), fn (Builder $query) => $query->whereNull('read_at')->where('status', Statuses::NOTIFICATION_UNREAD))
+            ->with(['userStates' => fn ($query) => $query->where('user_id', $request->user()->id)])
+            ->when($request->query('status') === 'read', fn (Builder $query) => $query->readBy($request->user()->id))
+            ->when($request->query('status') === 'unread' || $request->boolean('unread'), fn (Builder $query) => $query->unreadBy($request->user()->id))
             ->orderBy('created_at', $this->sortDirection($request));
 
         return $this->paginatedResponse(
@@ -176,7 +177,7 @@ class AgencyReadController extends Controller
             ->where('status', '!=', Statuses::RESEARCH_SUPERSEDED);
 
         if ($request->user()->isSuperAdmin()) {
-            return $query;
+            return $query->visibleTo($request->user()->id);
         }
 
         return $query->where('agency_id', $request->user()->agency_id);
@@ -204,7 +205,7 @@ class AgencyReadController extends Controller
         return $query->where(function (Builder $query) use ($request): void {
             $query->where('agency_id', $request->user()->agency_id)
                 ->orWhere('user_id', $request->user()->id);
-        });
+        })->visibleTo($request->user()->id);
     }
 
     private function agencyResearchFileQuery(Request $request): Builder

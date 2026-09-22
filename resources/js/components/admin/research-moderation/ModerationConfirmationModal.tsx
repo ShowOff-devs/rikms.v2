@@ -88,6 +88,7 @@ export function ModerationConfirmationModal({
     action,
     open,
     isSaving,
+    duplicateReview = false,
     onOpenChange,
     onConfirm,
 }: {
@@ -95,6 +96,7 @@ export function ModerationConfirmationModal({
     action: ModerationConfirmationAction | null;
     open: boolean;
     isSaving: boolean;
+    duplicateReview?: boolean;
     onOpenChange: (open: boolean) => void;
     onConfirm: (note?: string, issueType?: ModerationIssueType) => void;
 }) {
@@ -108,14 +110,24 @@ export function ModerationConfirmationModal({
         return null;
     }
 
-    const copy = actionCopy[action];
+    const copy =
+        action === 'flag' && duplicateReview
+            ? {
+                  ...actionCopy.flag,
+                  title: 'Flag Duplicate for Review?',
+                  description:
+                      "This records the duplicate concern for moderation without changing either research record's publication status.",
+                  confirmLabel: 'Flag Duplicate',
+              }
+            : actionCopy[action];
     const Icon = copy.icon;
     const requiresRationale = action === 'archive' || action === 'flag';
-    const effectiveIssueType =
-        issueType ??
-        (moderatorSelectableIssueTypes.includes(record.issueType)
-            ? record.issueType
-            : 'other_manual_review');
+    const effectiveIssueType = duplicateReview
+        ? 'possible_duplicate'
+        : (issueType ??
+          (moderatorSelectableIssueTypes.includes(record.issueType)
+              ? record.issueType
+              : 'other_manual_review'));
 
     const handleConfirm = () => {
         const trimmedNote = note.trim();
@@ -179,7 +191,7 @@ export function ModerationConfirmationModal({
                     </p>
                 </div>
 
-                {action === 'flag' ? (
+                {action === 'flag' && !duplicateReview ? (
                     <div>
                         <label
                             htmlFor="moderation-issue-type"
@@ -221,12 +233,16 @@ export function ModerationConfirmationModal({
                         >
                             {action === 'archive'
                                 ? 'Archive rationale'
-                                : 'Revision instructions'}
+                                : duplicateReview
+                                  ? 'Review rationale'
+                                  : 'Revision instructions'}
                         </label>
                         <p className="mt-1 text-xs leading-5 text-[#6a7282]">
                             {action === 'archive'
                                 ? 'Explain why this research record is being archived.'
-                                : 'Explain what must be reviewed or revised by the agency.'}{' '}
+                                : duplicateReview
+                                  ? 'Explain why this pair requires manual duplicate review.'
+                                  : 'Explain what must be reviewed or revised by the agency.'}{' '}
                             This rationale will be retained in the moderation
                             audit trail.
                         </p>

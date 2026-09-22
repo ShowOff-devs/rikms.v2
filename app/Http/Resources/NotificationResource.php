@@ -12,6 +12,11 @@ class NotificationResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $state = $this->relationLoaded('userStates')
+            ? $this->userStates->firstWhere('user_id', $request->user()?->id)
+            : null;
+        $readAt = $state?->read_at ?? ((int) $this->user_id === (int) $request->user()?->id ? $this->read_at : null);
+
         return [
             'id' => $this->id,
             'user_id' => $this->user_id,
@@ -20,10 +25,10 @@ class NotificationResource extends JsonResource
             'title' => $this->title,
             'message' => $this->message,
             'data' => $this->data ?? [],
-            'read_at' => $this->read_at?->toISOString(),
+            'read_at' => $readAt?->toISOString(),
             'action_url' => $this->action_url,
             'priority' => $this->priority,
-            'status' => $this->status,
+            'status' => $readAt ? 'read' : 'unread',
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
         ];

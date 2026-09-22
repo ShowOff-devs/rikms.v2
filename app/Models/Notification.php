@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class Notification extends Model
@@ -33,5 +34,39 @@ class Notification extends Model
     public function agency()
     {
         return $this->belongsTo(Agency::class);
+    }
+
+    public function userStates()
+    {
+        return $this->hasMany(NotificationUserState::class);
+    }
+
+    public function scopeVisibleTo(Builder $query, int $userId): Builder
+    {
+        return $query->whereDoesntHave('userStates', fn (Builder $query) => $query
+            ->where('user_id', $userId)
+            ->whereNotNull('hidden_at'));
+    }
+
+    public function scopeReadBy(Builder $query, int $userId): Builder
+    {
+        return $query->where(function (Builder $query) use ($userId): void {
+            $query->whereHas('userStates', fn (Builder $query) => $query->where('user_id', $userId)->whereNotNull('read_at'))
+                ->orWhere(function (Builder $query) use ($userId): void {
+                    $query->where('user_id', $userId)->whereNotNull('read_at');
+                });
+        });
+    }
+
+    public function scopeUnreadBy(Builder $query, int $userId): Builder
+    {
+        return $query->whereDoesntHave('userStates', fn (Builder $query) => $query->where('user_id', $userId)->whereNotNull('read_at'))
+            ->where(function (Builder $query) use ($userId): void {
+                $query->whereNull('user_id')
+                    ->orWhere('user_id', '!=', $userId)
+                    ->orWhere(function (Builder $query) use ($userId): void {
+                        $query->where('user_id', $userId)->whereNull('read_at');
+                    });
+            });
     }
 }

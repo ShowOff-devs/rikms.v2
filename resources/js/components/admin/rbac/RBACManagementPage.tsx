@@ -7,6 +7,7 @@ import { DeleteRoleConfirmModal } from '@/components/admin/rbac/DeleteRoleConfir
 import { EditRoleModal } from '@/components/admin/rbac/EditRoleModal';
 import { PermissionsTab } from '@/components/admin/rbac/PermissionsTab';
 import { RBACHeader } from '@/components/admin/rbac/RBACHeader';
+import { RbacPagination } from '@/components/admin/rbac/RbacPagination';
 import { RBACStats } from '@/components/admin/rbac/RBACStats';
 import { RBACTabs } from '@/components/admin/rbac/RBACTabs';
 import type { RBACTab } from '@/components/admin/rbac/RBACTabs';
@@ -21,11 +22,13 @@ import {
     deleteRole,
     getPermissions,
     getRoleChangeHistory,
+    getRoleById,
     getRoles,
     getUserRoleAssignments,
     updateRole,
     updateUserRole,
 } from '@/lib/admin/rbac-service';
+import { apiMessage } from '@/lib/api-client';
 import type {
     CreateRolePayload,
     Permission,
@@ -45,6 +48,10 @@ export function RBACManagementPage() {
     const [roles, setRoles] = useState<Role[]>([]);
     const [permissions, setPermissions] = useState<Permission[]>([]);
     const [assignments, setAssignments] = useState<UserRoleAssignment[]>([]);
+    const [assignmentPage, setAssignmentPage] = useState(1);
+    const [assignmentTotalPages, setAssignmentTotalPages] = useState(1);
+    const [assignmentTotal, setAssignmentTotal] = useState(0);
+    const [assignmentRowsPerPage, setAssignmentRowsPerPage] = useState(15);
     const [history, setHistory] = useState<RoleChangeHistoryType[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -64,6 +71,10 @@ export function RBACManagementPage() {
     const [diffChange, setDiffChange] = useState<RoleChangeHistoryType | null>(
         null,
     );
+    const normalizedSearch = [searchQuery, topbarSearch]
+        .map((query) => query.trim().toLowerCase())
+        .filter(Boolean)
+        .join(' ');
 
     useEffect(() => {
         let isCurrent = true;
@@ -79,7 +90,7 @@ export function RBACManagementPage() {
                     loadedRoles,
                     loadedPermissions,
                     loadedHistory,
-                    loadedAssignments,
+                    loadedAssignmentPage,
                 ]) => {
                     if (!isCurrent) {
                         return;
@@ -88,7 +99,17 @@ export function RBACManagementPage() {
                     setRoles(loadedRoles);
                     setPermissions(loadedPermissions);
                     setHistory(loadedHistory);
-                    setAssignments(loadedAssignments);
+                    setAssignments(loadedAssignmentPage.assignments);
+                    setAssignmentPage(
+                        loadedAssignmentPage.pagination.currentPage,
+                    );
+                    setAssignmentTotalPages(
+                        loadedAssignmentPage.pagination.lastPage,
+                    );
+                    setAssignmentTotal(loadedAssignmentPage.pagination.total);
+                    setAssignmentRowsPerPage(
+                        loadedAssignmentPage.pagination.perPage,
+                    );
                     setError(null);
                 },
             )
@@ -109,6 +130,47 @@ export function RBACManagementPage() {
     }, []);
 
     useEffect(() => {
+        if (activeTab !== 'assignments') {
+            return;
+        }
+
+        const timerId = window.setTimeout(() => {
+            getUserRoleAssignments({
+                page: assignmentPage,
+                perPage: assignmentRowsPerPage,
+                query: normalizedSearch,
+                activeOnly: showActiveAssignmentsOnly,
+            })
+                .then((result) => {
+                    setAssignments(result.assignments);
+                    setAssignmentTotalPages(result.pagination.lastPage);
+                    setAssignmentTotal(result.pagination.total);
+                    setError(null);
+                })
+                .catch((caughtError) => {
+                    setError(
+                        apiMessage(
+                            caughtError,
+                            'Unable to load user role assignments.',
+                        ),
+                    );
+                });
+        }, 250);
+
+        return () => window.clearTimeout(timerId);
+    }, [
+        activeTab,
+        assignmentPage,
+        assignmentRowsPerPage,
+        normalizedSearch,
+        showActiveAssignmentsOnly,
+    ]);
+
+    useEffect(() => {
+        setAssignmentPage(1);
+    }, [normalizedSearch, showActiveAssignmentsOnly]);
+
+    useEffect(() => {
         if (!feedback) {
             return;
         }
@@ -125,11 +187,6 @@ export function RBACManagementPage() {
             permissions.map((permission) => [permission.id, permission]),
         );
     }, [permissions]);
-
-    const normalizedSearch = [searchQuery, topbarSearch]
-        .map((query) => query.trim().toLowerCase())
-        .filter(Boolean)
-        .join(' ');
 
     const filteredRoles = useMemo(() => {
         if (!normalizedSearch) {
@@ -170,34 +227,6 @@ export function RBACManagementPage() {
         );
     }, [normalizedSearch, permissions]);
 
-    const filteredAssignments = useMemo(() => {
-        const visibleAssignments = showActiveAssignmentsOnly
-            ? assignments.filter((assignment) => assignment.status === 'active')
-            : assignments;
-
-        if (!normalizedSearch) {
-            return visibleAssignments;
-        }
-
-        return visibleAssignments.filter((assignment) => {
-            const roleName =
-                roles.find((role) => role.id === assignment.roleId)?.name ?? '';
-
-            return matchesQuery(
-                [
-                    assignment.userName,
-                    assignment.email,
-                    assignment.agency,
-                    roleName,
-                    assignment.status,
-                ]
-                    .filter(Boolean)
-                    .join(' '),
-                normalizedSearch,
-            );
-        });
-    }, [assignments, normalizedSearch, roles, showActiveAssignmentsOnly]);
-
     const stats = useMemo(() => {
         return {
             totalRoles: roles.length,
@@ -222,6 +251,15 @@ export function RBACManagementPage() {
                 role.id !== currentRoleId,
         );
 
+    const handleViewRole = async (role: Role) => {
+        try {
+            setViewRole((await getRoleById(role.id)) ?? role);
+            setError(null);
+        } catch (caughtError) {
+            setError(apiMessage(caughtError, 'Unable to load role details.'));
+        }
+    };
+
     const refreshHistory = async () => {
         const loadedHistory = await getRoleChangeHistory();
         setHistory(loadedHistory);
@@ -236,6 +274,9 @@ export function RBACManagementPage() {
             await refreshHistory();
             setIsCreateOpen(false);
             setFeedback(`${createdRole.name} has been created.`);
+            setError(null);
+        } catch (caughtError) {
+            setError(apiMessage(caughtError, 'Unable to create the role.'));
         } finally {
             setIsSaving(false);
         }
@@ -256,6 +297,9 @@ export function RBACManagementPage() {
             await refreshHistory();
             setEditRole(null);
             setFeedback(`${updatedRole.name} has been updated.`);
+            setError(null);
+        } catch (caughtError) {
+            setError(apiMessage(caughtError, 'Unable to update the role.'));
         } finally {
             setIsSaving(false);
         }
@@ -291,6 +335,9 @@ export function RBACManagementPage() {
             await refreshHistory();
             setDeleteTarget(null);
             setFeedback(`${role.name} has been deleted.`);
+            setError(null);
+        } catch (caughtError) {
+            setError(apiMessage(caughtError, 'Unable to delete the role.'));
         } finally {
             setIsSaving(false);
         }
@@ -319,6 +366,11 @@ export function RBACManagementPage() {
             const roleName = roles.find((role) => role.id === roleId)?.name;
             setFeedback(
                 `${assignment.userName} is now ${roleName ?? 'assigned'}.`,
+            );
+            setError(null);
+        } catch (caughtError) {
+            setError(
+                apiMessage(caughtError, 'Unable to change the user role.'),
             );
         } finally {
             setIsSaving(false);
@@ -393,7 +445,7 @@ export function RBACManagementPage() {
                         <RolesTable
                             roles={filteredRoles}
                             isLoading={isLoading}
-                            onView={setViewRole}
+                            onView={handleViewRole}
                             onEdit={setEditRole}
                             onDuplicate={handleDuplicateRole}
                             onDelete={setDeleteTarget}
@@ -406,10 +458,27 @@ export function RBACManagementPage() {
 
                     {activeTab === 'assignments' && (
                         <UserRoleAssignmentsTab
-                            assignments={filteredAssignments}
+                            assignments={assignments}
                             roles={roles}
                             onView={setViewAssignment}
                             onChangeRole={setChangeAssignment}
+                        />
+                    )}
+
+                    {activeTab === 'assignments' && (
+                        <RbacPagination
+                            currentPage={assignmentPage}
+                            totalPages={assignmentTotalPages}
+                            totalResults={assignmentTotal}
+                            rowsPerPage={assignmentRowsPerPage}
+                            onPageChange={(page) =>
+                                setAssignmentPage(
+                                    Math.min(
+                                        Math.max(page, 1),
+                                        assignmentTotalPages,
+                                    ),
+                                )
+                            }
                         />
                     )}
                 </section>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AgencyDetailsModal } from '@/components/admin/agencies/AgencyDetailsModal';
 import { AgencyFilters } from '@/components/admin/agencies/AgencyFilters';
 import { AgencyManagementHeader } from '@/components/admin/agencies/AgencyManagementHeader';
@@ -31,28 +31,6 @@ import type {
 
 const rowsPerPage = 9;
 
-function matchesSearch(agency: ManagedAgency, query: string) {
-    return [
-        agency.name,
-        agency.shortName,
-        agency.agencyAdmin?.fullName,
-        agency.agencyAdmin?.email,
-    ]
-        .join(' ')
-        .toLowerCase()
-        .includes(query);
-}
-
-function isWithinUpdatedWindow(value: string, days: string) {
-    if (days === 'all') {
-        return true;
-    }
-
-    const windowMs = Number(days) * 24 * 60 * 60 * 1000;
-
-    return Date.now() - new Date(value).getTime() <= windowMs;
-}
-
 export function AgencyManagementPage() {
     const [topbarSearch, setTopbarSearch] = useState('');
     const [agencies, setAgencies] = useState<ManagedAgency[]>([]);
@@ -68,6 +46,15 @@ export function AgencyManagementPage() {
     const [selectedStatus, setSelectedStatus] = useState('all');
     const [selectedUpdated, setSelectedUpdated] = useState('all');
     const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalResults, setTotalResults] = useState(0);
+    const [reloadVersion, setReloadVersion] = useState(0);
+    const [stats, setStats] = useState({
+        totalAgencies: 0,
+        activeAgencies: 0,
+        inactiveAgencies: 0,
+        totalResearchRecords: 0,
+    });
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [detailsAgency, setDetailsAgency] = useState<ManagedAgency | null>(
         null,
@@ -92,24 +79,20 @@ export function AgencyManagementPage() {
     useEffect(() => {
         let isCurrent = true;
 
-        Promise.all([getAgencies(), getAgencyAdminOptions()])
-            .then(([loadedAgencies, loadedAdminOptions]) => {
-                if (!isCurrent) {
-                    return;
+        getAgencyAdminOptions()
+            .then((loadedAdminOptions) => {
+                if (isCurrent) {
+                    setAdminOptions(loadedAdminOptions);
                 }
-
-                setAgencies(loadedAgencies);
-                setAdminOptions(loadedAdminOptions);
-                setError(null);
             })
             .catch((error) => {
                 if (isCurrent) {
-                    setError(apiMessage(error, 'Unable to load agencies.'));
-                }
-            })
-            .finally(() => {
-                if (isCurrent) {
-                    setIsLoading(false);
+                    setError(
+                        apiMessage(
+                            error,
+                            'Unable to load agency administrator options.',
+                        ),
+                    );
                 }
             });
 
@@ -119,8 +102,67 @@ export function AgencyManagementPage() {
     }, []);
 
     useEffect(() => {
+        let isCurrent = true;
+        const timerId = window.setTimeout(() => {
+            setIsLoading(true);
+
+            getAgencies({
+                page: currentPage,
+                perPage: rowsPerPage,
+                keyword: [searchQuery, topbarSearch]
+                    .map((value) => value.trim())
+                    .filter(Boolean)
+                    .join(' '),
+                type: selectedType,
+                status: selectedStatus,
+                updatedDays: selectedUpdated,
+            })
+                .then((result) => {
+                    if (!isCurrent) {
+                        return;
+                    }
+
+                    setAgencies(result.agencies);
+                    setTotalPages(Math.max(1, result.pagination.last_page));
+                    setTotalResults(result.pagination.total);
+                    setStats(result.summary);
+                    setError(null);
+                })
+                .catch((error) => {
+                    if (isCurrent) {
+                        setError(apiMessage(error, 'Unable to load agencies.'));
+                    }
+                })
+                .finally(() => {
+                    if (isCurrent) {
+                        setIsLoading(false);
+                    }
+                });
+        }, 250);
+
+        return () => {
+            isCurrent = false;
+            window.clearTimeout(timerId);
+        };
+    }, [
+        currentPage,
+        reloadVersion,
+        searchQuery,
+        selectedStatus,
+        selectedType,
+        selectedUpdated,
+        topbarSearch,
+    ]);
+
+    useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery, selectedType, selectedStatus, selectedUpdated]);
+    }, [
+        searchQuery,
+        selectedType,
+        selectedStatus,
+        selectedUpdated,
+        topbarSearch,
+    ]);
 
     useEffect(() => {
         if (!feedback) {
@@ -133,54 +175,6 @@ export function AgencyManagementPage() {
 
         return () => window.clearTimeout(timerId);
     }, [feedback]);
-
-    const stats = useMemo(() => {
-        const activeAgencies = agencies.filter(
-            (agency) => agency.status === 'active',
-        ).length;
-        const inactiveAgencies = agencies.length - activeAgencies;
-        const totalResearchRecords = agencies.reduce(
-            (total, agency) => total + agency.totalResearch,
-            0,
-        );
-
-        return {
-            totalAgencies: agencies.length,
-            activeAgencies,
-            inactiveAgencies,
-            totalResearchRecords,
-        };
-    }, [agencies]);
-
-    const filteredAgencies = useMemo(() => {
-        const normalizedSearch = searchQuery.trim().toLowerCase();
-
-        return agencies.filter((agency) => {
-            const searchMatches =
-                !normalizedSearch || matchesSearch(agency, normalizedSearch);
-            const typeMatches =
-                selectedType === 'all' || agency.type === selectedType;
-            const statusMatches =
-                selectedStatus === 'all' || agency.status === selectedStatus;
-            const updatedMatches = isWithinUpdatedWindow(
-                agency.lastUpdated,
-                selectedUpdated,
-            );
-
-            return (
-                searchMatches && typeMatches && statusMatches && updatedMatches
-            );
-        });
-    }, [agencies, searchQuery, selectedType, selectedStatus, selectedUpdated]);
-
-    const totalPages = Math.max(
-        1,
-        Math.ceil(filteredAgencies.length / rowsPerPage),
-    );
-    const paginatedAgencies = filteredAgencies.slice(
-        (currentPage - 1) * rowsPerPage,
-        currentPage * rowsPerPage,
-    );
 
     const isNameTaken = (name: string, currentAgencyId?: string) =>
         agencies.some(
@@ -211,10 +205,8 @@ export function AgencyManagementPage() {
 
         try {
             const createdAgency = await createAgency(payload);
-            setAgencies((currentAgencies) => [
-                createdAgency,
-                ...currentAgencies,
-            ]);
+            setCurrentPage(1);
+            setReloadVersion((version) => version + 1);
             await refreshAdminOptions();
             setIsCreateOpen(false);
             setFeedback(`${createdAgency.shortName} has been created.`);
@@ -235,11 +227,7 @@ export function AgencyManagementPage() {
 
         try {
             const updatedAgency = await updateAgency(id, payload);
-            setAgencies((currentAgencies) =>
-                currentAgencies.map((agency) =>
-                    agency.id === id ? updatedAgency : agency,
-                ),
-            );
+            setReloadVersion((version) => version + 1);
             await refreshAdminOptions();
             setEditAgency(null);
             setFeedback(`${updatedAgency.shortName} has been updated.`);
@@ -268,6 +256,7 @@ export function AgencyManagementPage() {
                     agency.id === updatedAgency.id ? updatedAgency : agency,
                 ),
             );
+            setReloadVersion((version) => version + 1);
             setStatusAgency(null);
             setFeedback(
                 `${updatedAgency.shortName} is now ${updatedAgency.status}.`,
@@ -296,6 +285,7 @@ export function AgencyManagementPage() {
                     agency.id === updatedAgency.id ? updatedAgency : agency,
                 ),
             );
+            setReloadVersion((version) => version + 1);
             await refreshAdminOptions();
             setAssignAgency(null);
             setFeedback(
@@ -320,9 +310,13 @@ export function AgencyManagementPage() {
 
         try {
             await archiveAgency(target.id);
-            setAgencies((currentAgencies) =>
-                currentAgencies.filter((agency) => agency.id !== target.id),
-            );
+
+            if (agencies.length === 1 && currentPage > 1) {
+                setCurrentPage((page) => page - 1);
+            } else {
+                setReloadVersion((version) => version + 1);
+            }
+
             await refreshAdminOptions();
             setArchiveTarget(null);
             setFeedback(`${target.shortName} has been archived.`);
@@ -371,7 +365,7 @@ export function AgencyManagementPage() {
                     />
 
                     <AgencyTable
-                        agencies={paginatedAgencies}
+                        agencies={agencies}
                         isLoading={isLoading}
                         onView={setDetailsAgency}
                         onEdit={setEditAgency}
@@ -383,7 +377,7 @@ export function AgencyManagementPage() {
                     <AgencyPagination
                         currentPage={currentPage}
                         totalPages={totalPages}
-                        totalResults={filteredAgencies.length}
+                        totalResults={totalResults}
                         rowsPerPage={rowsPerPage}
                         onPageChange={(page) =>
                             setCurrentPage(

@@ -12,8 +12,8 @@ export function AdminArchiveHeader({ onExport }: AdminArchiveHeaderProps) {
                     Archive & Data Recovery
                 </h1>
                 <p className="mt-1 max-w-3xl text-sm leading-5 text-[#6b7280]">
-                    View, restore, or permanently delete archived system
-                    records.
+                    View, restore, or permanently retire archived system records
+                    while preserving required audit history.
                 </p>
             </div>
 

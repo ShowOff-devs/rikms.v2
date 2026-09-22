@@ -17,10 +17,15 @@ export function NotificationSettings({
             icon={Bell}
             iconClassName="bg-[#dcfce7] text-[#16a34a]"
         >
+            <div className="mb-5 rounded-[10px] border border-[#fde68a] bg-[#fffbeb] px-4 py-3 text-xs leading-5 text-[#92400e]">
+                These values are saved as planned notification preferences but
+                are not yet enforced by notification delivery. Email transport
+                remains deployment-managed.
+            </div>
             <div className="space-y-4">
                 <ToggleRow
                     title="Enable System Notifications"
-                    description="Show in-app system notifications"
+                    description="Planned global default; not yet enforced"
                     icon={Bell}
                     checked={settings.systemNotificationsEnabled}
                     onChange={(systemNotificationsEnabled) =>
@@ -29,7 +34,7 @@ export function NotificationSettings({
                 />
                 <ToggleRow
                     title="Enable Email Notifications"
-                    description="Send email alerts for system events"
+                    description="Deployment-managed; this toggle does not start email delivery"
                     icon={Mail}
                     checked={settings.emailNotificationsEnabled}
                     onChange={(emailNotificationsEnabled) =>
@@ -38,7 +43,7 @@ export function NotificationSettings({
                 />
                 <ToggleRow
                     title="Enable Security Alerts"
-                    description="Receive alerts for security incidents and suspicious activity"
+                    description="Planned global default; security event logging remains active"
                     icon={ShieldCheck}
                     checked={settings.securityAlertsEnabled}
                     onChange={(securityAlertsEnabled) =>

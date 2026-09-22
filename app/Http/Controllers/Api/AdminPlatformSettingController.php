@@ -9,6 +9,7 @@ use App\Services\BackupReadinessService;
 use App\Services\PlatformSettingsService;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -29,6 +30,8 @@ class AdminPlatformSettingController extends Controller
     {
         $validated = $request->validate([
             'value' => ['nullable'],
+            'confirm_maintenance_mode' => ['sometimes', 'boolean'],
+            'expected_version' => ['sometimes', 'nullable', 'string', 'size:64'],
         ]);
 
         $definition = $settings->definition($setting->key);
@@ -40,8 +43,25 @@ class AdminPlatformSettingController extends Controller
         }
 
         $oldValues = $this->auditValues($setting);
+
+        if (array_key_exists('expected_version', $validated)
+            && $this->settingVersion($setting) !== $validated['expected_version']) {
+            return ApiResponse::error(
+                'This setting was changed by another administrator. Refresh before saving again.',
+                ['setting' => ['The platform setting has changed since it was loaded.']],
+                409,
+            );
+        }
+
         $type = (string) $definition['type'];
         $value = $settings->normalize($setting->key, $validated['value'] ?? null);
+
+        $this->ensureMaintenanceEnableWasConfirmed(
+            $setting->key,
+            $value,
+            (bool) ($validated['confirm_maintenance_mode'] ?? false),
+            $settings,
+        );
 
         $setting->forceFill([
             'value' => $settings->serialize($setting->key, $value),
@@ -73,8 +93,11 @@ class AdminPlatformSettingController extends Controller
     public function bulkUpdate(Request $request, PlatformSettingsService $settings): JsonResponse
     {
         $validated = $request->validate([
-            'settings' => ['required', 'array'],
+            'settings' => ['required', 'array', 'max:100'],
             'settings.*' => ['nullable'],
+            'confirm_maintenance_mode' => ['sometimes', 'boolean'],
+            'expected_versions' => ['sometimes', 'array'],
+            'expected_versions.*' => ['nullable', 'string', 'size:64'],
         ]);
 
         $unknownKeys = array_values(array_diff(array_keys($validated['settings']), $settings->keys()));
@@ -85,11 +108,55 @@ class AdminPlatformSettingController extends Controller
             ]);
         }
 
+        $unknownVersionKeys = array_values(array_diff(
+            array_keys($validated['expected_versions'] ?? []),
+            array_keys($validated['settings']),
+        ));
+
+        if ($unknownVersionKeys !== []) {
+            throw ValidationException::withMessages([
+                'expected_versions' => 'Version checks were supplied for settings that are not being updated.',
+            ]);
+        }
+
+        if (array_key_exists(PlatformSettingsService::MAINTENANCE_ENABLED, $validated['settings'])) {
+            $maintenanceEnabled = $settings->normalize(
+                PlatformSettingsService::MAINTENANCE_ENABLED,
+                $validated['settings'][PlatformSettingsService::MAINTENANCE_ENABLED],
+            );
+
+            $this->ensureMaintenanceEnableWasConfirmed(
+                PlatformSettingsService::MAINTENANCE_ENABLED,
+                $maintenanceEnabled,
+                (bool) ($validated['confirm_maintenance_mode'] ?? false),
+                $settings,
+            );
+        }
+
         $updated = DB::transaction(function () use ($request, $validated, $settings) {
+            $existingSettings = PlatformSetting::query()
+                ->whereIn('key', array_keys($validated['settings']))
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('key');
+
+            foreach ($validated['expected_versions'] ?? [] as $key => $expectedVersion) {
+                $existingSetting = $existingSettings->get($key);
+                $actualVersion = $existingSetting ? $this->settingVersion($existingSetting) : null;
+
+                if ($actualVersion !== $expectedVersion) {
+                    throw new HttpResponseException(ApiResponse::error(
+                        'Platform settings changed while you were editing. Refresh before saving again.',
+                        ['settings.'.$key => ['This setting has changed since it was loaded.']],
+                        409,
+                    ));
+                }
+            }
+
             return collect($validated['settings'])
-                ->map(function ($value, string $key) use ($request, $settings): PlatformSetting {
+                ->map(function ($value, string $key) use ($request, $settings, $existingSettings): PlatformSetting {
                     $definition = $settings->definition($key);
-                    $setting = PlatformSetting::query()->firstOrNew(['key' => $key]);
+                    $setting = $existingSettings->get($key) ?? new PlatformSetting(['key' => $key]);
                     $oldValues = $setting->exists ? $this->auditValues($setting) : null;
                     $normalizedValue = $settings->normalize($key, $value);
 
@@ -137,7 +204,7 @@ class AdminPlatformSettingController extends Controller
     public function uploadLogo(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'logo' => ['required', 'file', 'mimes:png,jpg,jpeg,svg,webp', 'max:2048'],
+            'logo' => ['required', 'file', 'image', 'mimetypes:image/png,image/jpeg,image/webp', 'mimes:png,jpg,jpeg,webp', 'max:2048', 'dimensions:min_width=16,min_height=16,max_width=4096,max_height=4096'],
         ]);
 
         $path = $validated['logo']->store('platform/logos', 'public');
@@ -169,5 +236,33 @@ class AdminPlatformSettingController extends Controller
             'type' => $setting->type,
             'group' => $setting->group,
         ];
+    }
+
+    private function settingVersion(PlatformSetting $setting): string
+    {
+        return hash('sha256', implode("\0", [
+            (string) $setting->key,
+            (string) $setting->value,
+            (string) $setting->type,
+            $setting->updated_at?->toISOString() ?? '',
+        ]));
+    }
+
+    private function ensureMaintenanceEnableWasConfirmed(
+        string $key,
+        mixed $value,
+        bool $confirmed,
+        PlatformSettingsService $settings,
+    ): void {
+        if ($key !== PlatformSettingsService::MAINTENANCE_ENABLED
+            || $value !== true
+            || $settings->maintenanceEnabled()
+            || $confirmed) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'confirm_maintenance_mode' => 'Confirm maintenance mode before enabling it.',
+        ]);
     }
 }

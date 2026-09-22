@@ -96,6 +96,8 @@ test('super admin dashboard api returns database metrics and safe recent records
     $inactiveAgency = superAdminDashboardAgency('inactive-dashboard-agency', 'inactive');
     $agencyAdmin = superAdminDashboardUser('agency_admin', $activeAgency);
     $superAdmin = superAdminDashboardUser('super_admin');
+    $publicUser = superAdminDashboardUser('public_user');
+    $publicUser->forceFill(['two_factor_confirmed_at' => now()])->save();
 
     $draft = superAdminDashboardResearch($activeAgency, $agencyAdmin, 'draft');
     superAdminDashboardResearch($activeAgency, $agencyAdmin, 'submitted');
@@ -151,6 +153,14 @@ test('super admin dashboard api returns database metrics and safe recent records
         'status' => 'unread',
     ]);
 
+    Notification::create([
+        'user_id' => $agencyAdmin->id,
+        'type' => 'dashboard.other-user-notice',
+        'title' => 'Other user dashboard notice',
+        'message' => 'This notification must not appear in the super admin count.',
+        'status' => 'unread',
+    ]);
+
     AuditLog::create([
         'user_id' => $agencyAdmin->id,
         'agency_id' => $activeAgency->id,
@@ -169,6 +179,30 @@ test('super admin dashboard api returns database metrics and safe recent records
         'created_at' => now(),
     ]);
 
+    SecurityEvent::create([
+        'user_id' => $agencyAdmin->id,
+        'agency_id' => $activeAgency->id,
+        'event_type' => 'login.failed',
+        'severity' => 'medium',
+        'created_at' => now()->subDays(2),
+    ]);
+
+    SecurityEvent::create([
+        'user_id' => $agencyAdmin->id,
+        'agency_id' => $activeAgency->id,
+        'event_type' => 'account.locked',
+        'severity' => 'high',
+        'created_at' => now(),
+    ]);
+
+    SecurityEvent::create([
+        'user_id' => $agencyAdmin->id,
+        'agency_id' => $activeAgency->id,
+        'event_type' => 'account.locked',
+        'severity' => 'high',
+        'created_at' => now(),
+    ]);
+
     $response = $this->actingAs($superAdmin)
         ->getJson('/api/admin/dashboard')
         ->assertOk()
@@ -176,10 +210,7 @@ test('super admin dashboard api returns database metrics and safe recent records
             'message',
             'data' => [
                 'metrics',
-                'recent_research',
-                'recent_agencies',
                 'recent_audit_logs',
-                'recent_security_events',
                 'pending_moderation_items',
                 'research_by_agency',
                 'research_uploads_by_year',
@@ -191,7 +222,7 @@ test('super admin dashboard api returns database metrics and safe recent records
         ->assertJsonPath('data.metrics.total_agencies', 2)
         ->assertJsonPath('data.metrics.active_agencies', 1)
         ->assertJsonPath('data.metrics.inactive_agencies', 1)
-        ->assertJsonPath('data.metrics.total_users', 2)
+        ->assertJsonPath('data.metrics.total_users', 3)
         ->assertJsonPath('data.metrics.agency_admin_users', 1)
         ->assertJsonPath('data.metrics.super_admin_users', 1)
         ->assertJsonPath('data.metrics.total_research', 6)
@@ -208,20 +239,16 @@ test('super admin dashboard api returns database metrics and safe recent records
         ->assertJsonPath('data.metrics.pending_moderation_count', 2)
         ->assertJsonPath('data.metrics.total_uploads', 1)
         ->assertJsonPath('data.metrics.unread_notifications_count', 1)
-        ->assertJsonPath('data.metrics.unresolved_security_events', 1)
-        ->assertJsonPath('data.security_status.recent_failed_logins', 1);
+        ->assertJsonPath('data.metrics.unresolved_security_events', 4)
+        ->assertJsonPath('data.security_status.mfa_enabled_accounts', 1)
+        ->assertJsonPath('data.security_status.mfa_eligible_accounts', 2)
+        ->assertJsonPath('data.security_status.recent_failed_logins', 1)
+        ->assertJsonPath('data.security_status.locked_accounts', 1);
 
     $payload = $response->json('data');
 
     expect($payload['recent_audit_logs'])->not->toBeEmpty()
-        ->and($payload['recent_security_events'])->not->toBeEmpty()
         ->and($payload['recent_audit_logs'][0]['user'])->not->toHaveKeys([
-            'password',
-            'remember_token',
-            'two_factor_secret',
-            'two_factor_recovery_codes',
-        ])
-        ->and($payload['recent_security_events'][0]['user'])->not->toHaveKeys([
             'password',
             'remember_token',
             'two_factor_secret',

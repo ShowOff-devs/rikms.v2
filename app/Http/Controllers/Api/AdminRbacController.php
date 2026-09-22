@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Api\Concerns\RespondsWithApiPagination;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Permission;
@@ -17,10 +18,12 @@ use Illuminate\Validation\ValidationException;
 
 class AdminRbacController extends Controller
 {
+    use RespondsWithApiPagination;
+
     public function roles(Request $request): JsonResponse
     {
         $roles = Role::query()
-            ->with(['permissions:id,slug,name,module,display_name,description', 'users.agency'])
+            ->with(['permissions:id,slug,name,module,display_name,description'])
             ->withCount('users')
             ->orderBy('is_system', 'desc')
             ->orderBy('name')
@@ -28,6 +31,14 @@ class AdminRbacController extends Controller
             ->map(fn (Role $role): array => $this->rolePayload($role));
 
         return ApiResponse::success('RBAC roles retrieved.', $roles);
+    }
+
+    public function role(Request $request, Role $role): JsonResponse
+    {
+        $role->load(['permissions:id,slug,name,module,display_name,description', 'users.agency'])
+            ->loadCount('users');
+
+        return ApiResponse::success('RBAC role retrieved.', $this->rolePayload($role));
     }
 
     public function permissions(): JsonResponse
@@ -51,13 +62,36 @@ class AdminRbacController extends Controller
 
     public function users(Request $request): JsonResponse
     {
-        $users = User::query()
+        $query = User::query()
             ->with(['agency', 'roles'])
+            ->when($request->boolean('active_only'), fn ($query) => $query->where('status', 'active'))
+            ->when($request->filled('query'), function ($query) use ($request): void {
+                $keyword = '%'.$request->string('query')->trim()->toString().'%';
+                $query->where(function ($query) use ($keyword): void {
+                    $query->where('name', 'like', $keyword)
+                        ->orWhere('email', 'like', $keyword)
+                        ->orWhere('status', 'like', $keyword)
+                        ->orWhereHas('agency', fn ($query) => $query->where('name', 'like', $keyword)->orWhere('short_name', 'like', $keyword))
+                        ->orWhereHas('roles', fn ($query) => $query->where('name', 'like', $keyword));
+                });
+            })
             ->orderBy('name')
-            ->get()
+            ->orderBy('id');
+
+        $paginator = $query->paginate($this->perPage($request));
+        $users = $paginator->getCollection()
             ->map(fn (User $user): array => $this->userAssignmentPayload($user));
 
-        return ApiResponse::success('RBAC user role assignments retrieved.', $users);
+        return ApiResponse::success('RBAC user role assignments retrieved.', $users, [
+            'pagination' => [
+                'current_page' => $paginator->currentPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'last_page' => $paginator->lastPage(),
+                'from' => $paginator->firstItem(),
+                'to' => $paginator->lastItem(),
+            ],
+        ]);
     }
 
     public function history(): JsonResponse
@@ -128,6 +162,8 @@ class AdminRbacController extends Controller
         $updatedUser = DB::transaction(function () use ($request, $user, $validated): User {
             $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
             $role = Role::query()->where('is_active', true)->lockForUpdate()->findOrFail($validated['role_id']);
+            $this->assertCanManageUser($request, $lockedUser);
+            $this->assertCanAssignRole($request, $role);
             $currentRole = $lockedUser->roles()->lockForUpdate()->first();
 
             if ($currentRole?->slug === 'super_admin' && $role->slug !== 'super_admin') {
@@ -180,34 +216,28 @@ class AdminRbacController extends Controller
 
     public function deleteRole(Request $request, Role $role): JsonResponse
     {
-        if ($role->is_system) {
-            throw ValidationException::withMessages([
-                'role' => ['Protected system roles cannot be deleted.'],
-            ]);
-        }
+        $oldValues = DB::transaction(function () use ($request, $role): array {
+            $lockedRole = Role::query()->lockForUpdate()->findOrFail($role->id);
+            if ($lockedRole->is_system) {
+                throw ValidationException::withMessages([
+                    'role' => ['Protected system roles cannot be deleted.'],
+                ]);
+            }
+            $this->assertCanManageRole($request, $lockedRole);
+            if ($lockedRole->users()->exists()) {
+                throw ValidationException::withMessages([
+                    'role' => ['Reassign every user before deleting this role.'],
+                ]);
+            }
+            $values = [
+                ...$lockedRole->only(['id', 'name', 'slug', 'display_name', 'description']),
+                'permission_ids' => $lockedRole->permissions()->pluck('permissions.id')->sort()->values()->all(),
+                'user_ids' => [],
+            ];
+            $lockedRole->permissions()->detach();
+            $lockedRole->delete();
 
-        $oldValues = [
-            ...$role->only(['id', 'name', 'slug', 'display_name', 'description']),
-            'permission_ids' => $role->permissions()->pluck('permissions.id')->sort()->values()->all(),
-            'user_ids' => $role->users()->pluck('users.id')->sort()->values()->all(),
-        ];
-
-        DB::transaction(function () use ($role): void {
-            $users = $role->users()->with('roles')->get();
-
-            $role->permissions()->detach();
-            $role->users()->detach();
-
-            $users->each(function (User $user) use ($role): void {
-                if ($user->role !== $role->slug) {
-                    return;
-                }
-
-                $replacementRole = $user->roles()->orderBy('roles.name')->first();
-                $user->forceFill(['role' => $replacementRole?->slug ?? ''])->save();
-            });
-
-            $role->delete();
+            return $values;
         });
 
         AuditLogger::record(
@@ -229,39 +259,61 @@ class AdminRbacController extends Controller
             ]);
         }
 
+        $this->assertCanManageRole($request, $role);
+
         $validated = $request->validate([
             'permission_ids' => ['required', 'array', 'min:1'],
-            'permission_ids.*' => ['integer', Rule::exists('permissions', 'id')],
+            'permission_ids.*' => ['integer', 'distinct', Rule::exists('permissions', 'id')],
+            'name' => ['sometimes', 'required', 'string', 'max:255', 'regex:/[a-z0-9]/i'],
+            'description' => ['sometimes', 'nullable', 'string', 'max:1000'],
         ]);
+        $this->assertCanGrantPermissions($request, $validated['permission_ids']);
 
-        $oldPermissionIds = $role->permissions()->pluck('permissions.id')->sort()->values()->all();
+        [$role, $oldValues, $newValues] = DB::transaction(function () use ($request, $role, $validated): array {
+            $lockedRole = Role::query()->lockForUpdate()->findOrFail($role->id);
+            $this->assertCanManageRole($request, $lockedRole);
+            $oldValues = [
+                ...$lockedRole->only(['name', 'display_name', 'description']),
+                'permission_ids' => $lockedRole->permissions()->pluck('permissions.id')->sort()->values()->all(),
+            ];
+            if (array_key_exists('name', $validated)) {
+                $lockedRole->forceFill([
+                    'name' => $validated['name'],
+                    'display_name' => $validated['name'],
+                    'description' => $validated['description'] ?? null,
+                ])->save();
+            }
+            $lockedRole->permissions()->sync($validated['permission_ids']);
+            $lockedRole->touch();
+            $updatedRole = $lockedRole->fresh(['permissions', 'users']);
+            $newValues = [
+                ...$updatedRole->only(['name', 'display_name', 'description']),
+                'permission_ids' => $updatedRole->permissions->pluck('id')->sort()->values()->all(),
+            ];
 
-        DB::transaction(function () use ($role, $validated): void {
-            $role->permissions()->sync($validated['permission_ids']);
-            $role->touch();
+            return [$updatedRole, $oldValues, $newValues];
         });
-
-        $newPermissionIds = $role->fresh()->permissions()->pluck('permissions.id')->sort()->values()->all();
 
         AuditLogger::record(
             $request,
             'rbac.permissions.updated',
             $role,
-            ['permission_ids' => $oldPermissionIds],
-            ['permission_ids' => $newPermissionIds],
+            $oldValues,
+            $newValues,
         );
 
-        return ApiResponse::success('Role permissions updated.', $this->rolePayload($role->fresh(['permissions', 'users'])));
+        return ApiResponse::success('Role updated.', $this->rolePayload($role));
     }
 
     public function createRole(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
+            'name' => ['required', 'string', 'max:255', 'regex:/[a-z0-9]/i'],
             'description' => ['nullable', 'string', 'max:1000'],
             'permission_ids' => ['array'],
-            'permission_ids.*' => ['integer', Rule::exists('permissions', 'id')],
+            'permission_ids.*' => ['integer', 'distinct', Rule::exists('permissions', 'id')],
         ]);
+        $this->assertCanGrantPermissions($request, $validated['permission_ids'] ?? []);
 
         $role = DB::transaction(function () use ($validated): Role {
             $slug = str($validated['name'])->lower()->replaceMatches('/[^a-z0-9]+/', '_')->trim('_')->toString();
@@ -302,6 +354,8 @@ class AdminRbacController extends Controller
 
     public function updateRole(Request $request, Role $role): JsonResponse
     {
+        $this->assertCanManageRole($request, $role);
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
@@ -447,5 +501,61 @@ class AdminRbacController extends Controller
             ])->values()->all(),
             'status' => $user->status === 'active' ? 'active' : 'inactive',
         ];
+    }
+
+    private function assertCanGrantPermissions(Request $request, array $permissionIds): void
+    {
+        if ($request->user()->isSuperAdmin()) {
+            return;
+        }
+
+        $unauthorized = Permission::query()
+            ->whereIn('id', $permissionIds)
+            ->get(['id', 'slug'])
+            ->first(fn (Permission $permission): bool => ! $request->user()->hasPermission($permission->slug));
+
+        if ($unauthorized) {
+            throw ValidationException::withMessages([
+                'permission_ids' => ['You cannot grant permissions that you do not currently hold.'],
+            ]);
+        }
+    }
+
+    private function assertCanAssignRole(Request $request, Role $role): void
+    {
+        if ($role->slug === 'super_admin' && ! $request->user()->isSuperAdmin()) {
+            throw ValidationException::withMessages([
+                'role_id' => ['Only a super admin can assign the super admin role.'],
+            ]);
+        }
+
+        $this->assertCanGrantPermissions($request, $role->permissions()->pluck('permissions.id')->all());
+    }
+
+    private function assertCanManageRole(Request $request, Role $role): void
+    {
+        $this->assertCanGrantPermissions($request, $role->permissions()->pluck('permissions.id')->all());
+    }
+
+    private function assertCanManageUser(Request $request, User $user): void
+    {
+        if ($user->isSuperAdmin() && ! $request->user()->isSuperAdmin()) {
+            throw ValidationException::withMessages([
+                'role_id' => ['Only a super admin can change a super admin account.'],
+            ]);
+        }
+
+        if ($request->user()->isSuperAdmin()) {
+            return;
+        }
+
+        $permissionIds = $user->roles()
+            ->with('permissions:id')
+            ->get()
+            ->flatMap(fn (Role $role) => $role->permissions->pluck('id'))
+            ->unique()
+            ->all();
+
+        $this->assertCanGrantPermissions($request, $permissionIds);
     }
 }

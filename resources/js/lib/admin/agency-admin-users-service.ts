@@ -51,6 +51,29 @@ type CreateAgencyAdminUserResult = {
     inviteMessage?: string | null;
 };
 
+type AgencyAdminUsersMeta = {
+    pagination: {
+        current_page: number;
+        per_page: number;
+        total: number;
+        last_page: number;
+    };
+    summary: {
+        total_users: number;
+        active_users: number;
+        inactive_users: number;
+        recently_created: number;
+    };
+};
+
+export type AgencyAdminUserListFilters = {
+    page?: number;
+    perPage?: number;
+    keyword?: string;
+    agencyId?: string;
+    status?: string;
+};
+
 function getInitials(fullName: string) {
     return fullName
         .trim()
@@ -61,23 +84,63 @@ function getInitials(fullName: string) {
 }
 
 export async function getAgencies(): Promise<Agency[]> {
-    const { data } = await fetchApi<AdminAgencyApiRecord[]>(
-        '/api/admin/agencies?per_page=100',
-    );
+    const agencies: AdminAgencyApiRecord[] = [];
+    let page = 1;
+    let lastPage = 1;
 
-    return data.map((agency) => ({
+    do {
+        const response = await fetchApi<
+            AdminAgencyApiRecord[],
+            { pagination?: { last_page?: number } }
+        >(`/api/admin/agencies?per_page=100&status=active&page=${page}`);
+
+        agencies.push(...response.data);
+        lastPage = response.meta.pagination?.last_page ?? page;
+        page += 1;
+    } while (page <= lastPage);
+
+    return agencies.map((agency) => ({
         id: String(agency.id),
         name: agency.name,
         shortName: agency.short_name ?? agency.name,
     }));
 }
 
-export async function getAgencyAdminUsers(): Promise<AgencyAdminUser[]> {
-    const { data } = await fetchApi<AdminAgencyAdminUserApiRecord[]>(
-        '/api/admin/agency-admin-users?per_page=100',
-    );
+export async function getAgencyAdminUsers(
+    filters: AgencyAdminUserListFilters = {},
+) {
+    const params = new URLSearchParams({
+        page: String(filters.page ?? 1),
+        per_page: String(filters.perPage ?? 10),
+    });
 
-    return data.map(mapAgencyAdminUserFromApi);
+    if (filters.keyword?.trim()) {
+        params.set('keyword', filters.keyword.trim());
+    }
+
+    if (filters.agencyId && filters.agencyId !== 'all') {
+        params.set('agency_id', filters.agencyId);
+    }
+
+    if (filters.status && filters.status !== 'all') {
+        params.set('status', filters.status);
+    }
+
+    const { data, meta } = await fetchApi<
+        AdminAgencyAdminUserApiRecord[],
+        AgencyAdminUsersMeta
+    >(`/api/admin/agency-admin-users?${params.toString()}`);
+
+    return {
+        users: data.map(mapAgencyAdminUserFromApi),
+        pagination: meta.pagination,
+        summary: {
+            totalUsers: meta.summary.total_users,
+            activeUsers: meta.summary.active_users,
+            inactiveUsers: meta.summary.inactive_users,
+            recentlyCreated: meta.summary.recently_created,
+        },
+    };
 }
 
 export async function getAgencyAdminUserById(

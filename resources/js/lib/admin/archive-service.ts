@@ -2,6 +2,7 @@ import { fetchApi } from '@/lib/api-client';
 import { downloadResponseFile } from '@/lib/download-file';
 import type {
     AdminArchiveSummary,
+    AdminArchiveFilters,
     AdminArchivedRecord,
     ArchiveActivity,
     ArchiveExportOptions,
@@ -12,6 +13,23 @@ import type {
     ArchivedUserRecord,
     GeneratedArchiveReport,
 } from '@/types/admin-archive';
+
+type ArchivePaginationMeta = {
+    pagination?: {
+        current_page?: number;
+        per_page?: number;
+        total?: number;
+        last_page?: number;
+    };
+};
+
+export type ArchivedRecordsPage = {
+    records: AdminArchivedRecord[];
+    currentPage: number;
+    perPage: number;
+    total: number;
+    lastPage: number;
+};
 
 type ResearchApiRecord = {
     id: number;
@@ -87,7 +105,9 @@ export async function getAdminArchiveSummary(): Promise<AdminArchiveSummary> {
         fetchApi<FileApiRecord[]>('/api/admin/archive/files?per_page=1'),
         fetchApi<AgencyApiRecord[]>('/api/admin/archive/agencies?per_page=1'),
         fetchApi<UserApiRecord[]>('/api/admin/archive/users?per_page=1'),
-        fetchApi<ArchiveActivity[]>('/api/admin/archive/activity'),
+        fetchApi<ArchiveActivity[], { recently_restored?: number }>(
+            '/api/admin/archive/activity?per_page=1',
+        ),
     ]);
 
     return {
@@ -95,54 +115,113 @@ export async function getAdminArchiveSummary(): Promise<AdminArchiveSummary> {
         archivedFiles: paginationTotal(files.meta),
         archivedAgencies: paginationTotal(agencies.meta),
         archivedUserAccounts: paginationTotal(users.meta),
-        recentlyRestored: activity.data.filter(
-            (item) => item.type === 'record-restored',
-        ).length,
+        recentlyRestored: activity.meta.recently_restored ?? 0,
     };
 }
 
-export async function getArchivedResearchRecords(): Promise<
-    ArchivedResearchRecord[]
-> {
-    const { data } = await fetchApi<ResearchApiRecord[]>(
-        '/api/admin/archive/research?per_page=100',
-    );
+export async function getArchivedRecordsPage(
+    recordType: ArchiveRecordType,
+    options: {
+        page: number;
+        perPage: number;
+        filters: AdminArchiveFilters;
+        topbarSearch?: string;
+    },
+): Promise<ArchivedRecordsPage> {
+    if (
+        options.filters.status === 'restored' ||
+        options.filters.status === 'pending-deletion' ||
+        (options.filters.recordType !== 'all' &&
+            options.filters.recordType !== recordType)
+    ) {
+        return {
+            records: [],
+            currentPage: 1,
+            perPage: options.perPage,
+            total: 0,
+            lastPage: 1,
+        };
+    }
 
-    return data.map(mapApiResearchRecord);
+    const params = new URLSearchParams({
+        page: String(options.page),
+        per_page: String(options.perPage),
+        date: options.filters.date,
+    });
+    const keyword = [options.filters.search, options.topbarSearch]
+        .map((value) => value?.trim())
+        .filter(Boolean)
+        .join(' ');
+
+    if (keyword) {
+        params.set('keyword', keyword);
+    }
+
+    if (options.filters.agency !== 'all') {
+        params.set('agency', options.filters.agency);
+    }
+
+    const endpoint = {
+        research: '/api/admin/archive/research',
+        file: '/api/admin/archive/files',
+        agency: '/api/admin/archive/agencies',
+        user: '/api/admin/archive/users',
+    }[recordType];
+    const response = await fetchApi<
+        | ResearchApiRecord[]
+        | FileApiRecord[]
+        | AgencyApiRecord[]
+        | UserApiRecord[],
+        ArchivePaginationMeta
+    >(`${endpoint}?${params}`);
+    const records = response.data.map((record) => {
+        if (recordType === 'research') {
+            return mapApiResearchRecord(record as ResearchApiRecord);
+        }
+
+        if (recordType === 'file') {
+            return mapApiFileRecord(record as FileApiRecord);
+        }
+
+        if (recordType === 'agency') {
+            return mapApiAgencyRecord(record as AgencyApiRecord);
+        }
+
+        return mapApiUserRecord(record as UserApiRecord);
+    });
+    const pagination = response.meta.pagination;
+
+    return {
+        records,
+        currentPage: pagination?.current_page ?? options.page,
+        perPage: pagination?.per_page ?? options.perPage,
+        total: pagination?.total ?? records.length,
+        lastPage: pagination?.last_page ?? 1,
+    };
 }
 
-export async function getArchivedFileRecords(): Promise<ArchivedFileRecord[]> {
-    const { data } = await fetchApi<FileApiRecord[]>(
-        '/api/admin/archive/files?per_page=100',
+export async function getArchiveFilterOptions(): Promise<string[]> {
+    const response = await fetchApi<{ agencies: string[] }>(
+        '/api/admin/archive/filter-options',
     );
 
-    return data.map(mapApiFileRecord);
+    return response.data.agencies;
 }
 
-export async function getArchivedAgencyRecords(): Promise<
-    ArchivedAgencyRecord[]
-> {
-    const { data } = await fetchApi<AgencyApiRecord[]>(
-        '/api/admin/archive/agencies?per_page=100',
+export async function getArchiveActivityTimeline(page = 1): Promise<{
+    activities: ArchiveActivity[];
+    currentPage: number;
+    lastPage: number;
+}> {
+    const response = await fetchApi<ArchiveActivity[], ArchivePaginationMeta>(
+        `/api/admin/archive/activity?per_page=50&page=${page}`,
     );
 
-    return data.map(mapApiAgencyRecord);
-}
-
-export async function getArchivedUserRecords(): Promise<ArchivedUserRecord[]> {
-    const { data } = await fetchApi<UserApiRecord[]>(
-        '/api/admin/archive/users?per_page=100',
-    );
-
-    return data.map(mapApiUserRecord);
-}
-
-export async function getArchiveActivityTimeline(): Promise<ArchiveActivity[]> {
-    const { data } = await fetchApi<ArchiveActivity[]>(
-        '/api/admin/archive/activity',
-    );
-
-    return data;
+    return {
+        activities: response.data,
+        currentPage: response.meta.pagination?.current_page ?? page,
+        lastPage: response.meta.pagination?.last_page ?? 1,
+    };
 }
 
 export async function restoreArchivedRecord(

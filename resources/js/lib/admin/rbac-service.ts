@@ -11,6 +11,22 @@ import type {
 let cachedPermissions: Permission[] = [];
 let cachedAssignments: UserRoleAssignment[] = [];
 
+export type RbacPagination = {
+    currentPage: number;
+    perPage: number;
+    total: number;
+    lastPage: number;
+};
+
+type ApiPaginationMeta = {
+    pagination?: {
+        current_page?: number;
+        per_page?: number;
+        total?: number;
+        last_page?: number;
+    };
+};
+
 function toPermission(permission: Permission): Permission {
     return {
         ...permission,
@@ -29,9 +45,9 @@ export async function getRoles(): Promise<Role[]> {
 }
 
 export async function getRoleById(id: string): Promise<Role | null> {
-    const roles = await getRoles();
+    const response = await fetchApi<Role>(`/api/admin/rbac/roles/${id}`);
 
-    return roles.find((role) => role.id === id) ?? null;
+    return response.data;
 }
 
 export async function createRole(payload: CreateRolePayload): Promise<Role> {
@@ -51,19 +67,13 @@ export async function updateRole(
     id: string,
     payload: UpdateRolePayload,
 ): Promise<Role> {
-    await fetchApi<Role>(`/api/admin/rbac/roles/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-            name: payload.name,
-            description: payload.description,
-        }),
-    });
-
     const permissionResponse = await fetchApi<Role>(
         `/api/admin/rbac/roles/${id}/permissions`,
         {
             method: 'PATCH',
             body: JSON.stringify({
+                name: payload.name,
+                description: payload.description,
                 permission_ids: permissionPayload(payload.permissionIds),
             }),
         },
@@ -96,14 +106,40 @@ export async function getRoleChangeHistory(): Promise<RoleChangeHistory[]> {
     return response.data;
 }
 
-export async function getUserRoleAssignments(): Promise<UserRoleAssignment[]> {
-    const response = await fetchApi<UserRoleAssignment[]>(
-        '/api/admin/rbac/users',
+export async function getUserRoleAssignments(
+    options: {
+        page?: number;
+        perPage?: number;
+        query?: string;
+        activeOnly?: boolean;
+    } = {},
+): Promise<{ assignments: UserRoleAssignment[]; pagination: RbacPagination }> {
+    const params = new URLSearchParams({
+        page: String(options.page ?? 1),
+        per_page: String(options.perPage ?? 15),
+        active_only: String(options.activeOnly ?? false),
+    });
+
+    if (options.query?.trim()) {
+        params.set('query', options.query.trim());
+    }
+
+    const response = await fetchApi<UserRoleAssignment[], ApiPaginationMeta>(
+        `/api/admin/rbac/users?${params}`,
     );
 
     cachedAssignments = response.data;
+    const pagination = response.meta.pagination;
 
-    return cachedAssignments;
+    return {
+        assignments: cachedAssignments,
+        pagination: {
+            currentPage: pagination?.current_page ?? options.page ?? 1,
+            perPage: pagination?.per_page ?? options.perPage ?? 15,
+            total: pagination?.total ?? cachedAssignments.length,
+            lastPage: pagination?.last_page ?? 1,
+        },
+    };
 }
 
 export async function updateUserRole(

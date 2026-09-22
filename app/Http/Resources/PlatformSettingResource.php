@@ -38,6 +38,12 @@ class PlatformSettingResource extends JsonResource
             'read_only' => $metadata['read_only'],
             'status' => $metadata['status'],
             'updated_by' => $this->updated_by,
+            'version' => hash('sha256', implode("\0", [
+                (string) $this->key,
+                (string) $this->value,
+                (string) $this->type,
+                $this->updated_at?->toISOString() ?? '',
+            ])),
             'updated_at' => $this->updated_at?->toISOString(),
             'created_at' => $this->created_at?->toISOString(),
         ];

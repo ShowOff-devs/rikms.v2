@@ -54,6 +54,35 @@ test('custom admin is limited to explicitly granted admin permissions', function
     $this->actingAs($viewer)->getJson('/api/admin/rbac/roles')->assertForbidden();
 });
 
+test('analytics viewers cannot export project reports without export permission', function () {
+    $viewer = remediationUser(remediationRole('analytics_viewer', ['analytics.view']));
+    $exporter = remediationUser(remediationRole('analytics_exporter', ['analytics.view', 'analytics.export']));
+
+    $this->actingAs($viewer)
+        ->getJson('/api/admin/analytics/project-reports/summary')
+        ->assertOk();
+    $this->actingAs($viewer)
+        ->get('/api/admin/analytics/project-reports/export?format=csv')
+        ->assertForbidden();
+    $this->actingAs($exporter)
+        ->get('/api/admin/analytics/project-reports/export?format=csv')
+        ->assertOk();
+});
+
+test('rbac user assignments are paginated and searchable', function () {
+    $superAdmin = remediationUser(remediationRole('super_admin'));
+    $role = remediationRole('regional_reviewer', ['dashboard.view']);
+    remediationUser($role)->forceFill(['name' => 'Unique Regional Reviewer'])->save();
+    User::factory()->count(3)->create(['status' => 'active']);
+
+    $this->actingAs($superAdmin)
+        ->getJson('/api/admin/rbac/users?per_page=2&page=1&query=Unique%20Regional')
+        ->assertOk()
+        ->assertJsonPath('meta.pagination.per_page', 2)
+        ->assertJsonPath('meta.pagination.total', 1)
+        ->assertJsonPath('data.0.userName', 'Unique Regional Reviewer');
+});
+
 test('built in agency admin cannot enter admin portal despite overlapping permissions', function () {
     $agencyAdmin = remediationUser(remediationRole('agency_admin', ['analytics.view']));
 
@@ -111,4 +140,54 @@ test('final active super admin cannot be replaced and system permissions are pro
         ->assertUnprocessable();
 
     expect($superAdmin->fresh()->isSuperAdmin())->toBeTrue();
+});
+
+test('delegated rbac managers cannot grant permissions above their own authority', function () {
+    $managerRole = remediationRole('delegated_rbac_manager', [
+        'rbac.view', 'rbac.manage', 'roles.manage', 'permissions.manage',
+    ]);
+    $manager = remediationUser($managerRole);
+    $securityManage = remediationPermission('security.manage');
+    $editableRole = remediationRole('limited_reviewer', ['rbac.view']);
+
+    $this->actingAs($manager)
+        ->postJson('/api/admin/rbac/roles', [
+            'name' => 'Escalated Role',
+            'permission_ids' => [$securityManage->id],
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('permission_ids');
+
+    $this->actingAs($manager)
+        ->patchJson("/api/admin/rbac/roles/{$editableRole->id}/permissions", [
+            'name' => 'Escalated Reviewer',
+            'permission_ids' => [$securityManage->id],
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('permission_ids');
+
+    expect($editableRole->fresh()->name)->toBe('Limited Reviewer')
+        ->and($editableRole->fresh()->permissions()->pluck('slug')->all())->toBe(['rbac.view']);
+});
+
+test('delegated rbac managers cannot assign or modify super admin accounts', function () {
+    $manager = remediationUser(remediationRole('delegated_assignment_manager', [
+        'rbac.view', 'rbac.manage',
+    ]));
+    $superRole = remediationRole('super_admin');
+    $superAdmin = remediationUser($superRole);
+    $target = remediationUser(remediationRole('assignment_target', ['rbac.view']));
+
+    $this->actingAs($manager)
+        ->putJson("/api/admin/rbac/users/{$target->id}/role", ['role_id' => $superRole->id])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('role_id');
+
+    $this->actingAs($manager)
+        ->putJson("/api/admin/rbac/users/{$superAdmin->id}/role", ['role_id' => $target->roles()->first()->id])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('role_id');
+
+    expect($target->fresh()->isSuperAdmin())->toBeFalse()
+        ->and($superAdmin->fresh()->isSuperAdmin())->toBeTrue();
 });
