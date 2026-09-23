@@ -41,6 +41,12 @@ export function AdminLayout({
     }, [isSidebarCollapsed]);
 
     useEffect(() => {
+        document.body.classList.add('admin-portal');
+
+        return () => document.body.classList.remove('admin-portal');
+    }, []);
+
+    useEffect(() => {
         if (unreadNotificationsCount !== undefined) {
             return;
         }
@@ -69,7 +75,7 @@ export function AdminLayout({
     };
 
     return (
-        <div className="min-h-screen bg-[#f3f4f6] text-[#0f172a]">
+        <div className="admin-shell min-h-screen bg-[#f3f4f6] text-[#0f172a]">
             <AdminTopbar
                 isSidebarCollapsed={isSidebarCollapsed}
                 search={search}
@@ -82,7 +88,7 @@ export function AdminLayout({
                     isCollapsed={isSidebarCollapsed}
                     onToggle={toggleSidebar}
                 />
-                <div className="min-w-0 flex-1 transition-all duration-300">
+                <div className="admin-content min-w-0 flex-1 transition-all duration-300">
                     {children}
                 </div>
             </div>

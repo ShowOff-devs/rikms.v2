@@ -17,6 +17,42 @@ afterEach(() => {
 });
 
 describe('agency admin users service', () => {
+    it('maps the last successful login returned by the API', async () => {
+        const fetchMock = vi.fn().mockResolvedValue(
+            response(
+                [
+                    {
+                        id: 1,
+                        name: 'Ada Admin',
+                        email: 'ada@example.test',
+                        role: 'agency_admin',
+                        status: 'active',
+                        last_login_at: '2026-09-23T01:30:00.000000Z',
+                    },
+                ],
+                {
+                    pagination: {
+                        current_page: 1,
+                        per_page: 10,
+                        total: 1,
+                        last_page: 1,
+                    },
+                    summary: {
+                        total_users: 1,
+                        active_users: 1,
+                        inactive_users: 0,
+                        recently_created: 0,
+                    },
+                },
+            ),
+        );
+        vi.stubGlobal('fetch', fetchMock);
+
+        const result = await getAgencyAdminUsers();
+
+        expect(result.users[0].lastLogin).toBe('2026-09-23T01:30:00.000000Z');
+    });
+
     it('passes list filters and keeps full summary metadata', async () => {
         const fetchMock = vi.fn().mockResolvedValue(
             response([], {

@@ -7,30 +7,12 @@ import PolicyPageLayout, {
 const description =
     'RIKMS supports responsible access to research knowledge while respecting intellectual property, privacy, confidentiality, ethical requirements, and institutional restrictions.';
 
-const sections = [
-    { id: 'policy-statement', label: 'Policy Statement' },
-    { id: 'scope', label: 'Scope' },
-    { id: 'access-classifications', label: 'Access Classifications' },
-    { id: 'public-metadata', label: 'Public Metadata' },
-    { id: 'full-text-access', label: 'Full-Text Access' },
-    { id: 'ownership', label: 'Ownership' },
-    { id: 'attribution-and-reuse', label: 'Attribution and Responsible Reuse' },
-    {
-        id: 'sensitive-information',
-        label: 'Sensitive and Restricted Information',
-    },
-    { id: 'embargoes', label: 'Embargoes' },
-    { id: 'correction-and-withdrawal', label: 'Correction and Withdrawal' },
-    { id: 'preservation', label: 'Preservation' },
-];
-
 export default function OpenAccessPolicyPage() {
     return (
         <PolicyPageLayout
             currentPage="open-access-policy"
             title="Open Access Policy"
             description={description}
-            sections={sections}
         >
             <PolicySection id="policy-statement" title="1. Policy Statement">
                 <p>

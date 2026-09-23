@@ -5,6 +5,8 @@ import type { AgencyAdminUser } from '@/types/admin-users';
 type AgencyAdminUsersTableProps = {
     users: AgencyAdminUser[];
     isLoading: boolean;
+    canEdit: boolean;
+    canManage: boolean;
     onView: (user: AgencyAdminUser) => void;
     onEdit: (user: AgencyAdminUser) => void;
     onToggleStatus: (user: AgencyAdminUser) => void;
@@ -42,6 +44,8 @@ function formatDateTime(value?: string) {
 export function AgencyAdminUsersTable({
     users,
     isLoading,
+    canEdit,
+    canManage,
     onView,
     onEdit,
     onToggleStatus,
@@ -191,6 +195,8 @@ export function AgencyAdminUsersTable({
                                     <div className="flex justify-end">
                                         <AgencyAdminUserActions
                                             user={user}
+                                            canEdit={canEdit}
+                                            canManage={canManage}
                                             onView={onView}
                                             onEdit={onEdit}
                                             onToggleStatus={onToggleStatus}

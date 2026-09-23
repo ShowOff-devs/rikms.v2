@@ -7,31 +7,12 @@ import PolicyPageLayout, {
 const description =
     'This Privacy Policy explains how the Regionwide Integrated Knowledge Management System (RIKMS) collects, uses, protects, stores, and manages personal information and research-related information processed through the platform.';
 
-const sections = [
-    { id: 'introduction', label: 'Introduction' },
-    { id: 'information-we-may-collect', label: 'Information We May Collect' },
-    { id: 'purpose-of-processing', label: 'Purpose of Processing' },
-    { id: 'lawful-processing', label: 'Lawful Processing' },
-    {
-        id: 'public-and-restricted-information',
-        label: 'Public and Restricted Information',
-    },
-    { id: 'disclosure-and-sharing', label: 'Disclosure and Sharing' },
-    { id: 'data-security', label: 'Data Security' },
-    { id: 'data-retention', label: 'Data Retention' },
-    { id: 'rights-of-data-subjects', label: 'Rights of Data Subjects' },
-    { id: 'third-party-links', label: 'Third-Party Links' },
-    { id: 'changes', label: 'Changes to this Privacy Policy' },
-    { id: 'privacy-contact', label: 'Privacy Contact' },
-];
-
 export default function PrivacyPolicyPage() {
     return (
         <PolicyPageLayout
             currentPage="privacy-policy"
             title="Privacy Policy"
             description={description}
-            sections={sections}
         >
             <PolicySection id="introduction" title="1. Introduction">
                 <p>

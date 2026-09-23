@@ -111,6 +111,14 @@ export function CreateAgencyAdminModal({
             return;
         }
 
+        if (!form.sendInvite && !form.temporaryPassword.trim()) {
+            setError(
+                'Enter a temporary password when no invitation email will be sent.',
+            );
+
+            return;
+        }
+
         setError(null);
         onSubmit({
             fullName: form.fullName,
@@ -240,7 +248,10 @@ export function CreateAgencyAdminModal({
                         </label>
 
                         <label className="space-y-1.5 text-sm font-medium text-[#1e2939]">
-                            <span>Temporary Password</span>
+                            <span>
+                                Temporary Password
+                                {form.sendInvite ? ' (optional)' : ''}
+                            </span>
                             <input
                                 value={form.temporaryPassword}
                                 onChange={(event) =>
@@ -250,7 +261,11 @@ export function CreateAgencyAdminModal({
                                     }))
                                 }
                                 className="h-10 w-full rounded-[8px] border border-[#e5e7eb] px-3 text-sm outline-none focus:border-[#1e3a8a]/40 focus:ring-2 focus:ring-[#1e3a8a]/10"
-                                placeholder="Optional"
+                                placeholder={
+                                    form.sendInvite
+                                        ? 'Optional'
+                                        : 'Required without invitation'
+                                }
                                 type="password"
                             />
                         </label>

@@ -27,6 +27,7 @@ type EditAgencyAdminModalProps = {
     user: AgencyAdminUser | null;
     agencies: Agency[];
     isSaving: boolean;
+    serverError?: string | null;
     isEmailTaken: (email: string, currentUserId?: string) => boolean;
     onOpenChange: (open: boolean) => void;
     onSubmit: (id: string, payload: UpdateAgencyAdminUserPayload) => void;
@@ -40,6 +41,7 @@ export function EditAgencyAdminModal({
     user,
     agencies,
     isSaving,
+    serverError = null,
     isEmailTaken,
     onOpenChange,
     onSubmit,
@@ -62,6 +64,7 @@ export function EditAgencyAdminModal({
                         user={user}
                         agencies={agencies}
                         isSaving={isSaving}
+                        serverError={serverError}
                         isEmailTaken={isEmailTaken}
                         onOpenChange={onOpenChange}
                         onSubmit={onSubmit}
@@ -76,6 +79,7 @@ function EditAgencyAdminForm({
     user,
     agencies,
     isSaving,
+    serverError,
     isEmailTaken,
     onOpenChange,
     onSubmit,
@@ -123,9 +127,12 @@ function EditAgencyAdminForm({
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-                <div className="rounded-[8px] border border-[#fecaca] bg-[#fef2f2] px-3 py-2 text-sm text-[#b91c1c]">
-                    {error}
+            {(error || serverError) && (
+                <div
+                    role="alert"
+                    className="rounded-[8px] border border-[#fecaca] bg-[#fef2f2] px-3 py-2 text-sm text-[#b91c1c]"
+                >
+                    {error || serverError}
                 </div>
             )}
 

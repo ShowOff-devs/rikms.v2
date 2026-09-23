@@ -6,30 +6,12 @@ import PolicyPageLayout, {
 const description =
     'These Terms govern access to and use of the Regionwide Integrated Knowledge Management System (RIKMS) and its public and authorized services.';
 
-const sections = [
-    { id: 'acceptance', label: 'Acceptance of Terms' },
-    { id: 'purpose', label: 'Purpose of RIKMS' },
-    { id: 'user-responsibilities', label: 'User Responsibilities' },
-    { id: 'prohibited-activities', label: 'Prohibited Activities' },
-    { id: 'accounts-and-access', label: 'Accounts and Access' },
-    { id: 'research-content', label: 'Research Content' },
-    { id: 'intellectual-property', label: 'Intellectual Property' },
-    { id: 'availability', label: 'Availability of the Service' },
-    { id: 'accuracy', label: 'Accuracy of Information' },
-    { id: 'restricted-research', label: 'Restricted Research' },
-    { id: 'suspension', label: 'Suspension and Enforcement' },
-    { id: 'changes', label: 'Changes to These Terms' },
-    { id: 'governing-law', label: 'Governing Law' },
-    { id: 'contact', label: 'Contact' },
-];
-
 export default function TermsOfUsePage() {
     return (
         <PolicyPageLayout
             currentPage="terms-of-use"
             title="Terms of Use"
             description={description}
-            sections={sections}
         >
             <PolicySection id="acceptance" title="1. Acceptance of Terms">
                 <p>

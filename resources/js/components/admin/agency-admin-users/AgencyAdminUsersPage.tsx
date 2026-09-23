@@ -1,3 +1,4 @@
+import { usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { AgencyAdminUserDetailsModal } from '@/components/admin/agency-admin-users/AgencyAdminUserDetailsModal';
 import { AgencyAdminUserFilters } from '@/components/admin/agency-admin-users/AgencyAdminUserFilters';
@@ -32,6 +33,13 @@ import type {
 const rowsPerPage = 10;
 
 export function AgencyAdminUsersPage() {
+    const { auth } = usePage().props;
+    const permissions = auth.adminPermissions ?? [];
+    const canManage =
+        permissions.includes('*') || permissions.includes('users.manage');
+    const canViewAgencies =
+        permissions.includes('*') || permissions.includes('agencies.view');
+    const canEdit = canManage && canViewAgencies;
     const [topbarSearch, setTopbarSearch] = useState('');
     const [users, setUsers] = useState<AgencyAdminUser[]>([]);
     const [agencies, setAgencies] = useState<Agency[]>([]);
@@ -40,6 +48,10 @@ export function AgencyAdminUsersPage() {
     const [error, setError] = useState<string | null>(null);
     const [feedback, setFeedback] = useState<string | null>(null);
     const [createError, setCreateError] = useState<string | null>(null);
+    const [editError, setEditError] = useState<string | null>(null);
+    const [statusError, setStatusError] = useState<string | null>(null);
+    const [resetError, setResetError] = useState<string | null>(null);
+    const [removeError, setRemoveError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedAgency, setSelectedAgency] = useState('all');
     const [selectedStatus, setSelectedStatus] = useState('all');
@@ -64,6 +76,12 @@ export function AgencyAdminUsersPage() {
     const [removeUser, setRemoveUser] = useState<AgencyAdminUser | null>(null);
 
     useEffect(() => {
+        if (!canViewAgencies) {
+            setAgencies([]);
+
+            return;
+        }
+
         let isCurrent = true;
 
         getAgencies()
@@ -83,7 +101,7 @@ export function AgencyAdminUsersPage() {
         return () => {
             isCurrent = false;
         };
-    }, []);
+    }, [canViewAgencies]);
 
     useEffect(() => {
         let isCurrent = true;
@@ -200,6 +218,7 @@ export function AgencyAdminUsersPage() {
         payload: UpdateAgencyAdminUserPayload,
     ) => {
         setIsSaving(true);
+        setEditError(null);
         setError(null);
 
         try {
@@ -208,7 +227,7 @@ export function AgencyAdminUsersPage() {
             setEditUser(null);
             setFeedback(`${updatedUser.fullName} has been updated.`);
         } catch (error) {
-            setError(apiMessage(error, 'Unable to update agency admin.'));
+            setEditError(apiMessage(error, 'Unable to update agency admin.'));
         } finally {
             setIsSaving(false);
         }
@@ -220,6 +239,7 @@ export function AgencyAdminUsersPage() {
         }
 
         setIsSaving(true);
+        setStatusError(null);
         setError(null);
 
         try {
@@ -238,7 +258,9 @@ export function AgencyAdminUsersPage() {
                 `${updatedUser.fullName} is now ${updatedUser.status}.`,
             );
         } catch (error) {
-            setError(apiMessage(error, 'Unable to update account status.'));
+            setStatusError(
+                apiMessage(error, 'Unable to update account status.'),
+            );
         } finally {
             setIsSaving(false);
         }
@@ -250,6 +272,7 @@ export function AgencyAdminUsersPage() {
         }
 
         setIsSaving(true);
+        setResetError(null);
         setError(null);
 
         try {
@@ -259,7 +282,7 @@ export function AgencyAdminUsersPage() {
             );
             setResetUser(null);
         } catch (error) {
-            setError(apiMessage(error, 'Unable to send password reset.'));
+            setResetError(apiMessage(error, 'Unable to send password reset.'));
         } finally {
             setIsSaving(false);
         }
@@ -271,6 +294,7 @@ export function AgencyAdminUsersPage() {
         }
 
         setIsSaving(true);
+        setRemoveError(null);
         setError(null);
 
         try {
@@ -285,7 +309,7 @@ export function AgencyAdminUsersPage() {
             setFeedback(`${removeUser.fullName} has been removed.`);
             setRemoveUser(null);
         } catch (error) {
-            setError(apiMessage(error, 'Unable to remove agency admin.'));
+            setRemoveError(apiMessage(error, 'Unable to remove agency admin.'));
         } finally {
             setIsSaving(false);
         }
@@ -295,6 +319,7 @@ export function AgencyAdminUsersPage() {
         <AdminLayout search={topbarSearch} onSearchChange={setTopbarSearch}>
             <main className="px-4 py-8 lg:px-8">
                 <AgencyAdminUsersHeader
+                    canCreate={canEdit}
                     onCreate={() => {
                         setCreateError(null);
                         setIsCreateOpen(true);
@@ -332,11 +357,25 @@ export function AgencyAdminUsersPage() {
                     <AgencyAdminUsersTable
                         users={users}
                         isLoading={isLoading}
+                        canEdit={canEdit}
+                        canManage={canManage}
                         onView={setDetailsUser}
-                        onEdit={setEditUser}
-                        onToggleStatus={setStatusUser}
-                        onResetPassword={setResetUser}
-                        onRemove={setRemoveUser}
+                        onEdit={(user) => {
+                            setEditError(null);
+                            setEditUser(user);
+                        }}
+                        onToggleStatus={(user) => {
+                            setStatusError(null);
+                            setStatusUser(user);
+                        }}
+                        onResetPassword={(user) => {
+                            setResetError(null);
+                            setResetUser(user);
+                        }}
+                        onRemove={(user) => {
+                            setRemoveError(null);
+                            setRemoveUser(user);
+                        }}
                     />
 
                     <AgencyAdminUsersPagination
@@ -373,9 +412,11 @@ export function AgencyAdminUsersPage() {
                 user={editUser}
                 agencies={agencies}
                 isSaving={isSaving}
+                serverError={editError}
                 isEmailTaken={isEmailTaken}
                 onOpenChange={(open) => {
                     if (!open) {
+                        setEditError(null);
                         setEditUser(null);
                     }
                 }}
@@ -392,8 +433,10 @@ export function AgencyAdminUsersPage() {
             <UserStatusConfirmModal
                 user={statusUser}
                 isSaving={isSaving}
+                serverError={statusError}
                 onOpenChange={(open) => {
                     if (!open) {
+                        setStatusError(null);
                         setStatusUser(null);
                     }
                 }}
@@ -402,8 +445,10 @@ export function AgencyAdminUsersPage() {
             <ResetPasswordModal
                 user={resetUser}
                 isSaving={isSaving}
+                serverError={resetError}
                 onOpenChange={(open) => {
                     if (!open) {
+                        setResetError(null);
                         setResetUser(null);
                     }
                 }}
@@ -412,8 +457,10 @@ export function AgencyAdminUsersPage() {
             <RemoveAgencyAdminModal
                 user={removeUser}
                 isSaving={isSaving}
+                serverError={removeError}
                 onOpenChange={(open) => {
                     if (!open) {
+                        setRemoveError(null);
                         setRemoveUser(null);
                     }
                 }}

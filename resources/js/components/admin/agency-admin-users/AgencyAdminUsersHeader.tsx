@@ -1,10 +1,12 @@
 import { Plus } from 'lucide-react';
 
 type AgencyAdminUsersHeaderProps = {
+    canCreate: boolean;
     onCreate: () => void;
 };
 
 export function AgencyAdminUsersHeader({
+    canCreate,
     onCreate,
 }: AgencyAdminUsersHeaderProps) {
     return (
@@ -19,14 +21,16 @@ export function AgencyAdminUsersHeader({
                 </p>
             </div>
 
-            <button
-                type="button"
-                onClick={onCreate}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-[8px] bg-[#1e3a8a] px-4 text-sm font-semibold text-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] transition hover:bg-[#1d3478] focus:ring-2 focus:ring-[#1e3a8a]/20 focus:outline-none"
-            >
-                <Plus className="size-4" aria-hidden="true" />
-                Create Agency Admin
-            </button>
+            {canCreate && (
+                <button
+                    type="button"
+                    onClick={onCreate}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-[8px] bg-[#1e3a8a] px-4 text-sm font-semibold text-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] transition hover:bg-[#1d3478] focus:ring-2 focus:ring-[#1e3a8a]/20 focus:outline-none"
+                >
+                    <Plus className="size-4" aria-hidden="true" />
+                    Create Agency Admin
+                </button>
+            )}
         </section>
     );
 }

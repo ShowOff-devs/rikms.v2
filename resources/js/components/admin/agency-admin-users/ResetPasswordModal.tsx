@@ -12,6 +12,7 @@ import type { AgencyAdminUser } from '@/types/admin-users';
 type ResetPasswordModalProps = {
     user: AgencyAdminUser | null;
     isSaving: boolean;
+    serverError?: string | null;
     onOpenChange: (open: boolean) => void;
     onConfirm: () => void;
 };
@@ -19,6 +20,7 @@ type ResetPasswordModalProps = {
 export function ResetPasswordModal({
     user,
     isSaving,
+    serverError = null,
     onOpenChange,
     onConfirm,
 }: ResetPasswordModalProps) {
@@ -38,6 +40,15 @@ export function ResetPasswordModal({
                 {user && (
                     <p className="rounded-[8px] bg-[#f9fafb] px-3 py-2 text-sm text-[#4a5565]">
                         Send reset instructions to {user.email}
+                    </p>
+                )}
+
+                {serverError && (
+                    <p
+                        role="alert"
+                        className="rounded-[8px] border border-[#fecaca] bg-[#fef2f2] px-3 py-2 text-sm text-[#b91c1c]"
+                    >
+                        {serverError}
                     </p>
                 )}
 

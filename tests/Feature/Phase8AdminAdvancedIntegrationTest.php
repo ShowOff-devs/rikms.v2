@@ -387,6 +387,7 @@ test('agency admin user management APIs use relational users instead of mock rec
             'agency_id' => $agency->id,
             'status' => 'active',
             'send_invite' => false,
+            'temporary_password' => 'temporary-password',
         ])
         ->assertCreated()
         ->assertJsonPath('data.name', 'Generated Password Admin')
@@ -427,6 +428,56 @@ test('agency admin user management APIs use relational users instead of mock rec
     expect($removedUser->archived_at)->not->toBeNull()
         ->and($removedUser->isAgencyAdmin())->toBeFalse()
         ->and(AuditLog::query()->where('event', 'agency_admin_user.removed')->exists())->toBeTrue();
+});
+
+test('agency admin users expose the latest successful login and require a delivery path for credentials', function () {
+    $agency = createPhase8Agency('agency-admin-login-metadata');
+    $superAdmin = createPhase8User('super_admin');
+    $agencyAdmin = createPhase8User('agency_admin', $agency);
+    $latestLogin = now()->subMinutes(5)->startOfSecond();
+
+    SecurityEvent::query()->create([
+        'user_id' => $agencyAdmin->id,
+        'agency_id' => $agency->id,
+        'event_type' => 'login.success',
+        'created_at' => now()->subDay(),
+    ]);
+    SecurityEvent::query()->create([
+        'user_id' => $agencyAdmin->id,
+        'agency_id' => $agency->id,
+        'event_type' => 'login.success',
+        'created_at' => $latestLogin,
+    ]);
+    SecurityEvent::query()->create([
+        'user_id' => $agencyAdmin->id,
+        'agency_id' => $agency->id,
+        'event_type' => 'password.changed',
+        'created_at' => now(),
+    ]);
+
+    $this->actingAs($superAdmin)
+        ->getJson('/api/admin/agency-admin-users?per_page=100')
+        ->assertOk()
+        ->assertJsonFragment([
+            'email' => $agencyAdmin->email,
+            'last_login_at' => $latestLogin->toISOString(),
+        ]);
+
+    $this->actingAs($superAdmin)
+        ->getJson("/api/admin/agency-admin-users/{$agencyAdmin->id}")
+        ->assertOk()
+        ->assertJsonPath('data.last_login_at', $latestLogin->toISOString());
+
+    $this->actingAs($superAdmin)
+        ->postJson('/api/admin/agency-admin-users', [
+            'full_name' => 'No Credential Delivery',
+            'email' => 'no-credential-delivery@example.test',
+            'agency_id' => $agency->id,
+            'status' => 'active',
+            'send_invite' => false,
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('temporary_password');
 });
 
 test('agency admin users reject inactive or archived agency assignments and expose complete summary metadata', function () {

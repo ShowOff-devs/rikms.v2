@@ -23,6 +23,7 @@ type AdminAgencyAdminUserApiRecord = {
     roles?: string[];
     status: string;
     deactivation_requested_at?: string | null;
+    last_login_at?: string | null;
     agency?: AdminAgencyApiRecord | null;
     created_at?: string | null;
     updated_at?: string | null;
@@ -261,6 +262,7 @@ function mapAgencyAdminUserFromApi(
         role: 'Agency Admin',
         status: user.status === 'active' ? 'active' : 'inactive',
         deactivationRequestedAt: user.deactivation_requested_at ?? null,
+        lastLogin: user.last_login_at ?? undefined,
         avatarInitials: getInitials(fullName),
         createdAt: user.created_at ?? new Date().toISOString(),
         updatedAt: user.updated_at ?? undefined,

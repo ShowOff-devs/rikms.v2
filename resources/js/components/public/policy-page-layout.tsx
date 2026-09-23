@@ -9,11 +9,6 @@ export type PolicyKey =
     | 'open-access-policy'
     | 'submission-guidelines';
 
-export type PolicySectionLink = {
-    id: string;
-    label: string;
-};
-
 const relatedPolicies: Array<{
     key: PolicyKey;
     label: string;
@@ -45,7 +40,6 @@ type PolicyPageLayoutProps = {
     currentPage: PolicyKey;
     title: string;
     description: string;
-    sections: PolicySectionLink[];
     children: ReactNode;
 };
 
@@ -53,7 +47,6 @@ export default function PolicyPageLayout({
     currentPage,
     title,
     description,
-    sections,
     children,
 }: PolicyPageLayoutProps) {
     return (
@@ -88,53 +81,10 @@ export default function PolicyPageLayout({
                             <p className="mt-4 max-w-4xl text-base leading-7 text-[#4b5563]">
                                 {description}
                             </p>
-
-                            <dl className="mt-6 grid gap-3 text-sm sm:grid-cols-2">
-                                <div className="rounded-[10px] bg-[#f9fafb] px-4 py-3">
-                                    <dt className="font-semibold text-[#374151]">
-                                        Effective Date
-                                    </dt>
-                                    <dd className="mt-1 text-[#6b7280]">
-                                        [Effective Date]
-                                    </dd>
-                                </div>
-                                <div className="rounded-[10px] bg-[#f9fafb] px-4 py-3">
-                                    <dt className="font-semibold text-[#374151]">
-                                        Last Updated
-                                    </dt>
-                                    <dd className="mt-1 text-[#6b7280]">
-                                        [Last Updated]
-                                    </dd>
-                                </div>
-                            </dl>
                         </header>
 
                         <div className="px-6 py-8 sm:px-10 sm:py-10 lg:px-12">
-                            <nav
-                                aria-labelledby="policy-table-of-contents"
-                                className="rounded-[12px] border border-[#dbeafe] bg-[#eff6ff] px-5 py-5 sm:px-6"
-                            >
-                                <h2
-                                    id="policy-table-of-contents"
-                                    className="text-base font-semibold text-[#1e3a8a]"
-                                >
-                                    On this page
-                                </h2>
-                                <ol className="mt-3 grid list-decimal gap-x-8 gap-y-2 pl-5 text-sm leading-6 text-[#374151] md:grid-cols-2">
-                                    {sections.map((section) => (
-                                        <li key={section.id}>
-                                            <a
-                                                href={`#${section.id}`}
-                                                className="rounded hover:text-[#1e3a8a] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1e3a8a]"
-                                            >
-                                                {section.label}
-                                            </a>
-                                        </li>
-                                    ))}
-                                </ol>
-                            </nav>
-
-                            <div className="mt-10 space-y-10">{children}</div>
+                            <div className="space-y-10">{children}</div>
 
                             <nav
                                 aria-labelledby="related-policies-heading"

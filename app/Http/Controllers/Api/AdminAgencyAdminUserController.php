@@ -40,7 +40,11 @@ class AdminAgencyAdminUserController extends Controller
             'inactive_users' => (clone $summaryQuery)->where('status', 'inactive')->count(),
             'recently_created' => (clone $summaryQuery)->where('created_at', '>=', now()->subDays(30))->count(),
         ];
-        $query = $agencyAdminScope(User::query()->with(['agency', 'roles']))
+        $query = $agencyAdminScope(User::query()
+            ->with(['agency', 'roles'])
+            ->withMax([
+                'securityEvents as last_login_at' => fn (Builder $query) => $query->where('event_type', 'login.success'),
+            ], 'created_at'))
             ->when($request->filled('agency_id'), fn (Builder $query) => $query->where('agency_id', $request->integer('agency_id')))
             ->when($request->filled('status'), fn (Builder $query) => $query->where('status', $request->string('status')))
             ->when($request->filled('keyword'), function (Builder $query) use ($request): void {
@@ -82,6 +86,10 @@ class AdminAgencyAdminUserController extends Controller
     public function show(Request $request, User $user): JsonResponse
     {
         $this->abortUnlessAgencyAdmin($user);
+        $user->setAttribute(
+            'last_login_at',
+            $user->securityEvents()->where('event_type', 'login.success')->max('created_at'),
+        );
 
         return ApiResponse::success(
             'Agency admin user retrieved.',
@@ -96,7 +104,13 @@ class AdminAgencyAdminUserController extends Controller
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')],
             'agency_id' => ['required', 'integer', $this->activeAgencyRule()],
             'status' => ['required', Rule::in(['active', 'inactive'])],
-            'temporary_password' => ['nullable', 'string', 'min:8', 'max:255'],
+            'temporary_password' => [
+                Rule::requiredIf(! $request->boolean('send_invite')),
+                'nullable',
+                'string',
+                'min:8',
+                'max:255',
+            ],
             'send_invite' => ['sometimes', 'boolean'],
         ]);
 

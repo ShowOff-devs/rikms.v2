@@ -8,35 +8,12 @@ import PolicyPageLayout, {
 const description =
     'These guidelines establish the minimum requirements for submitting research outputs to RIKMS and maintaining a reliable, searchable, secure, and consistent regional research repository.';
 
-const sections = [
-    { id: 'purpose', label: 'Purpose' },
-    { id: 'who-may-submit', label: 'Who May Submit' },
-    { id: 'accepted-outputs', label: 'Accepted Research Outputs' },
-    { id: 'general-requirements', label: 'General Submission Requirements' },
-    { id: 'required-metadata', label: 'Required Metadata' },
-    { id: 'document-requirements', label: 'Document Requirements' },
-    { id: 'accuracy', label: 'Accuracy and Completeness' },
-    { id: 'privacy', label: 'Privacy and Confidentiality' },
-    { id: 'copyright', label: 'Copyright and Submission Authority' },
-    { id: 'access-classification', label: 'Access Classification' },
-    { id: 'review', label: 'Review and Validation' },
-    { id: 'duplicates', label: 'Duplicate Submissions' },
-    { id: 'changes-after-submission', label: 'Changes After Submission' },
-    { id: 'rejection', label: 'Grounds for Rejection or Restriction' },
-    {
-        id: 'institutional-responsibility',
-        label: 'Responsibility of the Originating Institution',
-    },
-    { id: 'assistance', label: 'Assistance' },
-];
-
 export default function SubmissionGuidelinesPage() {
     return (
         <PolicyPageLayout
             currentPage="submission-guidelines"
             title="Submission Guidelines"
             description={description}
-            sections={sections}
         >
             <PolicySection id="purpose" title="1. Purpose">
                 <p>

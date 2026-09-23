@@ -12,6 +12,7 @@ import type { AgencyAdminUser } from '@/types/admin-users';
 type RemoveAgencyAdminModalProps = {
     user: AgencyAdminUser | null;
     isSaving: boolean;
+    serverError?: string | null;
     onOpenChange: (open: boolean) => void;
     onConfirm: () => void;
 };
@@ -19,6 +20,7 @@ type RemoveAgencyAdminModalProps = {
 export function RemoveAgencyAdminModal({
     user,
     isSaving,
+    serverError = null,
     onOpenChange,
     onConfirm,
 }: RemoveAgencyAdminModalProps) {
@@ -39,6 +41,15 @@ export function RemoveAgencyAdminModal({
                 {user && (
                     <p className="rounded-[8px] border border-[#fecaca] bg-[#fef2f2] px-3 py-2 text-sm text-[#991b1b]">
                         {user.fullName} - {user.agencyShortName}
+                    </p>
+                )}
+
+                {serverError && (
+                    <p
+                        role="alert"
+                        className="rounded-[8px] border border-[#fecaca] bg-[#fef2f2] px-3 py-2 text-sm text-[#b91c1c]"
+                    >
+                        {serverError}
                     </p>
                 )}
 

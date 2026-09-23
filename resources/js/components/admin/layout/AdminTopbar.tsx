@@ -129,7 +129,7 @@ export function AdminTopbar({
                 aria-label="RIKMS System Administration"
                 title="RIKMS System Administration"
             >
-                <span className="flex size-9 items-center justify-center rounded-[10px] bg-white p-1">
+                <span className="admin-logo-tile flex size-9 items-center justify-center rounded-[10px] bg-white p-1">
                     <AppLogoIcon className="size-8" />
                 </span>
                 <span
