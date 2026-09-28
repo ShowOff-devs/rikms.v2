@@ -76,9 +76,11 @@ Route::prefix('agency')
         Route::get('/analytics', [AgencyAnalyticsController::class, 'show'])->name('analytics.show');
         Route::get('/analytics/export', [AgencyAnalyticsController::class, 'export'])->name('analytics.export');
         Route::get('/analytics/project-reports/summary', [AgencyProjectReportAnalyticsController::class, 'summary'])->name('analytics.project-reports.summary');
+        Route::get('/analytics/project-reports/overview', [AgencyProjectReportAnalyticsController::class, 'overview'])->name('analytics.project-reports.overview');
         Route::get('/analytics/project-reports/status', [AgencyProjectReportAnalyticsController::class, 'status'])->name('analytics.project-reports.status');
         Route::get('/analytics/project-reports/budget', [AgencyProjectReportAnalyticsController::class, 'budget'])->name('analytics.project-reports.budget');
         Route::get('/analytics/project-reports/records', [AgencyProjectReportAnalyticsController::class, 'records'])->name('analytics.project-reports.records');
+        Route::get('/analytics/project-reports/export', [AgencyProjectReportAnalyticsController::class, 'export'])->name('analytics.project-reports.export');
         Route::get('/analytics/project-reports/{research}', [AgencyProjectReportAnalyticsController::class, 'show'])->name('analytics.project-reports.show');
         Route::get('/profile', [AgencyProfileSettingsController::class, 'profile'])->name('profile.show');
         Route::patch('/profile', [AgencyProfileSettingsController::class, 'updateProfile'])->name('profile.update');
@@ -130,6 +132,7 @@ Route::prefix('admin')
     ->middleware(['auth:sanctum', 'verified', 'admin.portal', 'super_admin.2fa', 'admin.authorize'])
     ->group(function () {
         Route::get('/dashboard', AdminDashboardController::class)->name('dashboard');
+        Route::get('/dashboard/export', [AdminDashboardController::class, 'export'])->name('dashboard.export');
         Route::get('/agency-admin-users', [AdminAgencyAdminUserController::class, 'index'])->middleware('permission:users.view')->name('agency-admin-users.index');
         Route::post('/agency-admin-users', [AdminAgencyAdminUserController::class, 'store'])->middleware('permission:users.manage')->name('agency-admin-users.store');
         Route::get('/agency-admin-users/{user}', [AdminAgencyAdminUserController::class, 'show'])->middleware('permission:users.view')->name('agency-admin-users.show');
@@ -193,6 +196,7 @@ Route::prefix('admin')
         Route::get('/analytics/agencies', [AdminAnalyticsController::class, 'agencies'])->name('analytics.agencies');
         Route::get('/analytics/security', [AdminAnalyticsController::class, 'security'])->name('analytics.security');
         Route::get('/analytics/project-reports/summary', [AdminProjectReportAnalyticsController::class, 'summary'])->name('analytics.project-reports.summary');
+        Route::get('/analytics/project-reports/overview', [AdminProjectReportAnalyticsController::class, 'overview'])->name('analytics.project-reports.overview');
         Route::get('/analytics/project-reports/status', [AdminProjectReportAnalyticsController::class, 'status'])->name('analytics.project-reports.status');
         Route::get('/analytics/project-reports/budget', [AdminProjectReportAnalyticsController::class, 'budget'])->name('analytics.project-reports.budget');
         Route::get('/analytics/project-reports/agencies', [AdminProjectReportAnalyticsController::class, 'agencies'])->name('analytics.project-reports.agencies');

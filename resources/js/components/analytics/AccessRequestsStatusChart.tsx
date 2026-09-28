@@ -21,6 +21,18 @@ const statusStyles = {
         bg: 'bg-[#fef2f2]',
         text: 'text-[#e7000b]',
     },
+    expired: {
+        label: 'Expired',
+        color: '#64748b',
+        bg: 'bg-[#f8fafc]',
+        text: 'text-[#475569]',
+    },
+    cancelled: {
+        label: 'Cancelled',
+        color: '#9333ea',
+        bg: 'bg-[#faf5ff]',
+        text: 'text-[#7e22ce]',
+    },
 };
 
 export function AccessRequestsStatusChart({
@@ -67,7 +79,7 @@ export function AccessRequestsStatusChart({
                         ))}
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                         {entries.map(([status, value]) => (
                             <button
                                 key={status}

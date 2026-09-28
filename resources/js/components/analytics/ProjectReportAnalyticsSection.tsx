@@ -2,6 +2,7 @@ import {
     AlertTriangle,
     BarChart3,
     ClipboardCheck,
+    Download,
     FileCheck2,
     FileText,
     FolderOpen,
@@ -22,7 +23,14 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getProjectReportAnalytics } from '@/lib/analytics/project-report-analytics-service';
+import {
+    exportAgencyProjectReportAnalytics,
+    getProjectReportOverview,
+    getProjectReportRecords,
+    projectReportAnalyticsPath,
+    projectReportDetailPath,
+    projectReportStateFromSearch,
+} from '@/lib/analytics/project-report-analytics-service';
 import type {
     AccomplishmentClassification,
     ApiPagination,
@@ -54,8 +62,6 @@ const workflowStatusOptions: ProjectReportWorkflowStatus[] = [
     'approved',
     'rejected',
     'published',
-    'archived',
-    'superseded',
 ];
 
 const completenessOptions: ReportCompletenessClassification[] = [
@@ -99,21 +105,56 @@ type ProjectReportAnalyticsState = {
     summary: ProjectReportSummary;
     status: ProjectReportStatusAnalytics;
     budget: ProjectReportBudgetAnalytics;
+};
+
+type ProjectReportRecordsState = {
     records: ProjectReportAnalyticsRecord[];
     pagination: ApiPagination;
 };
 
 export function ProjectReportAnalyticsSection() {
-    const [filters, setFilters] =
-        useState<ProjectReportAnalyticsFilters>(initialFilters);
-    const [publicationYearDraft, setPublicationYearDraft] = useState('');
-    const [fundingSourceDraft, setFundingSourceDraft] = useState('');
-    const [page, setPage] = useState(1);
+    const initialUrlState = useMemo(
+        () =>
+            projectReportStateFromSearch(
+                typeof window === 'undefined' ? '' : window.location.search,
+            ),
+        [],
+    );
+    const [filters, setFilters] = useState<ProjectReportAnalyticsFilters>({
+        ...initialFilters,
+        ...initialUrlState.filters,
+    });
+    const [publicationYearDraft, setPublicationYearDraft] = useState(
+        initialUrlState.filters.publication_year ?? '',
+    );
+    const [fundingSourceDraft, setFundingSourceDraft] = useState(
+        initialUrlState.filters.funding_source ?? '',
+    );
+    const [page, setPage] = useState(initialUrlState.page);
     const [analytics, setAnalytics] =
         useState<ProjectReportAnalyticsState | null>(null);
+    const [recordsState, setRecordsState] =
+        useState<ProjectReportRecordsState | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isRecordsLoading, setIsRecordsLoading] = useState(true);
     const [error, setError] = useState('');
+    const [recordsError, setRecordsError] = useState('');
     const [reloadToken, setReloadToken] = useState(0);
+    const [recordsReloadToken, setRecordsReloadToken] = useState(0);
+    const [exportingFormat, setExportingFormat] = useState<
+        'pdf' | 'csv' | null
+    >(null);
+    const [exportMessage, setExportMessage] = useState('');
+
+    useEffect(() => {
+        const path = projectReportAnalyticsPath(
+            '/agency/analytics',
+            filters,
+            page,
+        );
+
+        window.history.replaceState(window.history.state, '', path);
+    }, [filters, page]);
 
     useEffect(() => {
         const timeout = window.setTimeout(() => {
@@ -126,7 +167,9 @@ export function ProjectReportAnalyticsSection() {
                 }
 
                 setIsLoading(true);
+                setIsRecordsLoading(true);
                 setError('');
+                setRecordsError('');
                 setPage(1);
 
                 return {
@@ -144,11 +187,7 @@ export function ProjectReportAnalyticsSection() {
         const controller = new AbortController();
         let isCurrent = true;
 
-        getProjectReportAnalytics(
-            filters,
-            { page, perPage: recordsPerPage },
-            controller.signal,
-        )
+        getProjectReportOverview(filters, controller.signal)
             .then((payload) => {
                 if (!isCurrent) {
                     return;
@@ -172,7 +211,45 @@ export function ProjectReportAnalyticsSection() {
             isCurrent = false;
             controller.abort();
         };
-    }, [filters, page, reloadToken]);
+    }, [filters, reloadToken]);
+
+    useEffect(() => {
+        const controller = new AbortController();
+        let isCurrent = true;
+
+        getProjectReportRecords(
+            filters,
+            { page, perPage: recordsPerPage },
+            controller.signal,
+        )
+            .then((payload) => {
+                if (!isCurrent) {
+                    return;
+                }
+
+                setRecordsState({
+                    records: payload.data,
+                    pagination: payload.pagination,
+                });
+                setRecordsError('');
+                setIsRecordsLoading(false);
+            })
+            .catch((requestError: unknown) => {
+                if (!isCurrent || isAbortError(requestError)) {
+                    return;
+                }
+
+                setRecordsError(
+                    'Report records could not be loaded. Please try again later.',
+                );
+                setIsRecordsLoading(false);
+            });
+
+        return () => {
+            isCurrent = false;
+            controller.abort();
+        };
+    }, [filters, page, recordsReloadToken]);
 
     const activeFilterCount = useMemo(
         () =>
@@ -189,7 +266,9 @@ export function ProjectReportAnalyticsSection() {
         value: string,
     ) => {
         setIsLoading(true);
+        setIsRecordsLoading(true);
         setError('');
+        setRecordsError('');
         setPage(1);
         setFilters((current) => {
             const next = { ...current, [key]: value };
@@ -218,7 +297,9 @@ export function ProjectReportAnalyticsSection() {
 
     const clearFilters = () => {
         setIsLoading(true);
+        setIsRecordsLoading(true);
         setError('');
+        setRecordsError('');
         setFilters(initialFilters);
         setPublicationYearDraft('');
         setFundingSourceDraft('');
@@ -226,8 +307,8 @@ export function ProjectReportAnalyticsSection() {
     };
 
     const changePage = (nextPage: number) => {
-        setIsLoading(true);
-        setError('');
+        setIsRecordsLoading(true);
+        setRecordsError('');
         setPage(nextPage);
     };
 
@@ -235,6 +316,31 @@ export function ProjectReportAnalyticsSection() {
         setIsLoading(true);
         setError('');
         setReloadToken((current) => current + 1);
+    };
+
+    const retryRecords = () => {
+        setIsRecordsLoading(true);
+        setRecordsError('');
+        setRecordsReloadToken((current) => current + 1);
+    };
+
+    const exportReport = async (format: 'pdf' | 'csv') => {
+        setExportingFormat(format);
+        setExportMessage('');
+
+        try {
+            const result = await exportAgencyProjectReportAnalytics(
+                filters,
+                format,
+            );
+            setExportMessage(`${result.fileName} is ready.`);
+        } catch {
+            setExportMessage(
+                'Project report analytics could not be exported. Please try again.',
+            );
+        } finally {
+            setExportingFormat(null);
+        }
     };
 
     return (
@@ -255,9 +361,38 @@ export function ProjectReportAnalyticsSection() {
                 </h2>
                 <p className="mt-1 max-w-[760px] text-sm leading-5 text-[#6a7282]">
                     Monitor report completeness, workflow status, physical
-                    accomplishment, and budget utilization from submitted
+                    accomplishment, and budget utilization across all available
                     Terminal Reports and Project Accomplishment Reports.
                 </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => exportReport('pdf')}
+                        disabled={exportingFormat !== null}
+                    >
+                        <Download className="size-4" />
+                        {exportingFormat === 'pdf'
+                            ? 'Exporting PDF...'
+                            : 'Export PDF'}
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => exportReport('csv')}
+                        disabled={exportingFormat !== null}
+                    >
+                        <Download className="size-4" />
+                        {exportingFormat === 'csv'
+                            ? 'Exporting CSV...'
+                            : 'Export CSV'}
+                    </Button>
+                </div>
+                {exportMessage ? (
+                    <p className="mt-2 text-xs text-[#4a5565]" role="status">
+                        {exportMessage}
+                    </p>
+                ) : null}
             </div>
 
             <ProjectReportFilters
@@ -323,11 +458,25 @@ export function ProjectReportAnalyticsSection() {
                         <BudgetAnalyticsPanel budget={analytics.budget} />
                     </section>
 
-                    <ProjectReportRecordsTable
-                        records={analytics.records}
-                        pagination={analytics.pagination}
-                        onPageChange={changePage}
-                    />
+                    {isRecordsLoading ? (
+                        <Skeleton className="h-[420px] rounded-[14px]" />
+                    ) : recordsError ? (
+                        <ProjectReportErrorState
+                            message={recordsError}
+                            onRetry={retryRecords}
+                        />
+                    ) : recordsState ? (
+                        <ProjectReportRecordsTable
+                            records={recordsState.records}
+                            pagination={recordsState.pagination}
+                            onPageChange={changePage}
+                            returnPath={projectReportAnalyticsPath(
+                                '/agency/analytics',
+                                filters,
+                                page,
+                            )}
+                        />
+                    ) : null}
                 </>
             ) : null}
         </section>
@@ -441,14 +590,14 @@ function ProjectReportFilters({
                 />
                 <FilterInput
                     id="date_from"
-                    label="Date From"
+                    label="Record Created From"
                     type="date"
                     value={filters.date_from ?? ''}
                     onChange={(value) => onFilterChange('date_from', value)}
                 />
                 <FilterInput
                     id="date_to"
-                    label="Date To"
+                    label="Record Created To"
                     type="date"
                     value={filters.date_to ?? ''}
                     onChange={(value) => onFilterChange('date_to', value)}
@@ -751,9 +900,7 @@ function BudgetAnalyticsPanel({
     const allotted = parseDecimal(totals.allotted_budget);
     const utilized = parseDecimal(totals.utilized_amount);
     const maxAmount = Math.max(Math.abs(allotted), Math.abs(utilized), 0);
-    const hasOverutilization =
-        totals.utilization_percentage !== null &&
-        totals.utilization_percentage > 100;
+    const hasOverutilization = utilized > allotted;
 
     return (
         <article className="rounded-[14px] border border-[#e5e7eb] bg-white p-6 shadow-[0px_1px_3px_0px_rgba(0,0,0,0.08),0px_1px_2px_0px_rgba(0,0,0,0.06)]">
@@ -875,10 +1022,12 @@ function ProjectReportRecordsTable({
     records,
     pagination,
     onPageChange,
+    returnPath,
 }: {
     records: ProjectReportAnalyticsRecord[];
     pagination: ApiPagination;
     onPageChange: (page: number) => void;
+    returnPath: string;
 }) {
     return (
         <article className="rounded-[14px] border border-[#e5e7eb] bg-white shadow-[0px_1px_3px_0px_rgba(0,0,0,0.08),0px_1px_2px_0px_rgba(0,0,0,0.06)]">
@@ -1035,7 +1184,10 @@ function ProjectReportRecordsTable({
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <a
-                                                href={`/agency/analytics/project-reports/${record.research_id}`}
+                                                href={projectReportDetailPath(
+                                                    `/agency/analytics/project-reports/${record.research_id}`,
+                                                    returnPath,
+                                                )}
                                                 className="inline-flex h-8 items-center gap-2 rounded-[8px] border border-[#e5e7eb] bg-white px-3 text-xs font-medium text-[#1e3a8a] hover:bg-[#f9fafb]"
                                             >
                                                 <FolderOpen className="size-3.5" />

@@ -9,6 +9,7 @@ import {
     UserPlus,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { ActivityPagination } from '@/components/admin/system-activity/ActivityPagination';
 import { cn } from '@/lib/utils';
 import type {
     ActivityTimelineItem,
@@ -18,6 +19,11 @@ import type {
 type ActivityTimelineProps = {
     items: ActivityTimelineItem[];
     isLoading: boolean;
+    currentPage: number;
+    totalPages: number;
+    totalResults: number;
+    rowsPerPage: number;
+    onPageChange: (page: number) => void;
 };
 
 const timelineStyle = {
@@ -51,7 +57,15 @@ const timelineStyle = {
     },
 } satisfies Record<ActivityTimelineType, { color: string; icon: LucideIcon }>;
 
-export function ActivityTimeline({ items, isLoading }: ActivityTimelineProps) {
+export function ActivityTimeline({
+    items,
+    isLoading,
+    currentPage,
+    totalPages,
+    totalResults,
+    rowsPerPage,
+    onPageChange,
+}: ActivityTimelineProps) {
     return (
         <section className="mt-6 overflow-hidden rounded-[14px] border border-[#e5e7eb] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_-1px_rgba(0,0,0,0.1)]">
             <div className="flex h-[69px] items-center gap-2.5 border-b border-[#f3f4f6] px-6">
@@ -136,6 +150,16 @@ export function ActivityTimeline({ items, isLoading }: ActivityTimelineProps) {
                     </div>
                 )}
             </div>
+
+            {!isLoading && (
+                <ActivityPagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalResults={totalResults}
+                    rowsPerPage={rowsPerPage}
+                    onPageChange={onPageChange}
+                />
+            )}
         </section>
     );
 }

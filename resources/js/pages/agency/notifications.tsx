@@ -13,7 +13,8 @@ import {
     ShieldCheck,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { AccessRequestPagination } from '@/components/access-requests/AccessRequestPagination';
 import AgencyAdminLayout from '@/components/agency/AgencyAdminLayout';
 import {
     moderationIssueTypeLabels,
@@ -21,13 +22,15 @@ import {
 } from '@/data/research-moderation-options';
 import { useAgencySession } from '@/lib/auth/agency-auth';
 import {
-    getAgencyNotifications,
+    getAgencyNotificationsPage,
     markAllAgencyNotificationsRead,
     updateAgencyNotificationReadState,
 } from '@/lib/notifications/notification-service';
 import { cn } from '@/lib/utils';
 import type {
     AgencyNotification,
+    AgencyNotificationCounts,
+    AgencyNotificationPagination,
     AgencyNotificationType,
 } from '@/types/notifications';
 
@@ -88,14 +91,38 @@ const formatNotificationDate = (value: string) =>
         minute: '2-digit',
     }).format(new Date(value));
 
+const initialPagination: AgencyNotificationPagination = {
+    current_page: 1,
+    per_page: 10,
+    total: 0,
+    last_page: 1,
+    from: null,
+    to: null,
+};
+
+const initialCounts: AgencyNotificationCounts = {
+    total: 0,
+    unread: 0,
+    actionable: 0,
+};
+
 export default function AgencyNotificationsPage() {
     const session = useAgencySession();
     const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [filter, setFilter] = useState<NotificationFilter>('all');
     const [notifications, setNotifications] = useState<AgencyNotification[]>(
         [],
     );
+    const [pagination, setPagination] =
+        useState<AgencyNotificationPagination>(initialPagination);
+    const [counts, setCounts] =
+        useState<AgencyNotificationCounts>(initialCounts);
+    const [page, setPage] = useState(1);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
     const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [reloadToken, setReloadToken] = useState(0);
 
     useEffect(() => {
         if (!session) {
@@ -104,62 +131,88 @@ export default function AgencyNotificationsPage() {
     }, [session]);
 
     useEffect(() => {
+        const timeout = window.setTimeout(() => {
+            setIsLoading(true);
+            setError('');
+            setPage(1);
+            setDebouncedSearch(search.trim());
+        }, 300);
+
+        return () => window.clearTimeout(timeout);
+    }, [search]);
+
+    useEffect(() => {
         let isCurrent = true;
+        const controller = new AbortController();
 
-        getAgencyNotifications().then((nextNotifications) => {
-            if (!isCurrent) {
-                return;
-            }
+        void getAgencyNotificationsPage({
+            page,
+            perPage: rowsPerPage,
+            search: debouncedSearch,
+            filter,
+            signal: controller.signal,
+        })
+            .then((result) => {
+                if (!isCurrent) {
+                    return;
+                }
 
-            setNotifications(nextNotifications);
-            setIsLoading(false);
-        });
+                if (page > result.pagination.last_page) {
+                    setPage(Math.max(1, result.pagination.last_page));
+
+                    return;
+                }
+
+                setNotifications(result.notifications);
+                setPagination(result.pagination);
+                setCounts(result.counts);
+                setIsLoading(false);
+            })
+            .catch((requestError: unknown) => {
+                if (!isCurrent || isAbortError(requestError)) {
+                    return;
+                }
+
+                setError(
+                    'Notifications could not be loaded. Please try again.',
+                );
+                setIsLoading(false);
+            });
 
         return () => {
             isCurrent = false;
+            controller.abort();
         };
-    }, []);
-
-    const filteredNotifications = useMemo(() => {
-        const normalizedSearch = search.trim().toLowerCase();
-
-        return notifications.filter((notification) => {
-            const matchesSearch =
-                !normalizedSearch ||
-                [
-                    notification.title,
-                    notification.message,
-                    notificationTypeDisplay[notification.type].label,
-                ]
-                    .join(' ')
-                    .toLowerCase()
-                    .includes(normalizedSearch);
-            const matchesFilter =
-                filter === 'all' ||
-                (filter === 'unread' && !notification.isRead) ||
-                notification.type === filter;
-
-            return matchesSearch && matchesFilter;
-        });
-    }, [filter, notifications, search]);
-
-    const unreadCount = notifications.filter(
-        (notification) => !notification.isRead,
-    ).length;
+    }, [debouncedSearch, filter, page, reloadToken, rowsPerPage]);
 
     const handleReadToggle = async (notification: AgencyNotification) => {
-        const nextNotifications = await updateAgencyNotificationReadState(
-            notification.id,
-            !notification.isRead,
-        );
-
-        setNotifications(nextNotifications);
+        try {
+            await updateAgencyNotificationReadState(
+                notification.id,
+                !notification.isRead,
+            );
+            setIsLoading(true);
+            setError('');
+            setReloadToken((current) => current + 1);
+        } catch {
+            setError(
+                'The notification read state could not be updated. Please try again.',
+            );
+        }
     };
 
     const handleMarkAllRead = async () => {
-        const nextNotifications = await markAllAgencyNotificationsRead();
-
-        setNotifications(nextNotifications);
+        try {
+            await markAllAgencyNotificationsRead();
+            setIsLoading(true);
+            setError('');
+            setPage(1);
+            setReloadToken((current) => current + 1);
+        } catch {
+            setError(
+                'Notifications could not be marked as read. Please try again.',
+            );
+        }
     };
 
     if (!session) {
@@ -205,7 +258,7 @@ export default function AgencyNotificationsPage() {
                             </div>
                             <button
                                 type="button"
-                                disabled={unreadCount === 0}
+                                disabled={counts.unread === 0}
                                 onClick={() => void handleMarkAllRead()}
                                 className="inline-flex h-10 items-center gap-2 rounded-[10px] bg-[#1e3a8a] px-4 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-[#e5e7eb] disabled:text-[#99a1af]"
                             >
@@ -215,18 +268,11 @@ export default function AgencyNotificationsPage() {
                         </section>
 
                         <section className="mt-5 grid gap-3 sm:grid-cols-3">
-                            <MetricCard
-                                label="Total"
-                                value={notifications.length}
-                            />
-                            <MetricCard label="Unread" value={unreadCount} />
+                            <MetricCard label="Total" value={counts.total} />
+                            <MetricCard label="Unread" value={counts.unread} />
                             <MetricCard
                                 label="Actionable"
-                                value={
-                                    notifications.filter((notification) =>
-                                        Boolean(notification.actionHref),
-                                    ).length
-                                }
+                                value={counts.actionable}
                             />
                         </section>
 
@@ -248,9 +294,12 @@ export default function AgencyNotificationsPage() {
                                         <button
                                             key={option.value}
                                             type="button"
-                                            onClick={() =>
-                                                setFilter(option.value)
-                                            }
+                                            onClick={() => {
+                                                setIsLoading(true);
+                                                setError('');
+                                                setFilter(option.value);
+                                                setPage(1);
+                                            }}
                                             className={cn(
                                                 'h-9 rounded-[10px] border px-3 text-xs font-semibold',
                                                 filter === option.value
@@ -273,8 +322,19 @@ export default function AgencyNotificationsPage() {
                                         className="h-[118px] animate-pulse rounded-[14px] bg-white"
                                     />
                                 ))
-                            ) : filteredNotifications.length > 0 ? (
-                                filteredNotifications.map((notification) => (
+                            ) : error ? (
+                                <NotificationErrorState
+                                    message={error}
+                                    onRetry={() => {
+                                        setIsLoading(true);
+                                        setError('');
+                                        setReloadToken(
+                                            (current) => current + 1,
+                                        );
+                                    }}
+                                />
+                            ) : notifications.length > 0 ? (
+                                notifications.map((notification) => (
                                     <NotificationItem
                                         key={notification.id}
                                         notification={notification}
@@ -287,6 +347,39 @@ export default function AgencyNotificationsPage() {
                                 <EmptyState />
                             )}
                         </section>
+
+                        {!isLoading && !error && pagination.total > 0 ? (
+                            <section className="mt-4 overflow-hidden rounded-[14px] border border-[#e5e7eb] bg-white shadow-sm">
+                                <AccessRequestPagination
+                                    currentPage={pagination.current_page}
+                                    totalPages={Math.max(
+                                        1,
+                                        pagination.last_page,
+                                    )}
+                                    rowsPerPage={rowsPerPage}
+                                    totalItems={pagination.total}
+                                    onPageChange={(nextPage) => {
+                                        setIsLoading(true);
+                                        setError('');
+                                        setPage(
+                                            Math.min(
+                                                Math.max(nextPage, 1),
+                                                Math.max(
+                                                    1,
+                                                    pagination.last_page,
+                                                ),
+                                            ),
+                                        );
+                                    }}
+                                    onRowsPerPageChange={(nextRowsPerPage) => {
+                                        setIsLoading(true);
+                                        setError('');
+                                        setRowsPerPage(nextRowsPerPage);
+                                        setPage(1);
+                                    }}
+                                />
+                            </section>
+                        ) : null}
                     </div>
                 </main>
             </AgencyAdminLayout>
@@ -402,4 +495,32 @@ function EmptyState() {
             </p>
         </div>
     );
+}
+
+function NotificationErrorState({
+    message,
+    onRetry,
+}: {
+    message: string;
+    onRetry: () => void;
+}) {
+    return (
+        <div
+            role="alert"
+            className="flex min-h-[220px] flex-col items-center justify-center rounded-[14px] border border-[#fecaca] bg-[#fef2f2] px-6 text-center"
+        >
+            <p className="text-sm font-semibold text-[#b91c1c]">{message}</p>
+            <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 h-9 rounded-[10px] bg-[#1e3a8a] px-4 text-xs font-semibold text-white"
+            >
+                Try again
+            </button>
+        </div>
+    );
+}
+
+function isAbortError(error: unknown) {
+    return error instanceof DOMException && error.name === 'AbortError';
 }

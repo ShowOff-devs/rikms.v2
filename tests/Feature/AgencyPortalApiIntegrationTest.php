@@ -166,6 +166,57 @@ test('agency profile settings and analytics endpoints are database backed', func
         ->assertJsonPath('data.records.0.title', 'Database Backed Agency Research');
 });
 
+test('agency notifications support scoped server pagination search and category filters', function () {
+    $agency = agencyPortalApiAgency();
+    $user = agencyPortalApiUser($agency);
+    $otherAgency = agencyPortalApiAgency();
+
+    foreach (range(1, 13) as $index) {
+        Notification::query()->create([
+            'user_id' => $user->id,
+            'agency_id' => $agency->id,
+            'type' => $index <= 3 ? 'access_request.submitted' : 'research.created',
+            'title' => $index === 8 ? 'Needle notification' : "Notification {$index}",
+            'message' => "Agency notification message {$index}",
+            'action_url' => $index <= 4 ? "/agency/notifications/{$index}" : null,
+            'read_at' => $index === 1 ? now() : null,
+            'status' => $index === 1 ? 'read' : 'unread',
+        ]);
+    }
+
+    Notification::query()->create([
+        'agency_id' => $otherAgency->id,
+        'type' => 'research.created',
+        'title' => 'Other agency notification',
+        'message' => 'This notification must not leak.',
+        'status' => 'unread',
+    ]);
+
+    $this->actingAs($user)
+        ->getJson('/api/agency/notifications?per_page=5&page=2')
+        ->assertOk()
+        ->assertJsonCount(5, 'data')
+        ->assertJsonPath('meta.pagination.current_page', 2)
+        ->assertJsonPath('meta.pagination.per_page', 5)
+        ->assertJsonPath('meta.pagination.total', 13)
+        ->assertJsonPath('meta.pagination.last_page', 3)
+        ->assertJsonPath('meta.notification_counts.total', 13)
+        ->assertJsonPath('meta.notification_counts.unread', 12)
+        ->assertJsonPath('meta.notification_counts.actionable', 4);
+
+    $this->actingAs($user)
+        ->getJson('/api/agency/notifications?category=access-request&per_page=10')
+        ->assertOk()
+        ->assertJsonCount(3, 'data')
+        ->assertJsonPath('meta.pagination.total', 3);
+
+    $this->actingAs($user)
+        ->getJson('/api/agency/notifications?search=Needle&per_page=10')
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.title', 'Needle notification');
+});
+
 test('agency logo upload replaces removes and audits public files', function () {
     Storage::fake('public');
 

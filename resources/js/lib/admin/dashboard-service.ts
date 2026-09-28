@@ -1,4 +1,5 @@
 import { fetchApi } from '@/lib/api-client';
+import { downloadResponseFile } from '@/lib/download-file';
 import type {
     AdminDashboardIcon,
     AdminDashboardMetric,
@@ -271,12 +272,28 @@ export async function getQuickManagementActions() {
 }
 
 export async function generateSystemReport(): Promise<GeneratedSystemReport> {
+    const response = await fetch('/api/admin/dashboard/export', {
+        credentials: 'same-origin',
+        headers: {
+            Accept: 'application/pdf',
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+    });
+
+    if (!response.ok) {
+        throw new Error('Unable to generate the system report.');
+    }
+
     const generatedAt = new Date().toISOString();
     const dateStamp = generatedAt.slice(0, 10);
+    const { fileName } = await downloadResponseFile(
+        response,
+        `rikms-system-report-${dateStamp}.pdf`,
+    );
 
     return {
         id: `system-report-${Date.now()}`,
-        fileName: `rikms-system-report-${dateStamp}.pdf`,
+        fileName,
         format: 'pdf',
         generatedAt,
         status: 'ready',

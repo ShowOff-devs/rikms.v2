@@ -2,26 +2,24 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Api\Concerns\ExportsProjectReportAnalytics;
 use App\Http\Controllers\Api\Concerns\RespondsWithApiPagination;
 use App\Http\Controllers\Api\Concerns\ValidatesProjectReportAnalyticsFilters;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ProjectReportAnalyticsDetailResource;
-use App\Http\Resources\ProjectReportAnalyticsRecordResource;
 use App\Models\Research;
 use App\Services\Analytics\ProjectReportAnalyticsService;
 use App\Services\Analytics\ReportTypeResolver;
 use App\Support\ApiResponse;
 use App\Support\AuditLogger;
-use App\Support\CsvExport;
 use App\Support\Statuses;
-use Dompdf\Dompdf;
-use Dompdf\Options;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 class AdminProjectReportAnalyticsController extends Controller
 {
+    use ExportsProjectReportAnalytics;
     use RespondsWithApiPagination;
     use ValidatesProjectReportAnalyticsFilters;
 
@@ -37,6 +35,16 @@ class AdminProjectReportAnalyticsController extends Controller
         return ApiResponse::success(
             'Admin project report analytics summary retrieved.',
             $this->analytics->summary($filters, allowAgencyFilter: true),
+        );
+    }
+
+    public function overview(Request $request): JsonResponse
+    {
+        $filters = $this->reportAnalyticsFilters($request, allowAgencyFilter: true);
+
+        return ApiResponse::success(
+            'Admin project report analytics overview retrieved.',
+            $this->analytics->overview($filters, allowAgencyFilter: true, includeAgencies: true),
         );
     }
 
@@ -93,47 +101,17 @@ class AdminProjectReportAnalyticsController extends Controller
             'filters' => collect($filters)->except(['page', 'per_page'])->all(),
         ]);
 
-        if ($format === 'csv') {
-            return response()->streamDownload(function () use ($filters, $request): void {
-                $handle = fopen('php://output', 'w');
-                fputcsv($handle, ['ID', 'Title', 'Agency', 'Report Type', 'Reporting Period', 'Year', 'Workflow Status', 'Completeness', 'Allotted Budget', 'Utilized Amount', 'Utilization %', 'Physical Accomplishment %']);
-
-                foreach ($this->analytics->lazyExportRecords($filters, allowAgencyFilter: true) as $research) {
-                    $record = (new ProjectReportAnalyticsRecordResource($research))->resolve($request);
-                    fputcsv($handle, CsvExport::row([
-                        $record['research_id'], $record['title'], $record['agency']['name'] ?? '', $record['report_type'],
-                        $record['reporting_period'], $record['publication_year'], $record['workflow_status'],
-                        $record['completeness']['classification'] ?? '', $record['budget']['allotted_budget'] ?? '',
-                        $record['budget']['utilized_amount'] ?? '', $record['budget']['utilization_percentage'] ?? '',
-                        $record['accomplishment']['physical_accomplishment_percentage'] ?? '',
-                    ]));
-                }
-
-                fclose($handle);
-            }, 'project-report-analytics-'.now()->format('Y-m-d').'.csv', ['Content-Type' => 'text/csv']);
-        }
-
-        $records = $this->analytics->exportRecords($filters, allowAgencyFilter: true)
-            ->map(fn (Research $research): array => (new ProjectReportAnalyticsRecordResource($research))->resolve($request));
-
-        $options = new Options;
-        $options->set('defaultFont', 'DejaVu Sans');
-        $options->set('isRemoteEnabled', false);
-        $pdf = new Dompdf($options);
-        $pdf->loadHtml(view('reports.admin.project-report-analytics', [
-            'records' => $records,
-            'summary' => $this->analytics->summary($filters, allowAgencyFilter: true),
-            'budget' => $this->analytics->budget($filters, allowAgencyFilter: true, includeAgencyGroups: true),
-            'filters' => collect($filters)->except(['page', 'per_page', 'sort', 'direction'])->all(),
-            'generatedAt' => now(),
-        ])->render());
-        $pdf->setPaper('a4', 'landscape');
-        $pdf->render();
-
-        return response($pdf->output(), 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="project-report-analytics-'.now()->format('Y-m-d').'.pdf"',
-        ]);
+        return $this->projectReportAnalyticsExport(
+            $request,
+            $this->analytics,
+            $filters,
+            null,
+            allowAgencyFilter: true,
+            includeAgencies: true,
+            filenamePrefix: 'project-report-analytics',
+            scopeLabel: 'Regional Terminal Report and Project Accomplishment Report metrics',
+            footerLabel: 'RIKMS — Superadmin project report analytics export',
+        );
     }
 
     public function show(Request $request, Research $research): JsonResponse

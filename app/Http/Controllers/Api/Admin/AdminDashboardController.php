@@ -13,16 +13,59 @@ use App\Models\ResearchFile;
 use App\Models\SecurityEvent;
 use App\Models\User;
 use App\Support\ApiResponse;
+use App\Support\AuditLogger;
 use App\Support\Statuses;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+use Symfony\Component\HttpFoundation\Response;
 
 class AdminDashboardController extends Controller
 {
     public function __invoke(Request $request): JsonResponse
+    {
+        return ApiResponse::success(
+            'Admin dashboard loaded successfully.',
+            $this->dashboardData($request),
+        );
+    }
+
+    public function export(Request $request): Response
+    {
+        $data = $this->dashboardData($request);
+
+        AuditLogger::record(
+            $request,
+            'report.exported',
+            metadata: ['report' => 'system-dashboard', 'format' => 'pdf'],
+        );
+
+        $options = new Options;
+        $options->set('defaultFont', 'DejaVu Sans');
+        $options->set('isRemoteEnabled', false);
+
+        $pdf = new Dompdf($options);
+        $pdf->loadHtml(view('reports.admin.system-dashboard', [
+            'data' => $data,
+            'generatedAt' => now(),
+        ])->render());
+        $pdf->setPaper('a4', 'landscape');
+        $pdf->render();
+
+        return response($pdf->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="rikms-system-report-'.now()->format('Y-m-d').'.pdf"',
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function dashboardData(Request $request): array
     {
         $agencies = $this->query(Agency::class);
         $users = $this->query(User::class);
@@ -38,7 +81,7 @@ class AdminDashboardController extends Controller
         $underReviewResearch = $this->countWhere($research, 'status', Statuses::RESEARCH_UNDER_REVIEW);
         $pendingApprovals = $this->countWhere($researchApprovals, 'status', 'pending');
 
-        return ApiResponse::success('Admin dashboard loaded successfully.', [
+        return [
             'metrics' => [
                 'total_agencies' => $this->count($agencies),
                 'active_agencies' => $this->countWhere($agencies, 'status', 'active'),
@@ -81,7 +124,7 @@ class AdminDashboardController extends Controller
                 'locked_accounts' => $this->lockedAccountCount($securityEvents),
                 'security_alerts' => $this->countWhereNull($securityEvents, 'resolved_at'),
             ],
-        ]);
+        ];
     }
 
     /**

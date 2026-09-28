@@ -138,10 +138,29 @@ class AgencyReadController extends Controller
 
     public function notifications(Request $request): JsonResponse
     {
-        $query = $this->agencyNotificationQuery($request)
+        $baseQuery = $this->agencyNotificationQuery($request);
+        $counts = [
+            'total' => (clone $baseQuery)->count(),
+            'unread' => (clone $baseQuery)->unreadBy($request->user()->id)->count(),
+            'actionable' => (clone $baseQuery)
+                ->whereNotNull('action_url')
+                ->where('action_url', '!=', '')
+                ->count(),
+        ];
+
+        $query = (clone $baseQuery)
             ->with(['userStates' => fn ($query) => $query->where('user_id', $request->user()->id)])
             ->when($request->query('status') === 'read', fn (Builder $query) => $query->readBy($request->user()->id))
             ->when($request->query('status') === 'unread' || $request->boolean('unread'), fn (Builder $query) => $query->unreadBy($request->user()->id))
+            ->when($request->filled('category'), fn (Builder $query) => $this->applyNotificationCategoryFilter($query, $request->string('category')->toString()))
+            ->when($request->filled('search'), function (Builder $query) use ($request): void {
+                $search = '%'.addcslashes($request->string('search')->trim()->toString(), '%_\\').'%';
+
+                $query->where(function (Builder $query) use ($search): void {
+                    $query->where('title', 'like', $search)
+                        ->orWhere('message', 'like', $search);
+                });
+            })
             ->orderBy('created_at', $this->sortDirection($request));
 
         return $this->paginatedResponse(
@@ -149,7 +168,40 @@ class AgencyReadController extends Controller
             $query->paginate($this->perPage($request)),
             NotificationResource::class,
             $request,
+            ['notification_counts' => $counts],
         );
+    }
+
+    private function applyNotificationCategoryFilter(Builder $query, string $category): void
+    {
+        match ($category) {
+            'upload' => $query->whereIn('type', [
+                'upload',
+                'research.created',
+                'research.submitted',
+                'research.approved',
+                'research.approved_published',
+                'research.published',
+            ]),
+            'access-request' => $query->where(function (Builder $query): void {
+                $query->where('type', 'like', 'access_request.%')
+                    ->orWhere('type', 'like', 'agency_access_request.%')
+                    ->orWhere('type', 'access-request');
+            }),
+            'revision-request' => $query->whereIn('type', [
+                'research.revision_requested',
+                'research.rejected',
+                'research.returned',
+            ]),
+            'archive' => $query->whereIn('type', ['archive', 'research.archived', 'research.restored']),
+            'analytics' => $query->where(function (Builder $query): void {
+                $query->where('type', 'analytics')->orWhere('type', 'like', 'analytics.%');
+            }),
+            'settings' => $query->where(function (Builder $query): void {
+                $query->where('type', 'settings')->orWhere('type', 'like', 'settings.%');
+            }),
+            default => $query->whereRaw('1 = 0'),
+        };
     }
 
     public function researchFiles(Request $request): JsonResponse

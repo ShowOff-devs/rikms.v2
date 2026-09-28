@@ -5,6 +5,7 @@ type RbacPaginationProps = {
     totalPages: number;
     totalResults: number;
     rowsPerPage: number;
+    itemLabel?: string;
     onPageChange: (page: number) => void;
 };
 
@@ -13,6 +14,7 @@ export function RbacPagination({
     totalPages,
     totalResults,
     rowsPerPage,
+    itemLabel = 'assignments',
     onPageChange,
 }: RbacPaginationProps) {
     const start = totalResults === 0 ? 0 : (currentPage - 1) * rowsPerPage + 1;
@@ -21,7 +23,7 @@ export function RbacPagination({
     return (
         <div className="flex min-h-16 items-center justify-between border-t border-[#f3f4f6] px-6 py-4">
             <p className="text-xs text-[#99a1af]">
-                Showing {start}-{end} of {totalResults} assignments
+                Showing {start}-{end} of {totalResults} {itemLabel}
             </p>
             <div className="flex items-center gap-2">
                 <button
@@ -29,7 +31,7 @@ export function RbacPagination({
                     onClick={() => onPageChange(currentPage - 1)}
                     disabled={currentPage <= 1}
                     className="flex size-8 items-center justify-center rounded-[8px] border border-[#e5e7eb] text-[#6a7282] disabled:cursor-not-allowed disabled:opacity-40"
-                    aria-label="Previous assignment page"
+                    aria-label={`Previous ${itemLabel} page`}
                 >
                     <ChevronLeft className="size-4" aria-hidden="true" />
                 </button>
@@ -41,7 +43,7 @@ export function RbacPagination({
                     onClick={() => onPageChange(currentPage + 1)}
                     disabled={currentPage >= totalPages}
                     className="flex size-8 items-center justify-center rounded-[8px] border border-[#e5e7eb] text-[#6a7282] disabled:cursor-not-allowed disabled:opacity-40"
-                    aria-label="Next assignment page"
+                    aria-label={`Next ${itemLabel} page`}
                 >
                     <ChevronRight className="size-4" aria-hidden="true" />
                 </button>

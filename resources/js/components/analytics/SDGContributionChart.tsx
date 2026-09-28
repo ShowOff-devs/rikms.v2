@@ -15,7 +15,7 @@ export function SDGContributionChart({
         <article className="rounded-[14px] border border-[#e5e7eb] bg-white p-6 shadow-[0px_1px_3px_0px_rgba(0,0,0,0.08),0px_1px_2px_0px_rgba(0,0,0,0.06)]">
             <ChartHeading
                 title="Research Contribution by SDG"
-                description="Filtered research mapped to Sustainable Development Goals."
+                description="Share of filtered research mapped to each goal. One record may contribute to multiple SDGs, so percentages can total more than 100%."
             />
 
             {data.length === 0 ? (
@@ -42,7 +42,8 @@ export function SDGContributionChart({
                                         {item.sdg}: {item.label}
                                     </span>
                                     <span className="shrink-0 text-xs font-semibold text-[#1e3a8a]">
-                                        {item.count} / {item.percentage}%
+                                        {item.count} / {item.percentage}% of
+                                        research
                                     </span>
                                 </span>
                                 <span className="block h-2.5 overflow-hidden rounded-full bg-[#edf2f7]">

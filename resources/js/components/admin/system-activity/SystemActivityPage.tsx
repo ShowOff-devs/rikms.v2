@@ -27,6 +27,7 @@ import type {
 } from '@/types/system-activity';
 
 const defaultRowsPerPage = 8;
+const timelineRowsPerPage = 5;
 
 export function SystemActivityPage() {
     const [topbarSearch, setTopbarSearch] = useState('');
@@ -37,7 +38,9 @@ export function SystemActivityPage() {
     const [timelineItems, setTimelineItems] = useState<ActivityTimelineItem[]>(
         [],
     );
+    const [timelinePage, setTimelinePage] = useState(1);
     const [isLoading, setIsLoading] = useState(true);
+    const [isActivityLoading, setIsActivityLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [feedback, setFeedback] = useState<string | null>(null);
     const [selectedCategory, setSelectedCategory] =
@@ -94,6 +97,7 @@ export function SystemActivityPage() {
     useEffect(() => {
         let isCurrent = true;
         const timer = window.setTimeout(() => {
+            setIsActivityLoading(true);
             getActivityLogs(
                 {
                     query: [topbarSearch, activitySearch]
@@ -112,16 +116,31 @@ export function SystemActivityPage() {
                         return;
                     }
 
+                    const lastPage = Math.max(1, result.pagination.totalPages);
+
+                    if (currentPage > lastPage) {
+                        setCurrentPage(lastPage);
+
+                        return;
+                    }
+
                     setActivityLogs(result.logs);
-                    setTotalPages(result.pagination.totalPages);
+                    setCurrentPage(result.pagination.currentPage);
+                    setTotalPages(lastPage);
                     setTotalResults(result.pagination.total);
                     setAgencies(result.filterOptions.agencies);
                     setActions(result.filterOptions.actions);
+                    setError(null);
                 })
                 .catch(
                     () =>
                         isCurrent && setError('Unable to load activity logs.'),
-                );
+                )
+                .finally(() => {
+                    if (isCurrent) {
+                        setIsActivityLoading(false);
+                    }
+                });
         }, 250);
 
         return () => {
@@ -177,6 +196,16 @@ export function SystemActivityPage() {
         () =>
             notifications.filter((notification) => notification.isRead).length,
         [notifications],
+    );
+
+    const timelineTotalPages = Math.max(
+        1,
+        Math.ceil(timelineItems.length / timelineRowsPerPage),
+    );
+    const effectiveTimelinePage = Math.min(timelinePage, timelineTotalPages);
+    const paginatedTimelineItems = timelineItems.slice(
+        (effectiveTimelinePage - 1) * timelineRowsPerPage,
+        effectiveTimelinePage * timelineRowsPerPage,
     );
 
     const handleMarkAsRead = async (id: string) => {
@@ -304,7 +333,7 @@ export function SystemActivityPage() {
                     notifications={notifications}
                     filteredNotifications={filteredNotifications}
                     selectedCategory={selectedCategory}
-                    isLoading={isLoading}
+                    isLoading={isActivityLoading}
                     onCategoryChange={setSelectedCategory}
                     onMarkAsRead={handleMarkAsRead}
                     onMarkAllAsRead={handleMarkAllAsRead}
@@ -335,7 +364,19 @@ export function SystemActivityPage() {
                     }
                 />
 
-                <ActivityTimeline items={timelineItems} isLoading={isLoading} />
+                <ActivityTimeline
+                    items={paginatedTimelineItems}
+                    isLoading={isLoading}
+                    currentPage={effectiveTimelinePage}
+                    totalPages={timelineTotalPages}
+                    totalResults={timelineItems.length}
+                    rowsPerPage={timelineRowsPerPage}
+                    onPageChange={(page) =>
+                        setTimelinePage(
+                            Math.min(Math.max(page, 1), timelineTotalPages),
+                        )
+                    }
+                />
             </main>
 
             <ExportActivityLogModal

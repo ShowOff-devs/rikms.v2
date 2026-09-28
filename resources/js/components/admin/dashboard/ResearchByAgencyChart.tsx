@@ -72,11 +72,11 @@ export function ResearchByAgencyChart({
                                 </li>
                             ))}
                         </ul>
-                        <div className="absolute inset-x-0 bottom-0 flex h-8 items-start justify-between gap-3 px-2 pt-2">
+                        <div className="absolute inset-x-0 bottom-0 flex h-8 items-start justify-between gap-2 px-2 pt-2">
                             {data.map((item) => (
                                 <span
                                     key={item.agency}
-                                    className="-rotate-45 truncate text-[9px] leading-3 text-[#99a1af]"
+                                    className="min-w-0 flex-1 truncate text-center text-[9px] leading-3 text-[#99a1af]"
                                     title={item.agency}
                                 >
                                     {item.agency}

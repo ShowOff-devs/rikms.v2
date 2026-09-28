@@ -20,7 +20,7 @@ export function QuickManagementActions({
     isLoading: boolean;
 }) {
     return (
-        <article className="rounded-[10px] border border-[#e5e7eb] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_-1px_rgba(0,0,0,0.1)] xl:col-span-2">
+        <article className="rounded-[10px] border border-[#e5e7eb] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_-1px_rgba(0,0,0,0.1)]">
             <div className="flex h-[65px] items-center gap-2.5 border-b border-[#f3f4f6] px-6">
                 <span className="flex size-8 items-center justify-center rounded-[10px] bg-[#f3f4f6] text-[#4a5565]">
                     <Zap className="size-4" aria-hidden="true" />

@@ -4,12 +4,19 @@ import {
     severityStyles,
     toTitleCase,
 } from '@/components/admin/security-center/security-center-display';
+import { SecurityCenterPagination } from '@/components/admin/security-center/SecurityCenterPagination';
 import { cn } from '@/lib/utils';
 import type { SecurityAlert } from '@/types/security-center';
 
 type SecurityAlertsPanelProps = {
     alerts: SecurityAlert[];
     isLoading: boolean;
+    activeCount: number;
+    currentPage: number;
+    totalPages: number;
+    totalResults: number;
+    rowsPerPage: number;
+    onPageChange: (page: number) => void;
     onViewDetails: (alert: SecurityAlert) => void;
     onAcknowledge: (id: string) => void;
     onResolve: (id: string) => void;
@@ -19,15 +26,17 @@ type SecurityAlertsPanelProps = {
 export function SecurityAlertsPanel({
     alerts,
     isLoading,
+    activeCount,
+    currentPage,
+    totalPages,
+    totalResults,
+    rowsPerPage,
+    onPageChange,
     onViewDetails,
     onAcknowledge,
     onResolve,
     onReopen,
 }: SecurityAlertsPanelProps) {
-    const activeCount = alerts.filter(
-        (alert) => alert.status === 'open',
-    ).length;
-
     return (
         <section className="mt-6 overflow-hidden rounded-[14px] border border-[#e5e7eb] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_-1px_rgba(0,0,0,0.1)]">
             <div className="flex min-h-[65px] items-center justify-between gap-4 border-b border-[#f3f4f6] px-6 py-4">
@@ -159,6 +168,17 @@ export function SecurityAlertsPanel({
                     })
                 )}
             </div>
+
+            {!isLoading && (
+                <SecurityCenterPagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalResults={totalResults}
+                    rowsPerPage={rowsPerPage}
+                    itemLabel="security alerts"
+                    onPageChange={onPageChange}
+                />
+            )}
         </section>
     );
 }

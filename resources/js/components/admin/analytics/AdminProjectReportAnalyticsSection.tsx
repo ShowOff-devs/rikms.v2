@@ -25,12 +25,12 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-    getAdminProjectReportAgencies,
-    getAdminProjectReportBudgetAnalytics,
+    getAdminProjectReportOverview,
     getAdminProjectReportRecords,
-    getAdminProjectReportStatusAnalytics,
-    getAdminProjectReportSummary,
     exportAdminProjectReportAnalytics,
+    projectReportAnalyticsPath,
+    projectReportDetailPath,
+    projectReportStateFromSearch,
 } from '@/lib/analytics/project-report-analytics-service';
 import type {
     AccomplishmentClassification,
@@ -64,8 +64,6 @@ const workflowStatusOptions: ProjectReportWorkflowStatus[] = [
     'approved',
     'rejected',
     'published',
-    'archived',
-    'superseded',
 ];
 
 const completenessOptions: ReportCompletenessClassification[] = [
@@ -130,11 +128,24 @@ type RecordsState = {
 };
 
 export function AdminProjectReportAnalyticsSection() {
-    const [filters, setFilters] =
-        useState<ProjectReportAnalyticsFilters>(initialFilters);
-    const [publicationYearDraft, setPublicationYearDraft] = useState('');
-    const [fundingSourceDraft, setFundingSourceDraft] = useState('');
-    const [page, setPage] = useState(1);
+    const initialUrlState = useMemo(
+        () =>
+            projectReportStateFromSearch(
+                typeof window === 'undefined' ? '' : window.location.search,
+            ),
+        [],
+    );
+    const [filters, setFilters] = useState<ProjectReportAnalyticsFilters>({
+        ...initialFilters,
+        ...initialUrlState.filters,
+    });
+    const [publicationYearDraft, setPublicationYearDraft] = useState(
+        initialUrlState.filters.publication_year ?? '',
+    );
+    const [fundingSourceDraft, setFundingSourceDraft] = useState(
+        initialUrlState.filters.funding_source ?? '',
+    );
+    const [page, setPage] = useState(initialUrlState.page);
     const [aggregate, setAggregate] = useState<AggregateState | null>(null);
     const [recordsState, setRecordsState] = useState<RecordsState | null>(null);
     const [isAggregateLoading, setIsAggregateLoading] = useState(true);
@@ -153,26 +164,14 @@ export function AdminProjectReportAnalyticsSection() {
     const [exportMessage, setExportMessage] = useState('');
 
     useEffect(() => {
-        const controller = new AbortController();
-        let isCurrent = true;
+        const path = projectReportAnalyticsPath(
+            '/admin/analytics',
+            filters,
+            page,
+        );
 
-        getAdminProjectReportAgencies({}, controller.signal)
-            .then((agencies) => {
-                if (isCurrent) {
-                    setAgencyFilterOptions(agencies);
-                }
-            })
-            .catch((error: unknown) => {
-                if (isCurrent && !isAbortError(error)) {
-                    setAgencyFilterOptions([]);
-                }
-            });
-
-        return () => {
-            isCurrent = false;
-            controller.abort();
-        };
-    }, []);
+        window.history.replaceState(window.history.state, '', path);
+    }, [filters, page]);
 
     useEffect(() => {
         const timeout = window.setTimeout(() => {
@@ -205,18 +204,16 @@ export function AdminProjectReportAnalyticsSection() {
         const controller = new AbortController();
         let isCurrent = true;
 
-        Promise.all([
-            getAdminProjectReportSummary(filters, controller.signal),
-            getAdminProjectReportStatusAnalytics(filters, controller.signal),
-            getAdminProjectReportBudgetAnalytics(filters, controller.signal),
-            getAdminProjectReportAgencies(filters, controller.signal),
-        ])
-            .then(([summary, status, budget, agencies]) => {
+        getAdminProjectReportOverview(filters, controller.signal)
+            .then(({ summary, status, budget, agencies }) => {
                 if (!isCurrent) {
                     return;
                 }
 
                 setAggregate({ summary, status, budget, agencies });
+                setAgencyFilterOptions((current) =>
+                    current.length > 0 ? current : agencies,
+                );
                 setAggregateError('');
                 setIsAggregateLoading(false);
             })
@@ -549,6 +546,11 @@ export function AdminProjectReportAnalyticsSection() {
                 pagination={recordsState?.pagination ?? null}
                 onRetry={retryRecords}
                 onPageChange={changePage}
+                returnPath={projectReportAnalyticsPath(
+                    '/admin/analytics',
+                    filters,
+                    page,
+                )}
             />
         </section>
     );
@@ -1291,6 +1293,7 @@ function ProjectReportRecordsTable({
     pagination,
     onRetry,
     onPageChange,
+    returnPath,
 }: {
     isLoading: boolean;
     error: string;
@@ -1298,6 +1301,7 @@ function ProjectReportRecordsTable({
     pagination: ApiPagination | null;
     onRetry: () => void;
     onPageChange: (page: number) => void;
+    returnPath: string;
 }) {
     return (
         <article className="rounded-[14px] border border-[#e5e7eb] bg-white shadow-[0px_1px_3px_0px_rgba(0,0,0,0.08)]">
@@ -1460,7 +1464,10 @@ function ProjectReportRecordsTable({
                                     </td>
                                     <td className="px-6 py-4 text-right">
                                         <a
-                                            href={`/admin/analytics/project-reports/${record.research_id}`}
+                                            href={projectReportDetailPath(
+                                                `/admin/analytics/project-reports/${record.research_id}`,
+                                                returnPath,
+                                            )}
                                             className="inline-flex h-8 items-center gap-2 rounded-[8px] border border-[#e5e7eb] bg-white px-3 text-xs font-medium text-[#1e3a8a] hover:bg-[#f9fafb]"
                                         >
                                             <FolderOpen className="size-3.5" />

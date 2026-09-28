@@ -91,6 +91,42 @@ test('agency admin cannot access super admin dashboard api', function () {
         ->assertJsonStructure(['message', 'errors']);
 });
 
+test('only super admins can export the system dashboard report', function () {
+    $agency = superAdminDashboardAgency('dashboard-export-agency');
+    $agencyAdmin = superAdminDashboardUser('agency_admin', $agency);
+    $superAdmin = superAdminDashboardUser('super_admin');
+    $research = superAdminDashboardResearch($agency, $agencyAdmin, 'published');
+
+    AuditLog::create([
+        'user_id' => $agencyAdmin->id,
+        'agency_id' => $agency->id,
+        'event' => 'research.published',
+        'auditable_type' => Research::class,
+        'auditable_id' => $research->id,
+        'metadata' => ['target' => $research->title],
+        'created_at' => now(),
+    ]);
+
+    $this->getJson('/api/admin/dashboard/export')->assertUnauthorized();
+
+    $this->actingAs($agencyAdmin)
+        ->get('/api/admin/dashboard/export')
+        ->assertForbidden();
+
+    $response = $this->actingAs($superAdmin)
+        ->get('/api/admin/dashboard/export')
+        ->assertOk()
+        ->assertHeader('content-type', 'application/pdf')
+        ->assertDownload('rikms-system-report-'.now()->format('Y-m-d').'.pdf');
+
+    expect($response->getContent())->toStartWith('%PDF-');
+
+    $this->assertDatabaseHas('audit_logs', [
+        'user_id' => $superAdmin->id,
+        'event' => 'report.exported',
+    ]);
+});
+
 test('super admin dashboard api returns database metrics and safe recent records', function () {
     $activeAgency = superAdminDashboardAgency('active-dashboard-agency');
     $inactiveAgency = superAdminDashboardAgency('inactive-dashboard-agency', 'inactive');

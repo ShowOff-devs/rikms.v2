@@ -11,6 +11,7 @@ import { SystemActivityFeed } from '@/components/admin/dashboard/SystemActivityF
 import { AdminLayout } from '@/components/admin/layout/AdminLayout';
 import {
     getAdminDashboardMetrics,
+    generateSystemReport,
     getPendingModerationItems,
     getQuickManagementActions,
     getResearchByAgency,
@@ -61,7 +62,9 @@ export function AdminDashboardPage() {
         emptyAdminDashboardState,
     );
     const [isLoading, setIsLoading] = useState(true);
+    const [isExporting, setIsExporting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [feedback, setFeedback] = useState<string | null>(null);
     const [search, setSearch] = useState('');
     const [reloadKey, setReloadKey] = useState(0);
     const [selectedModerationItem, setSelectedModerationItem] =
@@ -136,6 +139,26 @@ export function AdminDashboardPage() {
         setReloadKey((key) => key + 1);
     };
 
+    const handleExport = async () => {
+        setIsExporting(true);
+        setError(null);
+        setFeedback(null);
+
+        try {
+            const report = await generateSystemReport();
+            setFeedback(`${report.fileName} is ready for download.`);
+        } catch (requestError: unknown) {
+            setError(
+                apiMessage(
+                    requestError,
+                    'Unable to generate the system report. Please try again.',
+                ),
+            );
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     const filteredActivityFeed = useMemo(() => {
         if (!normalizedSearch) {
             return dashboard.activityFeed;
@@ -184,7 +207,10 @@ export function AdminDashboardPage() {
             unreadNotificationsCount={dashboard.unreadNotificationsCount}
         >
             <main className="px-4 py-8 lg:px-8">
-                <AdminDashboardHeader />
+                <AdminDashboardHeader
+                    isExporting={isExporting}
+                    onExport={handleExport}
+                />
 
                 {error && (
                     <div
@@ -199,6 +225,15 @@ export function AdminDashboardPage() {
                         >
                             Retry
                         </button>
+                    </div>
+                )}
+
+                {feedback && (
+                    <div
+                        role="status"
+                        className="mt-6 rounded-[10px] border border-[#bbf7d0] bg-[#f0fdf4] px-4 py-3 text-sm text-[#166534]"
+                    >
+                        {feedback}
                     </div>
                 )}
 
@@ -230,7 +265,7 @@ export function AdminDashboardPage() {
                     />
                 </section>
 
-                <section className="mt-6 grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+                <section className="mt-6 space-y-6">
                     <SecurityStatusPanel
                         status={dashboard.securityStatus}
                         isLoading={isLoading}

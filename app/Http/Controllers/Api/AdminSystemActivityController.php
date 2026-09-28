@@ -87,7 +87,9 @@ class AdminSystemActivityController extends Controller
 
     public function activityLogs(Request $request): JsonResponse
     {
-        $query = $this->activityLogQuery($request)->latest('created_at');
+        $query = $this->activityLogQuery($request)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
         $paginator = $query->paginate($this->perPage($request));
         $agencies = Agency::query()
             ->whereIn('id', AuditLog::query()->select('agency_id')->whereNotNull('agency_id')->distinct())

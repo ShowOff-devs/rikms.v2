@@ -78,6 +78,7 @@ class AuthorizeAdminRoute
             Str::is('api.admin.audit-logs.*', $name),
             Str::is('api.admin.system-activity.*', $name) => 'audit_logs.view',
             Str::is('api.admin.notifications.*', $name) => 'notifications.view',
+            Str::is('api.admin.dashboard.export', $name) => 'dashboard.view',
             Str::is('api.admin.dashboard', $name) => 'dashboard.view',
             default => null,
         };

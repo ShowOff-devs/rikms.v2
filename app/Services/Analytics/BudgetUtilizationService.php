@@ -45,7 +45,11 @@ class BudgetUtilizationService
             'utilized_amount' => Decimal::normalize($detail->utilized_amount),
             'remaining_balance' => $remainingBalance,
             'utilization_percentage' => $utilizationPercentage,
-            'classification' => $this->classification($detail->utilized_amount, $utilizationPercentage),
+            'classification' => $this->classification(
+                $detail->allotted_budget,
+                $detail->utilized_amount,
+                $utilizationPercentage,
+            ),
             'warnings' => $this->warnings($detail),
         ];
     }
@@ -57,14 +61,23 @@ class BudgetUtilizationService
             $detail->released_amount,
             $detail->obligated_amount,
             $detail->utilized_amount,
-            $detail->financial_as_of_date,
         ])->contains(fn (mixed $value): bool => $this->present($value));
     }
 
-    private function classification(mixed $utilizedAmount, ?float $utilizationPercentage): string
-    {
+    private function classification(
+        mixed $allottedBudget,
+        mixed $utilizedAmount,
+        ?float $utilizationPercentage,
+    ): string {
         if (Decimal::normalize($utilizedAmount) === '0.00') {
             return 'not_utilized';
+        }
+
+        if (
+            Decimal::normalize($allottedBudget) === '0.00' &&
+            Decimal::compare($utilizedAmount, '0.00') === 1
+        ) {
+            return 'overutilized';
         }
 
         if ($utilizationPercentage === null) {

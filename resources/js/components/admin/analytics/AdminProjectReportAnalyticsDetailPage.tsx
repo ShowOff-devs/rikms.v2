@@ -12,7 +12,10 @@ import { useEffect, useState } from 'react';
 import { AdminLayout } from '@/components/admin/layout/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getAdminProjectReportDetail } from '@/lib/analytics/project-report-analytics-service';
+import {
+    getAdminProjectReportDetail,
+    projectReportReturnPath,
+} from '@/lib/analytics/project-report-analytics-service';
 import { ApiError, apiMessage } from '@/lib/api-client';
 import type {
     ProjectReportAnalyticsDetail,
@@ -120,7 +123,7 @@ function DetailHeader({ data }: { data: ProjectReportAnalyticsDetail | null }) {
     return (
         <section className="rounded-[14px] border border-[#e5e7eb] bg-white p-5 shadow-[0px_1px_3px_0px_rgba(0,0,0,0.08)]">
             <Link
-                href="/admin/analytics"
+                href={projectReportReturnPath('/admin/analytics')}
                 className="inline-flex items-center gap-2 text-sm font-medium text-[#1e3a8a] hover:underline"
             >
                 <ArrowLeft className="size-4" />

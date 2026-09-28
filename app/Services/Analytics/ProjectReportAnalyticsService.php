@@ -6,7 +6,9 @@ use App\Models\Research;
 use App\Support\Statuses;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\LazyCollection;
 
 class ProjectReportAnalyticsService
@@ -63,23 +65,176 @@ class ProjectReportAnalyticsService
      */
     public function summary(array $filters, ?int $agencyScope = null, bool $allowAgencyFilter = false): array
     {
-        $query = $this->filteredQuery($filters, $agencyScope, $allowAgencyFilter);
-        $total = (clone $query)->count();
-        $financial = $this->financialAggregate($query);
-        $classifications = $this->classificationCounts($query);
-        $workflow = $this->workflowCounts($query);
-        $types = $this->reportTypeCounts($query);
+        return $this->summaryFromBundle(
+            $this->aggregateBundle($filters, $agencyScope, $allowAgencyFilter),
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    public function status(array $filters, ?int $agencyScope = null, bool $allowAgencyFilter = false): array
+    {
+        return $this->statusFromBundle(
+            $this->aggregateBundle($filters, $agencyScope, $allowAgencyFilter),
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    public function budget(array $filters, ?int $agencyScope = null, bool $allowAgencyFilter = false, bool $includeAgencyGroups = false): array
+    {
+        return $this->budgetFromBundle(
+            $this->aggregateBundle($filters, $agencyScope, $allowAgencyFilter),
+            $includeAgencyGroups,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array<int, array<string, mixed>>
+     */
+    public function agencyComparison(array $filters): array
+    {
+        return $this->agenciesFromBundle($this->aggregateBundle($filters, null, true));
+    }
+
+    /**
+     * Return every aggregate panel from one bounded pass through matching reports.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    public function overview(array $filters, ?int $agencyScope = null, bool $allowAgencyFilter = false, bool $includeAgencies = false): array
+    {
+        $bundle = $this->aggregateBundle($filters, $agencyScope, $allowAgencyFilter);
 
         return [
-            'total_reports' => $total,
-            'terminal_reports' => $types[ReportTypeResolver::TERMINAL_REPORT] ?? 0,
-            'project_accomplishment_reports' => $types[ReportTypeResolver::PROJECT_ACCOMPLISHMENT] ?? 0,
-            'complete_reports' => $classifications['completeness']['complete'] ?? 0,
-            'incomplete_reports' => $classifications['completeness']['incomplete'] ?? 0,
-            'not_started_reports' => $classifications['completeness']['not_started'] ?? 0,
-            'submitted_reports' => $workflow[Statuses::RESEARCH_SUBMITTED] ?? 0,
-            'approved_reports' => $workflow['approved'] ?? 0,
-            'published_reports' => $workflow[Statuses::RESEARCH_PUBLISHED] ?? 0,
+            'summary' => $this->summaryFromBundle($bundle),
+            'status' => $this->statusFromBundle($bundle),
+            'budget' => $this->budgetFromBundle($bundle, $includeAgencies),
+            'agencies' => $includeAgencies ? $this->agenciesFromBundle($bundle) : [],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    private function aggregateBundle(array $filters, ?int $agencyScope, bool $allowAgencyFilter): array
+    {
+        $bundle = [
+            'total' => 0,
+            'types' => array_fill_keys(self::REPORT_TYPES, 0),
+            'workflow' => array_fill_keys(Statuses::RESEARCH, 0),
+            'classifications' => [
+                'completeness' => array_fill_keys(self::COMPLETENESS, 0),
+                'budget' => array_fill_keys(self::BUDGET_CLASSIFICATIONS, 0),
+                'accomplishment' => array_fill_keys(self::ACCOMPLISHMENT_CLASSIFICATIONS, 0),
+            ],
+            'financial' => $this->emptyFinancialGroup(),
+            'by_report_type' => [],
+            'by_reporting_period' => [],
+            'by_agency' => [],
+        ];
+
+        $query = $this->baseQuery($filters, $agencyScope, $allowAgencyFilter);
+
+        $this->chunkReports($query, function (Research $research) use (&$bundle, $filters): void {
+            $reportType = $this->reportTypeResolver->resolve($research);
+            $reportingPeriod = $research->reportDetail?->reporting_period ?? 'Not reported';
+            $agencyKey = (string) $research->agency_id;
+            $completeness = $this->completeness->calculate($research)['classification'];
+            $budget = $this->budget->calculate($research)['classification'];
+            $accomplishment = $this->accomplishment->calculate($research)['classification'];
+
+            if (! $this->matchesClassificationFilters($filters, $completeness, $budget, $accomplishment)) {
+                return;
+            }
+
+            $bundle['total']++;
+
+            if (isset($bundle['types'][$reportType])) {
+                $bundle['types'][$reportType]++;
+            }
+
+            $bundle['workflow'][$research->status] = ($bundle['workflow'][$research->status] ?? 0) + 1;
+
+            foreach ([
+                'completeness' => $completeness,
+                'budget' => $budget,
+                'accomplishment' => $accomplishment,
+            ] as $group => $classification) {
+                if (isset($bundle['classifications'][$group][$classification])) {
+                    $bundle['classifications'][$group][$classification]++;
+                }
+            }
+
+            $bundle['by_report_type'][$reportType] ??= $this->emptyFinancialGroup(['key' => $reportType]);
+            $bundle['by_reporting_period'][$reportingPeriod] ??= $this->emptyFinancialGroup(['key' => $reportingPeriod]);
+            $bundle['by_agency'][$agencyKey] ??= $this->emptyFinancialGroup([
+                'agency_id' => $research->agency_id,
+                'agency_name' => $research->agency?->name,
+                'agency_short_name' => $research->agency?->short_name,
+                'complete_count' => 0,
+                'incomplete_count' => 0,
+            ]);
+
+            if ($completeness === 'complete') {
+                $bundle['by_agency'][$agencyKey]['complete_count']++;
+            } elseif (in_array($completeness, ['incomplete', 'not_started'], true)) {
+                $bundle['by_agency'][$agencyKey]['incomplete_count']++;
+            }
+
+            $this->addFinancialReport($bundle['financial'], $research);
+            $this->addFinancialReport($bundle['by_report_type'][$reportType], $research);
+            $this->addFinancialReport($bundle['by_reporting_period'][$reportingPeriod], $research);
+            $this->addFinancialReport($bundle['by_agency'][$agencyKey], $research);
+        });
+
+        $bundle['financial'] = $this->finalizeFinancialGroup($bundle['financial']);
+        $bundle['by_report_type'] = $this->finalizeFinancialGroups($bundle['by_report_type']);
+        $bundle['by_reporting_period'] = $this->finalizeFinancialGroups($bundle['by_reporting_period']);
+        $bundle['by_agency'] = $this->finalizeFinancialGroups($bundle['by_agency']);
+
+        return $bundle;
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    private function matchesClassificationFilters(
+        array $filters,
+        string $completeness,
+        string $budget,
+        string $accomplishment,
+    ): bool {
+        return (! filled($filters['completeness'] ?? null) || $filters['completeness'] === $completeness)
+            && (! filled($filters['budget_classification'] ?? null) || $filters['budget_classification'] === $budget)
+            && (! filled($filters['accomplishment_classification'] ?? null) || $filters['accomplishment_classification'] === $accomplishment);
+    }
+
+    /**
+     * @param  array<string, mixed>  $bundle
+     * @return array<string, mixed>
+     */
+    private function summaryFromBundle(array $bundle): array
+    {
+        $financial = $bundle['financial'];
+
+        return [
+            'total_reports' => $bundle['total'],
+            'terminal_reports' => $bundle['types'][ReportTypeResolver::TERMINAL_REPORT] ?? 0,
+            'project_accomplishment_reports' => $bundle['types'][ReportTypeResolver::PROJECT_ACCOMPLISHMENT] ?? 0,
+            'complete_reports' => $bundle['classifications']['completeness']['complete'] ?? 0,
+            'incomplete_reports' => $bundle['classifications']['completeness']['incomplete'] ?? 0,
+            'not_started_reports' => $bundle['classifications']['completeness']['not_started'] ?? 0,
+            'submitted_reports' => $bundle['workflow'][Statuses::RESEARCH_SUBMITTED] ?? 0,
+            'approved_reports' => $bundle['workflow']['approved'] ?? 0,
+            'published_reports' => $bundle['workflow'][Statuses::RESEARCH_PUBLISHED] ?? 0,
             'reports_with_financial_data' => $financial['reports_with_financial_data'],
             'reports_without_financial_data' => $financial['reports_without_financial_data'],
             'total_allotted_budget' => $financial['allotted_budget'],
@@ -92,91 +247,50 @@ class ProjectReportAnalyticsService
     }
 
     /**
-     * @param  array<string, mixed>  $filters
+     * @param  array<string, mixed>  $bundle
      * @return array<string, mixed>
      */
-    public function status(array $filters, ?int $agencyScope = null, bool $allowAgencyFilter = false): array
+    private function statusFromBundle(array $bundle): array
     {
-        $query = $this->filteredQuery($filters, $agencyScope, $allowAgencyFilter);
-        $total = (clone $query)->count();
-        $classifications = $this->classificationCounts($query);
-
         return [
-            'report_type' => $this->distribution($this->reportTypeCounts($query), self::REPORT_TYPES, $total),
-            'workflow_status' => $this->distribution($this->workflowCounts($query), Statuses::RESEARCH, $total),
-            'completeness' => $this->distribution($classifications['completeness'], self::COMPLETENESS, $total),
-            'accomplishment' => $this->distribution($classifications['accomplishment'], self::ACCOMPLISHMENT_CLASSIFICATIONS, $total),
+            'report_type' => $this->distribution($bundle['types'], self::REPORT_TYPES, $bundle['total']),
+            'workflow_status' => $this->distribution($bundle['workflow'], Statuses::RESEARCH, $bundle['total']),
+            'completeness' => $this->distribution($bundle['classifications']['completeness'], self::COMPLETENESS, $bundle['total']),
+            'accomplishment' => $this->distribution($bundle['classifications']['accomplishment'], self::ACCOMPLISHMENT_CLASSIFICATIONS, $bundle['total']),
         ];
     }
 
     /**
-     * @param  array<string, mixed>  $filters
+     * @param  array<string, mixed>  $bundle
      * @return array<string, mixed>
      */
-    public function budget(array $filters, ?int $agencyScope = null, bool $allowAgencyFilter = false, bool $includeAgencyGroups = false): array
+    private function budgetFromBundle(array $bundle, bool $includeAgencyGroups): array
     {
-        $query = $this->filteredQuery($filters, $agencyScope, $allowAgencyFilter);
-
         $payload = [
-            'totals' => $this->financialAggregate($query),
+            'totals' => $bundle['financial'],
             'classification_distribution' => $this->distribution(
-                $this->classificationCounts($query)['budget'],
+                $bundle['classifications']['budget'],
                 self::BUDGET_CLASSIFICATIONS,
-                (clone $query)->count(),
+                $bundle['total'],
             ),
-            'by_report_type' => array_values($this->groupedFinancials($query, fn (Research $research): string => $this->reportTypeResolver->resolve($research))),
-            'by_reporting_period' => array_values($this->groupedFinancials($query, fn (Research $research): string => $research->reportDetail?->reporting_period ?? 'Not reported')),
+            'by_report_type' => array_values($bundle['by_report_type']),
+            'by_reporting_period' => array_values($bundle['by_reporting_period']),
         ];
 
         if ($includeAgencyGroups) {
-            $payload['by_agency'] = array_values($this->groupedFinancials(
-                $query,
-                fn (Research $research): string => (string) $research->agency_id,
-                fn (Research $research): array => [
-                    'agency_id' => $research->agency_id,
-                    'agency_name' => $research->agency?->name,
-                    'agency_short_name' => $research->agency?->short_name,
-                ],
-            ));
+            $payload['by_agency'] = array_values($bundle['by_agency']);
         }
 
         return $payload;
     }
 
     /**
-     * @param  array<string, mixed>  $filters
+     * @param  array<string, mixed>  $bundle
      * @return array<int, array<string, mixed>>
      */
-    public function agencyComparison(array $filters): array
+    private function agenciesFromBundle(array $bundle): array
     {
-        $query = $this->filteredQuery($filters, null, true);
-        $groups = $this->groupedFinancials(
-            $query,
-            fn (Research $research): string => (string) $research->agency_id,
-            fn (Research $research): array => [
-                'agency_id' => $research->agency_id,
-                'agency_name' => $research->agency?->name,
-                'agency_short_name' => $research->agency?->short_name,
-            ],
-        );
-
-        $this->chunkReports($query, function (Research $research) use (&$groups): void {
-            $key = (string) $research->agency_id;
-            $groups[$key] ??= $this->emptyFinancialGroup([
-                'agency_id' => $research->agency_id,
-                'agency_name' => $research->agency?->name,
-                'agency_short_name' => $research->agency?->short_name,
-            ]);
-            $classification = $this->completeness->calculate($research)['classification'];
-
-            if ($classification === 'complete') {
-                $groups[$key]['complete_count'] = ($groups[$key]['complete_count'] ?? 0) + 1;
-            } elseif (in_array($classification, ['incomplete', 'not_started'], true)) {
-                $groups[$key]['incomplete_count'] = ($groups[$key]['incomplete_count'] ?? 0) + 1;
-            }
-        });
-
-        return collect($groups)
+        return collect($bundle['by_agency'])
             ->sortBy('agency_name')
             ->values()
             ->map(fn (array $group): array => [
@@ -184,8 +298,8 @@ class ProjectReportAnalyticsService
                 'agency_name' => $group['agency_name'],
                 'agency_short_name' => $group['agency_short_name'],
                 'report_count' => $group['report_count'],
-                'complete_count' => $group['complete_count'] ?? 0,
-                'incomplete_count' => $group['incomplete_count'] ?? 0,
+                'complete_count' => $group['complete_count'],
+                'incomplete_count' => $group['incomplete_count'],
                 'allotted_budget' => $group['allotted_budget'],
                 'utilized_amount' => $group['utilized_amount'],
                 'remaining_balance' => $group['remaining_balance'],
@@ -210,12 +324,14 @@ class ProjectReportAnalyticsService
     /**
      * @param  array<string, mixed>  $filters
      */
-    public function exportRecords(array $filters, ?int $agencyScope = null, bool $allowAgencyFilter = false): Collection
+    public function exportRecords(array $filters, ?int $agencyScope = null, bool $allowAgencyFilter = false, ?int $limit = null): Collection
     {
         $query = $this->filteredQuery($filters, $agencyScope, $allowAgencyFilter);
         $this->applySorting($query, $filters);
 
-        return $this->withAnalyticsRelations($query)->get();
+        return $this->withAnalyticsRelations($query)
+            ->when($limit !== null, fn (Builder $query) => $query->limit($limit))
+            ->get();
     }
 
     /**
@@ -261,7 +377,10 @@ class ProjectReportAnalyticsService
                 $query
                     ->where('category', 'like', '%Terminal Report%')
                     ->orWhere('category', 'like', '%Project Accomplishment%')
-                    ->orWhereHas('files', fn (Builder $query) => $query->whereIn('file_type', self::REPORT_TYPES));
+                    ->orWhereHas('files', function (Builder $query): void {
+                        $this->activeReportFiles($query);
+                        $query->whereIn('file_type', self::REPORT_TYPES);
+                    });
             });
 
         if ($agencyScope !== null) {
@@ -278,7 +397,7 @@ class ProjectReportAnalyticsService
             ->when(filled($filters['publication_year'] ?? null), fn (Builder $query) => $query->where('publication_year', (int) $filters['publication_year']))
             ->when(filled($filters['workflow_status'] ?? null), fn (Builder $query) => $query->where('status', $filters['workflow_status']))
             ->when(filled($filters['reporting_period'] ?? null), fn (Builder $query) => $query->whereHas('reportDetail', fn (Builder $query) => $query->where('reporting_period', $filters['reporting_period'])))
-            ->when(filled($filters['funding_source'] ?? null), fn (Builder $query) => $query->where('public_metadata->funding_source', $filters['funding_source']))
+            ->when(filled($filters['funding_source'] ?? null), fn (Builder $query) => $this->applyFundingSourceFilter($query, (string) $filters['funding_source']))
             ->when(filled($filters['date_from'] ?? null), fn (Builder $query) => $query->whereDate('created_at', '>=', $filters['date_from']))
             ->when(filled($filters['date_to'] ?? null), fn (Builder $query) => $query->whereDate('created_at', '<=', $filters['date_to']));
     }
@@ -294,7 +413,9 @@ class ProjectReportAnalyticsService
                             ->where(function (Builder $query): void {
                                 $query->whereNull('category')->orWhere('category', 'not like', '%Project Accomplishment%');
                             })
-                            ->whereHas('files', fn (Builder $query) => $query->where('file_type', ReportTypeResolver::TERMINAL_REPORT));
+                            ->whereHas('files', function (Builder $query): void {
+                                $this->activeReportFiles($query, ReportTypeResolver::TERMINAL_REPORT);
+                            });
                     });
             });
 
@@ -309,7 +430,9 @@ class ProjectReportAnalyticsService
                         ->where(function (Builder $query): void {
                             $query->whereNull('category')->orWhere('category', 'not like', '%Terminal Report%');
                         })
-                        ->whereHas('files', fn (Builder $query) => $query->where('file_type', ReportTypeResolver::PROJECT_ACCOMPLISHMENT));
+                        ->whereHas('files', function (Builder $query): void {
+                            $this->activeReportFiles($query, ReportTypeResolver::PROJECT_ACCOMPLISHMENT);
+                        });
                 });
         });
     }
@@ -322,8 +445,67 @@ class ProjectReportAnalyticsService
                 'agency:id,name,short_name',
                 'reportDetail',
                 'performanceItems',
-                'files:id,research_id,file_type',
+                'files' => function ($query): void {
+                    $query->select('id', 'research_id', 'file_type');
+                    $this->activeReportFiles($query);
+                },
             ]);
+    }
+
+    private function activeReportFiles(Builder|Relation $query, ?string $reportType = null): void
+    {
+        $query
+            ->whereNull('archived_at')
+            ->where('status', 'active')
+            ->when($reportType !== null, fn (Builder $query) => $query->where('file_type', $reportType));
+    }
+
+    private function applyFundingSourceFilter(Builder $query, string $fundingSource): void
+    {
+        $driver = DB::connection()->getDriverName();
+
+        $query->where(function (Builder $query) use ($driver, $fundingSource): void {
+            if ($driver === 'sqlite') {
+                $query
+                    ->whereRaw(
+                        <<<'SQL'
+                        exists (
+                            select 1
+                            from json_each(research.public_metadata) as metadata
+                            where json_extract(metadata.value, '$.key') = 'funding_source'
+                              and cast(json_extract(metadata.value, '$.value') as text) = ?
+                        )
+                        SQL,
+                        [$fundingSource],
+                    )
+                    ->orWhereRaw("json_extract(research.public_metadata, '$.funding_source') = ?", [$fundingSource]);
+
+                return;
+            }
+
+            if ($driver === 'mysql') {
+                $query
+                    ->whereRaw(
+                        <<<'SQL'
+                        exists (
+                            select 1
+                            from json_table(research.public_metadata, '$[*]' columns(
+                                meta_key varchar(100) path '$.key',
+                                meta_value varchar(255) path '$.value'
+                            )) as metadata
+                            where metadata.meta_key = 'funding_source'
+                              and metadata.meta_value = ?
+                        )
+                        SQL,
+                        [$fundingSource],
+                    )
+                    ->orWhereRaw("json_unquote(json_extract(research.public_metadata, '$.funding_source')) = ?", [$fundingSource]);
+
+                return;
+            }
+
+            $query->where('public_metadata->funding_source', $fundingSource);
+        });
     }
 
     /**
@@ -484,6 +666,7 @@ class ProjectReportAnalyticsService
                 $group[$field] = Decimal::add($group[$field], $detail->{$field});
             }
         }
+
     }
 
     /**
@@ -492,10 +675,27 @@ class ProjectReportAnalyticsService
      */
     private function finalizeFinancialGroup(array $group): array
     {
-        $group['remaining_balance'] = Decimal::subtract($group['allotted_budget'], $group['utilized_amount']) ?? '0.00';
-        $group['utilization_percentage'] = Decimal::percentage($group['utilized_amount'], $group['allotted_budget']);
+        $group['remaining_balance'] = Decimal::subtract(
+            $group['allotted_budget'],
+            $group['utilized_amount'],
+        ) ?? '0.00';
+        $group['utilization_percentage'] = Decimal::percentage(
+            $group['utilized_amount'],
+            $group['allotted_budget'],
+        );
 
         return $group;
+    }
+
+    /**
+     * @param  array<string, array<string, mixed>>  $groups
+     * @return array<string, array<string, mixed>>
+     */
+    private function finalizeFinancialGroups(array $groups): array
+    {
+        return collect($groups)
+            ->map(fn (array $group): array => $this->finalizeFinancialGroup($group))
+            ->all();
     }
 
     private function hasAnyFinancialData(mixed $detail): bool
@@ -505,7 +705,6 @@ class ProjectReportAnalyticsService
             $detail->released_amount,
             $detail->obligated_amount,
             $detail->utilized_amount,
-            $detail->financial_as_of_date,
         ])->contains(fn (mixed $value): bool => Decimal::isReported($value));
     }
 

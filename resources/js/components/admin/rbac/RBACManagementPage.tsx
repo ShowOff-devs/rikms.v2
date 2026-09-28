@@ -42,6 +42,8 @@ function matchesQuery(value: string, query: string) {
     return value.toLowerCase().includes(query);
 }
 
+const historyRowsPerPage = 8;
+
 export function RBACManagementPage() {
     const [topbarSearch, setTopbarSearch] = useState('');
     const [activeTab, setActiveTab] = useState<RBACTab>('roles');
@@ -53,6 +55,7 @@ export function RBACManagementPage() {
     const [assignmentTotal, setAssignmentTotal] = useState(0);
     const [assignmentRowsPerPage, setAssignmentRowsPerPage] = useState(15);
     const [history, setHistory] = useState<RoleChangeHistoryType[]>([]);
+    const [historyPage, setHistoryPage] = useState(1);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -226,6 +229,16 @@ export function RBACManagementPage() {
             ),
         );
     }, [normalizedSearch, permissions]);
+
+    const historyTotalPages = Math.max(
+        1,
+        Math.ceil(history.length / historyRowsPerPage),
+    );
+    const effectiveHistoryPage = Math.min(historyPage, historyTotalPages);
+    const paginatedHistory = history.slice(
+        (effectiveHistoryPage - 1) * historyRowsPerPage,
+        effectiveHistoryPage * historyRowsPerPage,
+    );
 
     const stats = useMemo(() => {
         return {
@@ -484,7 +497,16 @@ export function RBACManagementPage() {
                 </section>
 
                 <RoleChangeHistory
-                    changes={history}
+                    changes={paginatedHistory}
+                    currentPage={effectiveHistoryPage}
+                    totalPages={historyTotalPages}
+                    totalResults={history.length}
+                    rowsPerPage={historyRowsPerPage}
+                    onPageChange={(page) =>
+                        setHistoryPage(
+                            Math.min(Math.max(page, 1), historyTotalPages),
+                        )
+                    }
                     onViewDiff={setDiffChange}
                 />
             </main>

@@ -39,7 +39,13 @@ type AnalyticsView = 'repository' | 'project-reports';
 
 export function AgencyAnalyticsPage() {
     const session = useAgencySession();
-    const [activeView, setActiveView] = useState<AnalyticsView>('repository');
+    const [activeView, setActiveView] = useState<AnalyticsView>(() =>
+        typeof window !== 'undefined' &&
+        new URLSearchParams(window.location.search).get('view') ===
+            'project-reports'
+            ? 'project-reports'
+            : 'repository',
+    );
     const [filters, setFilters] =
         useState<AnalyticsFiltersValue>(initialFilters);
     const [analytics, setAnalytics] = useState<AgencyAnalyticsPayload | null>(
@@ -50,6 +56,8 @@ export function AgencyAnalyticsPage() {
     const [isExportOpen, setIsExportOpen] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
     const [feedback, setFeedback] = useState('');
+    const [feedbackIsError, setFeedbackIsError] = useState(false);
+    const [loadError, setLoadError] = useState('');
     const [drillDown, setDrillDown] = useState<AnalyticsDrillDown | null>(null);
 
     useEffect(() => {
@@ -59,20 +67,51 @@ export function AgencyAnalyticsPage() {
     }, [session]);
 
     useEffect(() => {
+        const url = new URL(window.location.href);
+
+        if (activeView === 'project-reports') {
+            url.searchParams.set('view', 'project-reports');
+        } else {
+            url.searchParams.delete('view');
+        }
+
+        window.history.replaceState(
+            window.history.state,
+            '',
+            `${url.pathname}${url.search}`,
+        );
+    }, [activeView]);
+
+    useEffect(() => {
         if (activeView !== 'repository') {
             return;
         }
 
         let isCurrent = true;
 
-        getAgencyAnalytics(filters).then((payload) => {
-            if (!isCurrent) {
-                return;
-            }
+        setIsLoading(true);
+        setLoadError('');
 
-            setAnalytics(payload);
-            setIsLoading(false);
-        });
+        void getAgencyAnalytics(filters)
+            .then((payload) => {
+                if (!isCurrent) {
+                    return;
+                }
+
+                setAnalytics(payload);
+                setIsLoading(false);
+            })
+            .catch(() => {
+                if (!isCurrent) {
+                    return;
+                }
+
+                setAnalytics(null);
+                setLoadError(
+                    'Unable to load repository analytics. Review the selected filters and try again.',
+                );
+                setIsLoading(false);
+            });
 
         return () => {
             isCurrent = false;
@@ -91,7 +130,7 @@ export function AgencyAnalyticsPage() {
         }
 
         return records.filter((record) =>
-            [record.title, record.category, String(record.year)]
+            [record.title, record.category, record.year ?? 'Unknown']
                 .join(' ')
                 .toLowerCase()
                 .includes(normalizedSearch),
@@ -110,18 +149,31 @@ export function AgencyAnalyticsPage() {
         setIsLoading(true);
         setFilters(nextFilters);
         setFeedback('');
+        setFeedbackIsError(false);
+        setLoadError('');
     };
 
     const handleExportConfirm = async (format: 'pdf' | 'csv') => {
         setIsExporting(true);
+        setFeedback('');
+        setFeedbackIsError(false);
 
-        const result = await exportAgencyAnalyticsReport(filters, format);
+        try {
+            const result = await exportAgencyAnalyticsReport(filters, format);
 
-        setIsExporting(false);
-        setIsExportOpen(false);
+            setIsExportOpen(false);
 
-        if (result.success) {
-            setFeedback(`${result.fileName} is ready for download workflow.`);
+            if (result.success) {
+                setFeedback(`${result.fileName} is ready for download.`);
+            }
+        } catch {
+            setIsExportOpen(false);
+            setFeedback(
+                'Unable to export repository analytics. Please try again.',
+            );
+            setFeedbackIsError(true);
+        } finally {
+            setIsExporting(false);
         }
     };
 
@@ -136,6 +188,7 @@ export function AgencyAnalyticsPage() {
                 'Repository activity detail for the selected research record.',
             stats: [
                 { label: 'Category', value: record.category },
+                { label: 'Year', value: record.year ?? 'Unknown' },
                 {
                     label: 'Downloads',
                     value: record.downloads.toLocaleString(),
@@ -169,6 +222,7 @@ export function AgencyAnalyticsPage() {
                             onViewChange={(view) => {
                                 setActiveView(view);
                                 setFeedback('');
+                                setFeedbackIsError(false);
                             }}
                         />
 
@@ -187,14 +241,27 @@ export function AgencyAnalyticsPage() {
 
                                 {feedback ? (
                                     <div
-                                        role="status"
-                                        className="rounded-[10px] border border-[#b9f8cf] bg-[#f0fdf4] px-4 py-3 text-sm font-medium text-[#008236]"
+                                        role={
+                                            feedbackIsError ? 'alert' : 'status'
+                                        }
+                                        className={`rounded-[10px] border px-4 py-3 text-sm font-medium ${
+                                            feedbackIsError
+                                                ? 'border-[#fecaca] bg-[#fef2f2] text-[#b91c1c]'
+                                                : 'border-[#b9f8cf] bg-[#f0fdf4] text-[#008236]'
+                                        }`}
                                     >
                                         {feedback}
                                     </div>
                                 ) : null}
 
-                                {isLoading || !analytics ? (
+                                {loadError ? (
+                                    <div
+                                        role="alert"
+                                        className="rounded-[14px] border border-[#fecaca] bg-[#fef2f2] px-5 py-6 text-sm font-medium text-[#b91c1c]"
+                                    >
+                                        {loadError}
+                                    </div>
+                                ) : isLoading || !analytics ? (
                                     <AnalyticsLoadingState />
                                 ) : (
                                     <>

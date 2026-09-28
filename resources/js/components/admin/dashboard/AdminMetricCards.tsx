@@ -14,8 +14,8 @@ export function AdminMetricCards({
 }) {
     if (isLoading) {
         return (
-            <section className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-                {Array.from({ length: 6 }, (_, index) => (
+            <section className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
+                {Array.from({ length: 8 }, (_, index) => (
                     <div
                         key={index}
                         className="h-24 animate-pulse rounded-[10px] border border-[#e5e7eb] bg-white"
@@ -25,8 +25,16 @@ export function AdminMetricCards({
         );
     }
 
+    if (metrics.length === 0) {
+        return (
+            <section className="mt-4 rounded-[10px] border border-dashed border-[#cbd5e1] bg-white px-6 py-10 text-center text-sm text-[#64748b]">
+                Dashboard metrics are currently unavailable.
+            </section>
+        );
+    }
+
     return (
-        <section className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+        <section className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
             {metrics.map((metric) => {
                 const Icon = metric.icon
                     ? adminDashboardIcons[metric.icon]

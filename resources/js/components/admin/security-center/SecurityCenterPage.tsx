@@ -34,6 +34,9 @@ import type {
     SecuritySummary,
 } from '@/types/security-center';
 
+const securityCenterRowsPerPage = 8;
+const securityAlertsRowsPerPage = 6;
+
 function matchesSearch(values: Array<string | undefined>, query: string) {
     if (!query) {
         return true;
@@ -50,6 +53,9 @@ export function SecurityCenterPage() {
     const [loginActivity, setLoginActivity] = useState<LoginActivity[]>([]);
     const [activeSessions, setActiveSessions] = useState<AdminSession[]>([]);
     const [securityEvents, setSecurityEvents] = useState<SecurityEvent[]>([]);
+    const [securityAlertsPage, setSecurityAlertsPage] = useState(1);
+    const [loginActivityPage, setLoginActivityPage] = useState(1);
+    const [securityEventsPage, setSecurityEventsPage] = useState(1);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [feedback, setFeedback] = useState<string | null>(null);
@@ -203,6 +209,49 @@ export function SecurityCenterPage() {
             ),
         [securityEvents, searchQuery],
     );
+
+    const securityAlertsTotalPages = Math.max(
+        1,
+        Math.ceil(filteredAlerts.length / securityAlertsRowsPerPage),
+    );
+    const loginActivityTotalPages = Math.max(
+        1,
+        Math.ceil(filteredLoginActivity.length / securityCenterRowsPerPage),
+    );
+    const securityEventsTotalPages = Math.max(
+        1,
+        Math.ceil(filteredEvents.length / securityCenterRowsPerPage),
+    );
+    const effectiveSecurityAlertsPage = Math.min(
+        securityAlertsPage,
+        securityAlertsTotalPages,
+    );
+    const effectiveLoginActivityPage = Math.min(
+        loginActivityPage,
+        loginActivityTotalPages,
+    );
+    const effectiveSecurityEventsPage = Math.min(
+        securityEventsPage,
+        securityEventsTotalPages,
+    );
+    const paginatedAlerts = filteredAlerts.slice(
+        (effectiveSecurityAlertsPage - 1) * securityAlertsRowsPerPage,
+        effectiveSecurityAlertsPage * securityAlertsRowsPerPage,
+    );
+    const paginatedLoginActivity = filteredLoginActivity.slice(
+        (effectiveLoginActivityPage - 1) * securityCenterRowsPerPage,
+        effectiveLoginActivityPage * securityCenterRowsPerPage,
+    );
+    const paginatedEvents = filteredEvents.slice(
+        (effectiveSecurityEventsPage - 1) * securityCenterRowsPerPage,
+        effectiveSecurityEventsPage * securityCenterRowsPerPage,
+    );
+
+    useEffect(() => {
+        setSecurityAlertsPage(1);
+        setLoginActivityPage(1);
+        setSecurityEventsPage(1);
+    }, [searchQuery]);
 
     const handleViewAlertDetails = (alert: SecurityAlert) => {
         setSelectedAlert(alert);
@@ -364,8 +413,25 @@ export function SecurityCenterPage() {
                 <QueueHealthPanel health={queueHealth} isLoading={isLoading} />
 
                 <SecurityAlertsPanel
-                    alerts={filteredAlerts}
+                    alerts={paginatedAlerts}
                     isLoading={isLoading}
+                    activeCount={
+                        filteredAlerts.filter(
+                            (alert) => alert.status === 'open',
+                        ).length
+                    }
+                    currentPage={effectiveSecurityAlertsPage}
+                    totalPages={securityAlertsTotalPages}
+                    totalResults={filteredAlerts.length}
+                    rowsPerPage={securityAlertsRowsPerPage}
+                    onPageChange={(page) =>
+                        setSecurityAlertsPage(
+                            Math.min(
+                                Math.max(page, 1),
+                                securityAlertsTotalPages,
+                            ),
+                        )
+                    }
                     onViewDetails={handleViewAlertDetails}
                     onAcknowledge={handleAcknowledgeAlert}
                     onResolve={handleResolveAlert}
@@ -373,8 +439,20 @@ export function SecurityCenterPage() {
                 />
 
                 <LoginActivityTable
-                    activity={filteredLoginActivity}
+                    activity={paginatedLoginActivity}
                     isLoading={isLoading}
+                    currentPage={effectiveLoginActivityPage}
+                    totalPages={loginActivityTotalPages}
+                    totalResults={filteredLoginActivity.length}
+                    rowsPerPage={securityCenterRowsPerPage}
+                    onPageChange={(page) =>
+                        setLoginActivityPage(
+                            Math.min(
+                                Math.max(page, 1),
+                                loginActivityTotalPages,
+                            ),
+                        )
+                    }
                 />
 
                 <ActiveAdminSessions
@@ -384,8 +462,20 @@ export function SecurityCenterPage() {
                 />
 
                 <SecurityEventsTimeline
-                    events={filteredEvents}
+                    events={paginatedEvents}
                     isLoading={isLoading}
+                    currentPage={effectiveSecurityEventsPage}
+                    totalPages={securityEventsTotalPages}
+                    totalResults={filteredEvents.length}
+                    rowsPerPage={securityCenterRowsPerPage}
+                    onPageChange={(page) =>
+                        setSecurityEventsPage(
+                            Math.min(
+                                Math.max(page, 1),
+                                securityEventsTotalPages,
+                            ),
+                        )
+                    }
                 />
             </main>
 
