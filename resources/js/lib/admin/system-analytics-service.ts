@@ -94,8 +94,15 @@ export async function getPlatformUsageActivity(
 
 export async function getSystemAnalytics(
     filters: SystemAnalyticsFilters = {},
+    dateRange?: string,
 ): Promise<SystemAnalyticsPayload> {
-    const query = params(filters);
+    const searchParams = new URLSearchParams(params(filters));
+
+    if (dateRange && dateRange !== 'all-time') {
+        searchParams.set('date_range', dateRange);
+    }
+
+    const query = searchParams.toString();
     const response = await fetchApi<SystemAnalyticsPayload>(
         `/api/admin/analytics/overview${query ? `?${query}` : ''}`,
     );

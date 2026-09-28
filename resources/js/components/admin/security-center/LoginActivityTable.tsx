@@ -3,12 +3,18 @@ import {
     loginStatusStyles,
     roleStyles,
 } from '@/components/admin/security-center/security-center-display';
+import { SecurityCenterPagination } from '@/components/admin/security-center/SecurityCenterPagination';
 import { cn } from '@/lib/utils';
 import type { LoginActivity } from '@/types/security-center';
 
 type LoginActivityTableProps = {
     activity: LoginActivity[];
     isLoading: boolean;
+    currentPage: number;
+    totalPages: number;
+    totalResults: number;
+    rowsPerPage: number;
+    onPageChange: (page: number) => void;
 };
 
 function LoginStatusBadge({ status }: { status: LoginActivity['status'] }) {
@@ -30,6 +36,11 @@ function LoginStatusBadge({ status }: { status: LoginActivity['status'] }) {
 export function LoginActivityTable({
     activity,
     isLoading,
+    currentPage,
+    totalPages,
+    totalResults,
+    rowsPerPage,
+    onPageChange,
 }: LoginActivityTableProps) {
     return (
         <section className="mt-6 overflow-hidden rounded-[14px] border border-[#e5e7eb] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_-1px_rgba(0,0,0,0.1)]">
@@ -164,6 +175,17 @@ export function LoginActivityTable({
                     </tbody>
                 </table>
             </div>
+
+            {!isLoading && (
+                <SecurityCenterPagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalResults={totalResults}
+                    rowsPerPage={rowsPerPage}
+                    itemLabel="login activities"
+                    onPageChange={onPageChange}
+                />
+            )}
         </section>
     );
 }

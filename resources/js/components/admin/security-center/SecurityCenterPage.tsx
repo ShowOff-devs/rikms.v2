@@ -23,6 +23,7 @@ import {
     resolveSecurityAlert,
     revokeAdminSession,
 } from '@/lib/admin/security-center-service';
+import { apiMessage } from '@/lib/api-client';
 import type {
     AdminSession,
     LoginActivity,
@@ -32,6 +33,9 @@ import type {
     SecurityReportExportOptions,
     SecuritySummary,
 } from '@/types/security-center';
+
+const securityCenterRowsPerPage = 8;
+const securityAlertsRowsPerPage = 6;
 
 function matchesSearch(values: Array<string | undefined>, query: string) {
     if (!query) {
@@ -49,6 +53,9 @@ export function SecurityCenterPage() {
     const [loginActivity, setLoginActivity] = useState<LoginActivity[]>([]);
     const [activeSessions, setActiveSessions] = useState<AdminSession[]>([]);
     const [securityEvents, setSecurityEvents] = useState<SecurityEvent[]>([]);
+    const [securityAlertsPage, setSecurityAlertsPage] = useState(1);
+    const [loginActivityPage, setLoginActivityPage] = useState(1);
+    const [securityEventsPage, setSecurityEventsPage] = useState(1);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [feedback, setFeedback] = useState<string | null>(null);
@@ -203,21 +210,48 @@ export function SecurityCenterPage() {
         [securityEvents, searchQuery],
     );
 
-    const displayedSummary = useMemo(() => {
-        if (!summary) {
-            return null;
-        }
+    const securityAlertsTotalPages = Math.max(
+        1,
+        Math.ceil(filteredAlerts.length / securityAlertsRowsPerPage),
+    );
+    const loginActivityTotalPages = Math.max(
+        1,
+        Math.ceil(filteredLoginActivity.length / securityCenterRowsPerPage),
+    );
+    const securityEventsTotalPages = Math.max(
+        1,
+        Math.ceil(filteredEvents.length / securityCenterRowsPerPage),
+    );
+    const effectiveSecurityAlertsPage = Math.min(
+        securityAlertsPage,
+        securityAlertsTotalPages,
+    );
+    const effectiveLoginActivityPage = Math.min(
+        loginActivityPage,
+        loginActivityTotalPages,
+    );
+    const effectiveSecurityEventsPage = Math.min(
+        securityEventsPage,
+        securityEventsTotalPages,
+    );
+    const paginatedAlerts = filteredAlerts.slice(
+        (effectiveSecurityAlertsPage - 1) * securityAlertsRowsPerPage,
+        effectiveSecurityAlertsPage * securityAlertsRowsPerPage,
+    );
+    const paginatedLoginActivity = filteredLoginActivity.slice(
+        (effectiveLoginActivityPage - 1) * securityCenterRowsPerPage,
+        effectiveLoginActivityPage * securityCenterRowsPerPage,
+    );
+    const paginatedEvents = filteredEvents.slice(
+        (effectiveSecurityEventsPage - 1) * securityCenterRowsPerPage,
+        effectiveSecurityEventsPage * securityCenterRowsPerPage,
+    );
 
-        return {
-            ...summary,
-            failedLoginAttempts: loginActivity.filter(
-                (activity) => activity.status === 'failed',
-            ).length,
-            activeAdminSessions: activeSessions.length,
-            securityAlerts: alerts.filter((alert) => alert.status === 'open')
-                .length,
-        };
-    }, [activeSessions.length, alerts, loginActivity, summary]);
+    useEffect(() => {
+        setSecurityAlertsPage(1);
+        setLoginActivityPage(1);
+        setSecurityEventsPage(1);
+    }, [searchQuery]);
 
     const handleViewAlertDetails = (alert: SecurityAlert) => {
         setSelectedAlert(alert);
@@ -231,39 +265,72 @@ export function SecurityCenterPage() {
     };
 
     const handleAcknowledgeAlert = async (id: string) => {
-        const updatedAlert = await acknowledgeSecurityAlert(id);
+        try {
+            const updatedAlert = await acknowledgeSecurityAlert(id);
 
-        setAlerts((currentAlerts) =>
-            currentAlerts.map((alert) =>
-                alert.id === id ? { ...alert, ...updatedAlert } : alert,
-            ),
-        );
-        syncSelectedAlert(updatedAlert);
-        setFeedback('Security alert acknowledged.');
+            setAlerts((currentAlerts) =>
+                currentAlerts.map((alert) =>
+                    alert.id === id ? { ...alert, ...updatedAlert } : alert,
+                ),
+            );
+            syncSelectedAlert(updatedAlert);
+            setSummary(await getSecuritySummary());
+            setError(null);
+            setFeedback('Security alert acknowledged.');
+        } catch (caughtError) {
+            setError(
+                apiMessage(
+                    caughtError,
+                    'Unable to acknowledge the security alert. Refresh and try again.',
+                ),
+            );
+        }
     };
 
     const handleResolveAlert = async (id: string) => {
-        const updatedAlert = await resolveSecurityAlert(id);
+        try {
+            const updatedAlert = await resolveSecurityAlert(id);
 
-        setAlerts((currentAlerts) =>
-            currentAlerts.map((alert) =>
-                alert.id === id ? { ...alert, ...updatedAlert } : alert,
-            ),
-        );
-        syncSelectedAlert(updatedAlert);
-        setFeedback('Security alert marked resolved.');
+            setAlerts((currentAlerts) =>
+                currentAlerts.map((alert) =>
+                    alert.id === id ? { ...alert, ...updatedAlert } : alert,
+                ),
+            );
+            syncSelectedAlert(updatedAlert);
+            setSummary(await getSecuritySummary());
+            setError(null);
+            setFeedback('Security alert marked resolved.');
+        } catch (caughtError) {
+            setError(
+                apiMessage(
+                    caughtError,
+                    'Unable to resolve the security alert. Refresh and try again.',
+                ),
+            );
+        }
     };
 
     const handleReopenAlert = async (id: string) => {
-        const updatedAlert = await reopenSecurityAlert(id);
+        try {
+            const updatedAlert = await reopenSecurityAlert(id);
 
-        setAlerts((currentAlerts) =>
-            currentAlerts.map((alert) =>
-                alert.id === id ? { ...alert, ...updatedAlert } : alert,
-            ),
-        );
-        syncSelectedAlert(updatedAlert);
-        setFeedback('Security alert reopened.');
+            setAlerts((currentAlerts) =>
+                currentAlerts.map((alert) =>
+                    alert.id === id ? { ...alert, ...updatedAlert } : alert,
+                ),
+            );
+            syncSelectedAlert(updatedAlert);
+            setSummary(await getSecuritySummary());
+            setError(null);
+            setFeedback('Security alert reopened.');
+        } catch (caughtError) {
+            setError(
+                apiMessage(
+                    caughtError,
+                    'Unable to reopen the security alert. Refresh and try again.',
+                ),
+            );
+        }
     };
 
     const handleOpenRevokeSession = (session: AdminSession) => {
@@ -288,6 +355,15 @@ export function SecurityCenterPage() {
             setFeedback(`${selectedSession.user}'s session was revoked.`);
             setIsRevokeModalOpen(false);
             setSelectedSession(null);
+            setSummary(await getSecuritySummary());
+            setError(null);
+        } catch (caughtError) {
+            setError(
+                apiMessage(
+                    caughtError,
+                    'Unable to revoke the selected session.',
+                ),
+            );
         } finally {
             setIsRevoking(false);
         }
@@ -300,6 +376,14 @@ export function SecurityCenterPage() {
             const exportResult = await exportSecurityReport(options);
             setFeedback(`${exportResult.fileName} is ready for download.`);
             setIsExportModalOpen(false);
+            setError(null);
+        } catch (caughtError) {
+            setError(
+                apiMessage(
+                    caughtError,
+                    'Unable to export the security report.',
+                ),
+            );
         } finally {
             setIsExporting(false);
         }
@@ -324,16 +408,30 @@ export function SecurityCenterPage() {
                     </div>
                 )}
 
-                <SecuritySummaryCards
-                    summary={displayedSummary}
-                    isLoading={isLoading}
-                />
+                <SecuritySummaryCards summary={summary} isLoading={isLoading} />
 
                 <QueueHealthPanel health={queueHealth} isLoading={isLoading} />
 
                 <SecurityAlertsPanel
-                    alerts={filteredAlerts}
+                    alerts={paginatedAlerts}
                     isLoading={isLoading}
+                    activeCount={
+                        filteredAlerts.filter(
+                            (alert) => alert.status === 'open',
+                        ).length
+                    }
+                    currentPage={effectiveSecurityAlertsPage}
+                    totalPages={securityAlertsTotalPages}
+                    totalResults={filteredAlerts.length}
+                    rowsPerPage={securityAlertsRowsPerPage}
+                    onPageChange={(page) =>
+                        setSecurityAlertsPage(
+                            Math.min(
+                                Math.max(page, 1),
+                                securityAlertsTotalPages,
+                            ),
+                        )
+                    }
                     onViewDetails={handleViewAlertDetails}
                     onAcknowledge={handleAcknowledgeAlert}
                     onResolve={handleResolveAlert}
@@ -341,8 +439,20 @@ export function SecurityCenterPage() {
                 />
 
                 <LoginActivityTable
-                    activity={filteredLoginActivity}
+                    activity={paginatedLoginActivity}
                     isLoading={isLoading}
+                    currentPage={effectiveLoginActivityPage}
+                    totalPages={loginActivityTotalPages}
+                    totalResults={filteredLoginActivity.length}
+                    rowsPerPage={securityCenterRowsPerPage}
+                    onPageChange={(page) =>
+                        setLoginActivityPage(
+                            Math.min(
+                                Math.max(page, 1),
+                                loginActivityTotalPages,
+                            ),
+                        )
+                    }
                 />
 
                 <ActiveAdminSessions
@@ -352,8 +462,20 @@ export function SecurityCenterPage() {
                 />
 
                 <SecurityEventsTimeline
-                    events={filteredEvents}
+                    events={paginatedEvents}
                     isLoading={isLoading}
+                    currentPage={effectiveSecurityEventsPage}
+                    totalPages={securityEventsTotalPages}
+                    totalResults={filteredEvents.length}
+                    rowsPerPage={securityCenterRowsPerPage}
+                    onPageChange={(page) =>
+                        setSecurityEventsPage(
+                            Math.min(
+                                Math.max(page, 1),
+                                securityEventsTotalPages,
+                            ),
+                        )
+                    }
                 />
             </main>
 

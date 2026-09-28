@@ -101,6 +101,13 @@ export type ProjectReportBudgetAnalytics = {
     by_agency?: ProjectReportAgencyComparison[];
 };
 
+export type ProjectReportAnalyticsOverview = {
+    summary: ProjectReportSummary;
+    status: ProjectReportStatusAnalytics;
+    budget: ProjectReportBudgetAnalytics;
+    agencies: ProjectReportAgencyComparison[];
+};
+
 export type ProjectReportAgencyComparison = {
     agency_id: number | null;
     agency_name: string | null;

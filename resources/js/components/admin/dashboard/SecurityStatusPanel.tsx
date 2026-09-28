@@ -20,7 +20,7 @@ export function SecurityStatusPanel({
     const statusItems = status
         ? [
               {
-                  label: 'MFA-enabled accounts',
+                  label: 'MFA-enabled admin accounts',
                   value: status.mfaEligibleAccounts
                       ? `${status.mfaEnabledAccounts} / ${status.mfaEligibleAccounts}`
                       : String(status.mfaEnabledAccounts),
@@ -28,13 +28,13 @@ export function SecurityStatusPanel({
                   className: 'bg-[#ecfdf5] text-[#047857]',
               },
               {
-                  label: 'Recent failed logins',
+                  label: 'Failed logins (24h)',
                   value: String(status.recentFailedLogins),
                   icon: ShieldAlert,
                   className: 'bg-[#fff7ed] text-[#c2410c]',
               },
               {
-                  label: 'Locked accounts',
+                  label: 'Locked accounts (unresolved)',
                   value: String(status.lockedAccounts),
                   icon: UserX,
                   className: 'bg-[#fef2f2] text-[#b91c1c]',
@@ -49,7 +49,7 @@ export function SecurityStatusPanel({
         : [];
 
     return (
-        <article className="rounded-[10px] border border-[#e5e7eb] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_-1px_rgba(0,0,0,0.1)] xl:col-span-2">
+        <article className="rounded-[10px] border border-[#e5e7eb] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_-1px_rgba(0,0,0,0.1)]">
             <div className="flex h-[65px] items-center justify-between gap-4 border-b border-[#f3f4f6] px-6">
                 <div className="flex items-center gap-2.5">
                     <span className="flex size-8 shrink-0 items-center justify-center rounded-[10px] bg-[#fef2f2] text-[#fb2c36]">

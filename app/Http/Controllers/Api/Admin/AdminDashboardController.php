@@ -13,16 +13,59 @@ use App\Models\ResearchFile;
 use App\Models\SecurityEvent;
 use App\Models\User;
 use App\Support\ApiResponse;
+use App\Support\AuditLogger;
 use App\Support\Statuses;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+use Symfony\Component\HttpFoundation\Response;
 
 class AdminDashboardController extends Controller
 {
     public function __invoke(Request $request): JsonResponse
+    {
+        return ApiResponse::success(
+            'Admin dashboard loaded successfully.',
+            $this->dashboardData($request),
+        );
+    }
+
+    public function export(Request $request): Response
+    {
+        $data = $this->dashboardData($request);
+
+        AuditLogger::record(
+            $request,
+            'report.exported',
+            metadata: ['report' => 'system-dashboard', 'format' => 'pdf'],
+        );
+
+        $options = new Options;
+        $options->set('defaultFont', 'DejaVu Sans');
+        $options->set('isRemoteEnabled', false);
+
+        $pdf = new Dompdf($options);
+        $pdf->loadHtml(view('reports.admin.system-dashboard', [
+            'data' => $data,
+            'generatedAt' => now(),
+        ])->render());
+        $pdf->setPaper('a4', 'landscape');
+        $pdf->render();
+
+        return response($pdf->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="rikms-system-report-'.now()->format('Y-m-d').'.pdf"',
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function dashboardData(Request $request): array
     {
         $agencies = $this->query(Agency::class);
         $users = $this->query(User::class);
@@ -38,7 +81,7 @@ class AdminDashboardController extends Controller
         $underReviewResearch = $this->countWhere($research, 'status', Statuses::RESEARCH_UNDER_REVIEW);
         $pendingApprovals = $this->countWhere($researchApprovals, 'status', 'pending');
 
-        return ApiResponse::success('Admin dashboard loaded successfully.', [
+        return [
             'metrics' => [
                 'total_agencies' => $this->count($agencies),
                 'active_agencies' => $this->countWhere($agencies, 'status', 'active'),
@@ -62,29 +105,26 @@ class AdminDashboardController extends Controller
                 'pending_moderation_count' => $submittedResearch + $underReviewResearch + $pendingApprovals,
                 'total_uploads' => $this->count($researchFiles),
                 'total_files' => $this->count($researchFiles),
-                'unread_notifications_count' => $this->unreadNotificationsCount($notifications),
+                'unread_notifications_count' => $this->unreadNotificationsCount($notifications, $request),
                 'total_security_events' => $this->count($securityEvents),
                 'unresolved_security_events' => $this->countWhereNull($securityEvents, 'resolved_at'),
-                'recent_failed_logins' => $this->countWhere($securityEvents, 'event_type', 'login.failed'),
-                'locked_accounts' => $this->countWhere($securityEvents, 'event_type', 'account.locked'),
-                'mfa_enabled_users' => $this->countWhereNotNull($users, 'two_factor_confirmed_at'),
-                'mfa_eligible_users' => $this->count($users),
+                'recent_failed_logins' => $this->recentFailedLoginCount($securityEvents),
+                'locked_accounts' => $this->lockedAccountCount($securityEvents),
+                'mfa_enabled_users' => $this->mfaEnabledAdminCount(),
+                'mfa_eligible_users' => $this->adminUserCount(),
             ],
-            'recent_research' => $this->recentResearch($request),
-            'recent_agencies' => $this->recentAgencies(),
             'recent_audit_logs' => $this->recentAuditLogs(),
-            'recent_security_events' => $this->recentSecurityEvents(),
             'pending_moderation_items' => $this->pendingModerationItems(),
             'research_by_agency' => $this->researchByAgency(),
             'research_uploads_by_year' => $this->researchUploadsByYear(),
             'security_status' => [
-                'mfa_enabled_accounts' => $this->countWhereNotNull($users, 'two_factor_confirmed_at'),
-                'mfa_eligible_accounts' => $this->count($users),
-                'recent_failed_logins' => $this->countWhere($securityEvents, 'event_type', 'login.failed'),
-                'locked_accounts' => $this->countWhere($securityEvents, 'event_type', 'account.locked'),
+                'mfa_enabled_accounts' => $this->mfaEnabledAdminCount(),
+                'mfa_eligible_accounts' => $this->adminUserCount(),
+                'recent_failed_logins' => $this->recentFailedLoginCount($securityEvents),
+                'locked_accounts' => $this->lockedAccountCount($securityEvents),
                 'security_alerts' => $this->countWhereNull($securityEvents, 'resolved_at'),
             ],
-        ]);
+        ];
     }
 
     /**
@@ -161,81 +201,78 @@ class AdminDashboardController extends Controller
             ->count();
     }
 
-    private function unreadNotificationsCount(?Builder $notifications): int
+    private function unreadNotificationsCount(?Builder $notifications, Request $request): int
     {
         if (! $notifications) {
             return 0;
         }
 
-        if (Schema::hasColumn('notifications', 'read_at')) {
-            return (clone $notifications)->whereNull('read_at')->count();
-        }
+        $query = (clone $notifications)->where(function (Builder $query) use ($request): void {
+            $query->where('user_id', $request->user()->id)
+                ->orWhere(function (Builder $query): void {
+                    $query->whereNull('user_id')->whereNull('agency_id');
+                });
+        });
 
-        return $this->countWhere($notifications, 'status', Statuses::NOTIFICATION_UNREAD);
+        return $query
+            ->visibleTo($request->user()->id)
+            ->unreadBy($request->user()->id)
+            ->count();
     }
 
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    private function recentResearch(Request $request): array
+    private function adminUsersQuery(): ?Builder
     {
-        $query = $this->query(Research::class);
+        $query = $this->query(User::class);
 
         if (! $query) {
-            return [];
+            return null;
         }
 
         return $query
-            ->with('agency:id,name,short_name,slug,status,created_at')
-            ->latest()
-            ->limit(5)
-            ->get()
-            ->map(fn (Research $research): array => [
-                'id' => $research->id,
-                'title' => $research->title,
-                'status' => $research->status,
-                'agency_id' => $research->agency_id,
-                'agency' => $research->agency ? [
-                    'id' => $research->agency->id,
-                    'name' => $research->agency->name,
-                    'short_name' => $research->agency->short_name,
-                    'slug' => $research->agency->slug,
-                    'status' => $research->agency->status,
-                    'created_at' => $research->agency->created_at?->toISOString(),
-                ] : null,
-                'publication_year' => $research->publication_year,
-                'access_level' => $research->access_level,
-                'created_at' => $research->created_at?->toISOString(),
-                'published_at' => $research->published_at?->toISOString(),
-            ])
-            ->all();
+            ->where('status', Statuses::USER_ACTIVE)
+            ->where(function (Builder $query): void {
+                $query->whereIn('role', ['super_admin', 'agency_admin']);
+
+                if (Schema::hasTable('roles') && Schema::hasTable('role_user')) {
+                    $query->orWhereHas('roles', fn (Builder $query) => $query->whereIn('slug', ['super_admin', 'agency_admin']));
+                }
+            });
     }
 
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    private function recentAgencies(): array
+    private function adminUserCount(): int
     {
-        $query = $this->query(Agency::class);
+        return $this->count($this->adminUsersQuery());
+    }
 
-        if (! $query) {
-            return [];
+    private function mfaEnabledAdminCount(): int
+    {
+        return $this->countWhereNotNull($this->adminUsersQuery(), 'two_factor_confirmed_at');
+    }
+
+    private function recentFailedLoginCount(?Builder $securityEvents): int
+    {
+        if (! $securityEvents || ! $this->hasColumn($securityEvents, 'created_at')) {
+            return 0;
         }
 
-        return $query
-            ->latest()
-            ->limit(5)
-            ->get(['id', 'name', 'short_name', 'slug', 'status', 'created_at'])
-            ->map(fn (Agency $agency): array => [
-                'id' => $agency->id,
-                'name' => $agency->name,
-                'acronym' => $agency->short_name,
-                'short_name' => $agency->short_name,
-                'slug' => $agency->slug,
-                'status' => $agency->status,
-                'created_at' => $agency->created_at?->toISOString(),
-            ])
-            ->all();
+        return (clone $securityEvents)
+            ->where('event_type', 'like', '%failed%')
+            ->where('created_at', '>=', now()->subDay())
+            ->count();
+    }
+
+    private function lockedAccountCount(?Builder $securityEvents): int
+    {
+        if (! $securityEvents) {
+            return 0;
+        }
+
+        return (clone $securityEvents)
+            ->where('event_type', 'like', '%locked%')
+            ->whereNull('resolved_at')
+            ->whereNotNull('user_id')
+            ->distinct('user_id')
+            ->count('user_id');
     }
 
     /**
@@ -279,50 +316,6 @@ class AdminDashboardController extends Controller
                     'created_at' => $log->agency->created_at?->toISOString(),
                 ] : null,
                 'created_at' => $log->created_at?->toISOString(),
-            ])
-            ->all();
-    }
-
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    private function recentSecurityEvents(): array
-    {
-        $query = $this->query(SecurityEvent::class);
-
-        if (! $query) {
-            return [];
-        }
-
-        return $query
-            ->with(['user:id,name,email,status,agency_id,created_at', 'agency:id,name,short_name,slug,status,created_at'])
-            ->latest('created_at')
-            ->limit(5)
-            ->get()
-            ->map(fn (SecurityEvent $event): array => [
-                'id' => $event->id,
-                'event_type' => $event->event_type,
-                'severity' => $event->severity,
-                'user_id' => $event->user_id,
-                'agency_id' => $event->agency_id,
-                'resolved_at' => $event->resolved_at?->toISOString(),
-                'user' => $event->user ? [
-                    'id' => $event->user->id,
-                    'name' => $event->user->name,
-                    'email' => $event->user->email,
-                    'status' => $event->user->status,
-                    'agency_id' => $event->user->agency_id,
-                    'created_at' => $event->user->created_at?->toISOString(),
-                ] : null,
-                'agency' => $event->agency ? [
-                    'id' => $event->agency->id,
-                    'name' => $event->agency->name,
-                    'short_name' => $event->agency->short_name,
-                    'slug' => $event->agency->slug,
-                    'status' => $event->agency->status,
-                    'created_at' => $event->agency->created_at?->toISOString(),
-                ] : null,
-                'created_at' => $event->created_at?->toISOString(),
             ])
             ->all();
     }

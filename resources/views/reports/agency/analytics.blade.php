@@ -30,11 +30,14 @@
             &nbsp; | &nbsp; <strong>Applied filters:</strong>
             {{ collect($filters)->reject(fn ($value) => $value === 'all')->map(fn ($value, $key) => str($key)->headline().' = '.$value)->implode('; ') }}
         @endif
+        @if ($isTruncated)
+            <br><strong>Notice:</strong> This PDF is limited to the first {{ number_format($recordLimit) }} matching records. Use CSV export for the complete dataset.
+        @endif
     </div>
 
     <table class="summary"><tr>
         <td><strong>{{ $records->count() }}</strong>Total research</td>
-        <td><strong>{{ $records->where('status', 'published')->count() }}</strong>Published</td>
+        <td><strong>{{ $publishedCount }}</strong>Approved / published</td>
         <td><strong>{{ $records->pluck('category')->filter()->unique()->count() }}</strong>Categories</td>
         <td><strong>{{ number_format($records->sum('downloads')) }}</strong>Downloads</td>
     </tr></table>
@@ -44,8 +47,8 @@
         <tbody>
         @forelse ($records as $research)
             <tr><td>{{ $research->id }}</td><td>{{ $research->title }}</td><td>{{ $research->category ?? '—' }}</td>
-                <td>{{ $research->publication_year ?? '—' }}</td><td>{{ str($research->status)->headline() }}</td>
-                <td>{{ str($research->access_level ?? 'public')->headline() }}</td><td>{{ number_format($research->downloads) }}</td><td>{{ $research->created_at?->format('Y-m-d') }}</td></tr>
+                <td>{{ $research->publication_year ?? '—' }}</td><td>{{ str($research->analytics_status)->headline() }}</td>
+                <td>{{ str($research->analytics_access_type)->headline() }}</td><td>{{ number_format($research->downloads) }}</td><td>{{ $research->created_at?->format('Y-m-d') }}</td></tr>
         @empty
             <tr><td colspan="8" class="empty">No agency research records match the selected filters.</td></tr>
         @endforelse

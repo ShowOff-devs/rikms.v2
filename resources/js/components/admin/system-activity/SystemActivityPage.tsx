@@ -13,6 +13,7 @@ import {
     getActivityTimeline,
     getSystemNotifications,
     markNotificationAsRead,
+    markAllSystemNotificationsAsRead,
 } from '@/lib/admin/system-activity-service';
 import type {
     ActivityExportOptions,
@@ -26,28 +27,7 @@ import type {
 } from '@/types/system-activity';
 
 const defaultRowsPerPage = 8;
-
-function matchesActivitySearch(log: ActivityLog, query: string) {
-    return [
-        log.timestamp,
-        log.user,
-        log.role,
-        log.agency,
-        log.action,
-        log.affectedResource,
-        log.status,
-    ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-        .includes(query);
-}
-
-function uniqueSorted(values: Array<string | undefined>) {
-    return Array.from(new Set(values.filter(Boolean) as string[])).sort(
-        (left, right) => left.localeCompare(right),
-    );
-}
+const timelineRowsPerPage = 5;
 
 export function SystemActivityPage() {
     const [topbarSearch, setTopbarSearch] = useState('');
@@ -58,7 +38,9 @@ export function SystemActivityPage() {
     const [timelineItems, setTimelineItems] = useState<ActivityTimelineItem[]>(
         [],
     );
+    const [timelinePage, setTimelinePage] = useState(1);
     const [isLoading, setIsLoading] = useState(true);
+    const [isActivityLoading, setIsActivityLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [feedback, setFeedback] = useState<string | null>(null);
     const [selectedCategory, setSelectedCategory] =
@@ -74,6 +56,10 @@ export function SystemActivityPage() {
     const [selectedAction, setSelectedAction] = useState('all');
     const [currentPage, setCurrentPage] = useState(1);
     const [rowsPerPage] = useState(defaultRowsPerPage);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalResults, setTotalResults] = useState(0);
+    const [agencies, setAgencies] = useState<string[]>([]);
+    const [actions, setActions] = useState<string[]>([]);
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
     const [isClearModalOpen, setIsClearModalOpen] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
@@ -82,18 +68,13 @@ export function SystemActivityPage() {
     useEffect(() => {
         let isCurrent = true;
 
-        Promise.all([
-            getSystemNotifications(),
-            getActivityLogs(),
-            getActivityTimeline(),
-        ])
-            .then(([loadedNotifications, loadedLogs, loadedTimeline]) => {
+        Promise.all([getSystemNotifications(), getActivityTimeline()])
+            .then(([loadedNotifications, loadedTimeline]) => {
                 if (!isCurrent) {
                     return;
                 }
 
                 setNotifications(loadedNotifications);
-                setActivityLogs(loadedLogs);
                 setTimelineItems(loadedTimeline);
                 setError(null);
             })
@@ -114,6 +95,70 @@ export function SystemActivityPage() {
     }, []);
 
     useEffect(() => {
+        let isCurrent = true;
+        const timer = window.setTimeout(() => {
+            setIsActivityLoading(true);
+            getActivityLogs(
+                {
+                    query: [topbarSearch, activitySearch]
+                        .filter(Boolean)
+                        .join(' '),
+                    status: selectedStatus,
+                    role: selectedRole,
+                    agency: selectedAgency,
+                    action: selectedAction,
+                },
+                currentPage,
+                rowsPerPage,
+            )
+                .then((result) => {
+                    if (!isCurrent) {
+                        return;
+                    }
+
+                    const lastPage = Math.max(1, result.pagination.totalPages);
+
+                    if (currentPage > lastPage) {
+                        setCurrentPage(lastPage);
+
+                        return;
+                    }
+
+                    setActivityLogs(result.logs);
+                    setCurrentPage(result.pagination.currentPage);
+                    setTotalPages(lastPage);
+                    setTotalResults(result.pagination.total);
+                    setAgencies(result.filterOptions.agencies);
+                    setActions(result.filterOptions.actions);
+                    setError(null);
+                })
+                .catch(
+                    () =>
+                        isCurrent && setError('Unable to load activity logs.'),
+                )
+                .finally(() => {
+                    if (isCurrent) {
+                        setIsActivityLoading(false);
+                    }
+                });
+        }, 250);
+
+        return () => {
+            isCurrent = false;
+            window.clearTimeout(timer);
+        };
+    }, [
+        activitySearch,
+        currentPage,
+        rowsPerPage,
+        selectedAction,
+        selectedAgency,
+        selectedRole,
+        selectedStatus,
+        topbarSearch,
+    ]);
+
+    useEffect(() => {
         setCurrentPage(1);
     }, [
         activitySearch,
@@ -121,6 +166,7 @@ export function SystemActivityPage() {
         selectedRole,
         selectedAgency,
         selectedAction,
+        topbarSearch,
         rowsPerPage,
     ]);
 
@@ -146,80 +192,58 @@ export function SystemActivityPage() {
         );
     }, [notifications, selectedCategory]);
 
-    const filteredActivityLogs = useMemo(() => {
-        const query = activitySearch.trim().toLowerCase();
-
-        return activityLogs.filter((log) => {
-            const searchMatches = !query || matchesActivitySearch(log, query);
-            const statusMatches =
-                selectedStatus === 'all' || log.status === selectedStatus;
-            const roleMatches =
-                selectedRole === 'all' || log.role === selectedRole;
-            const agencyMatches =
-                selectedAgency === 'all' || log.agency === selectedAgency;
-            const actionMatches =
-                selectedAction === 'all' || log.action === selectedAction;
-
-            return (
-                searchMatches &&
-                statusMatches &&
-                roleMatches &&
-                agencyMatches &&
-                actionMatches
-            );
-        });
-    }, [
-        activityLogs,
-        activitySearch,
-        selectedStatus,
-        selectedRole,
-        selectedAgency,
-        selectedAction,
-    ]);
-
-    const totalPages = Math.max(
-        1,
-        Math.ceil(filteredActivityLogs.length / rowsPerPage),
-    );
-    const paginatedActivityLogs = filteredActivityLogs.slice(
-        (currentPage - 1) * rowsPerPage,
-        currentPage * rowsPerPage,
-    );
-
-    const agencies = useMemo(
-        () => uniqueSorted(activityLogs.map((log) => log.agency)),
-        [activityLogs],
-    );
-    const actions = useMemo(
-        () => uniqueSorted(activityLogs.map((log) => log.action)),
-        [activityLogs],
-    );
     const readNotificationCount = useMemo(
         () =>
             notifications.filter((notification) => notification.isRead).length,
         [notifications],
     );
 
-    const handleMarkAsRead = async (id: string) => {
-        const updatedNotification = await markNotificationAsRead(id);
+    const timelineTotalPages = Math.max(
+        1,
+        Math.ceil(timelineItems.length / timelineRowsPerPage),
+    );
+    const effectiveTimelinePage = Math.min(timelinePage, timelineTotalPages);
+    const paginatedTimelineItems = timelineItems.slice(
+        (effectiveTimelinePage - 1) * timelineRowsPerPage,
+        effectiveTimelinePage * timelineRowsPerPage,
+    );
 
-        setNotifications((currentNotifications) =>
-            currentNotifications.map((notification) =>
-                notification.id === id
-                    ? { ...notification, isRead: updatedNotification.isRead }
-                    : notification,
-            ),
-        );
+    const handleMarkAsRead = async (id: string) => {
+        try {
+            const updatedNotification = await markNotificationAsRead(id);
+
+            setNotifications((currentNotifications) =>
+                currentNotifications.map((notification) =>
+                    notification.id === id
+                        ? {
+                              ...notification,
+                              isRead: updatedNotification.isRead,
+                          }
+                        : notification,
+                ),
+            );
+            setError(null);
+        } catch {
+            setError('Unable to mark the notification as read.');
+        }
     };
 
-    const handleMarkAllAsRead = () => {
-        setNotifications((currentNotifications) =>
-            currentNotifications.map((notification) => ({
-                ...notification,
-                isRead: true,
-            })),
-        );
-        setFeedback('All visible system notifications have been marked read.');
+    const handleMarkAllAsRead = async () => {
+        try {
+            await markAllSystemNotificationsAsRead();
+            setNotifications((currentNotifications) =>
+                currentNotifications.map((notification) => ({
+                    ...notification,
+                    isRead: true,
+                })),
+            );
+            setError(null);
+            setFeedback(
+                'All visible system notifications have been marked read.',
+            );
+        } catch {
+            setError('Unable to mark all notifications as read.');
+        }
     };
 
     const handleResetActivityFilters = () => {
@@ -237,6 +261,8 @@ export function SystemActivityPage() {
             const exportResult = await exportActivityLogs(options);
             setFeedback(`${exportResult.fileName} is ready for download.`);
             setIsExportModalOpen(false);
+        } catch {
+            setError('Unable to export activity data. Please try again.');
         } finally {
             setIsExporting(false);
         }
@@ -276,6 +302,8 @@ export function SystemActivityPage() {
                 'System notifications were cleared. Activity logs remain available.',
             );
             setIsClearModalOpen(false);
+        } catch {
+            setError('Unable to clear notifications. Please try again.');
         } finally {
             setIsClearing(false);
         }
@@ -305,14 +333,14 @@ export function SystemActivityPage() {
                     notifications={notifications}
                     filteredNotifications={filteredNotifications}
                     selectedCategory={selectedCategory}
-                    isLoading={isLoading}
+                    isLoading={isActivityLoading}
                     onCategoryChange={setSelectedCategory}
                     onMarkAsRead={handleMarkAsRead}
                     onMarkAllAsRead={handleMarkAllAsRead}
                 />
 
                 <ActivityLogTable
-                    logs={paginatedActivityLogs}
+                    logs={activityLogs}
                     isLoading={isLoading}
                     searchQuery={activitySearch}
                     selectedStatus={selectedStatus}
@@ -323,7 +351,7 @@ export function SystemActivityPage() {
                     actions={actions}
                     currentPage={currentPage}
                     totalPages={totalPages}
-                    totalResults={filteredActivityLogs.length}
+                    totalResults={totalResults}
                     rowsPerPage={rowsPerPage}
                     onSearchChange={setActivitySearch}
                     onStatusChange={setSelectedStatus}
@@ -336,7 +364,19 @@ export function SystemActivityPage() {
                     }
                 />
 
-                <ActivityTimeline items={timelineItems} isLoading={isLoading} />
+                <ActivityTimeline
+                    items={paginatedTimelineItems}
+                    isLoading={isLoading}
+                    currentPage={effectiveTimelinePage}
+                    totalPages={timelineTotalPages}
+                    totalResults={timelineItems.length}
+                    rowsPerPage={timelineRowsPerPage}
+                    onPageChange={(page) =>
+                        setTimelinePage(
+                            Math.min(Math.max(page, 1), timelineTotalPages),
+                        )
+                    }
+                />
             </main>
 
             <ExportActivityLogModal

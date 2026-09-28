@@ -2,6 +2,7 @@ import { Transition } from '@headlessui/react';
 import { Form, Head, Link, usePage } from '@inertiajs/react';
 import { CheckCircle2, UserRound } from 'lucide-react';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
+import { SuperAdminProfilePage } from '@/components/admin/profile/SuperAdminProfilePage';
 import DeleteUser from '@/components/delete-user';
 import InputError from '@/components/input-error';
 import SettingsSection from '@/components/settings/settings-section';
@@ -29,6 +30,19 @@ export default function Profile({
     status?: string;
 }) {
     const { auth } = usePage().props;
+
+    if (auth.adminPermissions?.includes('*')) {
+        return (
+            <>
+                <Head title="My Profile" />
+                <SuperAdminProfilePage
+                    user={auth.user}
+                    mustVerifyEmail={mustVerifyEmail}
+                    status={status}
+                />
+            </>
+        );
+    }
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>

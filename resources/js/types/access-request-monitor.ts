@@ -57,6 +57,16 @@ export type AccessRequestMonitorSummary = {
     denied: number;
 };
 
+export type AccessRequestMonitorFilterOptions = {
+    agencies: string[];
+    organizations: string[];
+};
+
+export type AccessRequestsByAgency = {
+    agency: string;
+    count: number;
+};
+
 export type AccessReportExportFormat = 'pdf' | 'csv' | 'excel';
 
 export type AccessReportExportDateRange =

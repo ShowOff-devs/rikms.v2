@@ -141,3 +141,238 @@
         @apply bg-background text-foreground;
     }
 }
+
+/*
+ * The administration portal predates the semantic color tokens above and
+ * uses a fixed light palette throughout its screens. These scoped mappings
+ * keep that palette intact in light mode while giving every AdminLayout page,
+ * including portaled dialogs and menus, a consistent dark equivalent.
+ */
+@layer utilities {
+    .dark body.admin-portal .admin-shell {
+        background-color: #0b1120 !important;
+        color: #f8fafc !important;
+    }
+
+    .dark body.admin-portal .admin-logo-tile {
+        background-color: #ffffff !important;
+    }
+
+    /* Neutral surfaces */
+    .dark body.admin-portal .bg-white,
+    .dark body.admin-portal [class~='bg-[#ffffff]'] {
+        background-color: #111827 !important;
+    }
+
+    .dark body.admin-portal [class~='bg-[#f9fafb]'],
+    .dark body.admin-portal [class~='bg-[#f9fafb]/80'],
+    .dark body.admin-portal [class~='bg-[#f8fafc]'] {
+        background-color: #172033 !important;
+    }
+
+    .dark body.admin-portal [class~='bg-[#f3f4f6]'],
+    .dark body.admin-portal [class~='bg-[#f1f5f9]'],
+    .dark body.admin-portal [class~='bg-[#eef2f7]'] {
+        background-color: #1e293b !important;
+    }
+
+    .dark body.admin-portal [class~='bg-[#e5e7eb]'],
+    .dark body.admin-portal [class~='bg-[#d1d5dc]'],
+    .dark body.admin-portal [class~='bg-[#e2e8f0]'] {
+        background-color: #334155 !important;
+    }
+
+    /* Neutral typography */
+    .dark body.admin-portal [class~='text-[#0f172a]'],
+    .dark body.admin-portal [class~='text-[#101828]'],
+    .dark body.admin-portal [class~='text-[#111827]'],
+    .dark body.admin-portal [class~='text-[#1e2939]'] {
+        color: #f8fafc !important;
+    }
+
+    .dark body.admin-portal [class~='text-[#364153]'] {
+        color: #e2e8f0 !important;
+    }
+
+    .dark body.admin-portal [class~='text-[#4a5565]'] {
+        color: #cbd5e1 !important;
+    }
+
+    .dark body.admin-portal [class~='text-[#6a7282]'],
+    .dark body.admin-portal [class~='text-[#64748b]'],
+    .dark body.admin-portal [class~='text-[#6b7280]'],
+    .dark body.admin-portal [class~='text-[#99a1af]'] {
+        color: #94a3b8 !important;
+    }
+
+    /* Neutral borders and dividers */
+    .dark body.admin-portal [class~='border-[#e5e7eb]'],
+    .dark body.admin-portal [class~='border-[#eef2f7]'],
+    .dark body.admin-portal [class~='border-[#f3f4f6]'],
+    .dark body.admin-portal [class~='border-[#f9fafb]'] {
+        border-color: #293548 !important;
+    }
+
+    .dark body.admin-portal [class~='border-[#d1d5dc]'],
+    .dark body.admin-portal [class~='border-[#d1d5db]'],
+    .dark body.admin-portal [class~='border-[#cbd5e1]'] {
+        border-color: #3b475b !important;
+    }
+
+    .dark body.admin-portal [class~='divide-[#e5e7eb]'] > :not(:last-child),
+    .dark body.admin-portal [class~='divide-[#f3f4f6]'] > :not(:last-child) {
+        border-color: #293548 !important;
+    }
+
+    /* Inputs, selects, and interactive neutral states */
+    .dark body.admin-portal input:not([type='checkbox']):not([type='radio']),
+    .dark body.admin-portal textarea,
+    .dark body.admin-portal select {
+        color: #f8fafc;
+        caret-color: #f8fafc;
+    }
+
+    .dark body.admin-portal input::placeholder,
+    .dark body.admin-portal textarea::placeholder {
+        color: #64748b;
+    }
+
+    .dark body.admin-portal [class~='hover:bg-[#f9fafb]']:hover,
+    .dark body.admin-portal [class~='hover:bg-[#f8fafc]']:hover,
+    .dark body.admin-portal [class~='hover:bg-[#f3f4f6]']:hover,
+    .dark body.admin-portal [class~='focus:bg-white']:focus {
+        background-color: #243044 !important;
+    }
+
+    /* Brand and informational treatments */
+    .dark body.admin-portal [class~='text-[#1e3a8a]'],
+    .dark body.admin-portal [class~='text-[#1d4ed8]'],
+    .dark body.admin-portal [class~='text-[#1447e6]'],
+    .dark body.admin-portal [class~='text-[#2563eb]'],
+    .dark body.admin-portal [class~='text-[#172554]'],
+    .dark body.admin-portal [class~='text-[#1d3478]'] {
+        color: #a5b4fc !important;
+    }
+
+    .dark body.admin-portal [class~='text-[#4338ca]'],
+    .dark body.admin-portal [class~='text-[#7c3aed]'] {
+        color: #c4b5fd !important;
+    }
+
+    .dark body.admin-portal [class~='bg-[#eef2ff]'] {
+        background-color: #25264f !important;
+    }
+
+    .dark body.admin-portal [class~='bg-[#1e3a8a]/5'],
+    .dark body.admin-portal [class~='bg-[#1e3a8a]/10'] {
+        background-color: #25264f !important;
+    }
+
+    .dark body.admin-portal [class~='bg-[#f5f3ff]'],
+    .dark body.admin-portal [class~='bg-[#f3e8ff]'],
+    .dark body.admin-portal [class~='bg-[#ede9fe]'] {
+        background-color: #2e1f4f !important;
+    }
+
+    .dark body.admin-portal [class~='border-[#ddd6fe]'],
+    .dark body.admin-portal [class~='border-[#c7d2fe]'] {
+        border-color: #5b21b6 !important;
+    }
+
+    .dark body.admin-portal [class~='bg-[#eff6ff]'],
+    .dark body.admin-portal [class~='bg-[#dbeafe]'] {
+        background-color: #172554 !important;
+    }
+
+    .dark body.admin-portal [class~='border-[#dbeafe]'],
+    .dark body.admin-portal [class~='border-[#bfdbfe]'] {
+        border-color: #1e40af !important;
+    }
+
+    /* Success treatments */
+    .dark body.admin-portal [class~='bg-[#f0fdf4]'],
+    .dark body.admin-portal [class~='bg-[#dcfce7]'],
+    .dark body.admin-portal [class~='bg-[#ecfdf5]'],
+    .dark body.admin-portal [class~='bg-[#b9f8cf]'] {
+        background-color: #10291d !important;
+    }
+
+    .dark body.admin-portal [class~='border-[#bbf7d0]'],
+    .dark body.admin-portal [class~='border-[#b9f8cf]'] {
+        border-color: #166534 !important;
+    }
+
+    .dark body.admin-portal [class~='text-[#008236]'],
+    .dark body.admin-portal [class~='text-[#166534]'],
+    .dark body.admin-portal [class~='text-[#15803d]'],
+    .dark body.admin-portal [class~='text-[#16a34a]'],
+    .dark body.admin-portal [class~='text-[#00a63e]'] {
+        color: #86efac !important;
+    }
+
+    /* Warning and elevated-access treatments */
+    .dark body.admin-portal [class~='bg-[#fffbeb]'],
+    .dark body.admin-portal [class~='bg-[#fef3c7]'],
+    .dark body.admin-portal [class~='bg-[#fff7ed]'] {
+        background-color: #2b2110 !important;
+    }
+
+    .dark body.admin-portal [class~='border-[#fee685]'],
+    .dark body.admin-portal [class~='border-[#fed7aa]'],
+    .dark body.admin-portal [class~='border-[#ffd6a8]'] {
+        border-color: #92400e !important;
+    }
+
+    .dark body.admin-portal [class~='text-[#bb4d00]'],
+    .dark body.admin-portal [class~='text-[#ca3500]'],
+    .dark body.admin-portal [class~='text-[#9a3412]'],
+    .dark body.admin-portal [class~='text-[#c2410c]'],
+    .dark body.admin-portal [class~='text-[#d97706]'] {
+        color: #fdba74 !important;
+    }
+
+    /* Destructive and critical treatments */
+    .dark body.admin-portal [class~='bg-[#fef2f2]'],
+    .dark body.admin-portal [class~='bg-[#fee2e2]'] {
+        background-color: #32171b !important;
+    }
+
+    .dark body.admin-portal [class~='border-[#fecaca]'],
+    .dark body.admin-portal [class~='border-[#ffc9c9]'],
+    .dark body.admin-portal [class~='border-[#fee2e2]'] {
+        border-color: #7f1d1d !important;
+    }
+
+    .dark body.admin-portal [class~='text-[#991b1b]'],
+    .dark body.admin-portal [class~='text-[#b91c1c]'],
+    .dark body.admin-portal [class~='text-[#c10007]'],
+    .dark body.admin-portal [class~='text-[#dc2626]'],
+    .dark body.admin-portal [class~='text-[#e7000b]'] {
+        color: #fca5a5 !important;
+    }
+
+    /* Keep primary and destructive filled actions legible. */
+    .dark body.admin-portal [class~='bg-[#1e3a8a]'] {
+        background-color: #3730a3 !important;
+    }
+
+    .dark body.admin-portal [class~='hover:bg-[#172f70]']:hover {
+        background-color: #4338ca !important;
+    }
+
+    .dark body.admin-portal [class~='bg-[#e7000b]'],
+    .dark body.admin-portal [class~='bg-[#dc2626]'] {
+        background-color: #b91c1c !important;
+    }
+
+    /* Browser-native controls and focus affordances */
+    .dark body.admin-portal option {
+        background-color: #111827;
+        color: #f8fafc;
+    }
+
+    .dark body.admin-portal ::selection {
+        background-color: #4338ca;
+        color: #ffffff;
+    }
+}

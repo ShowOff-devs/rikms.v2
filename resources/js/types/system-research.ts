@@ -1,8 +1,12 @@
 export type SystemResearchStatus =
     | 'published'
     | 'under-review'
+    | 'submitted'
+    | 'approved'
+    | 'rejected'
     | 'draft'
-    | 'archived';
+    | 'archived'
+    | 'superseded';
 
 export type SystemResearchDocumentType =
     | 'research-study'
@@ -23,7 +27,7 @@ export type SystemResearchRecord = {
     agencyId: string;
     agencyName: string;
     agencyShortName: string;
-    year: number;
+    year: number | null;
     status: SystemResearchStatus;
     category: string;
     sdgs: string[];
@@ -51,6 +55,13 @@ export type SystemResearchSummary = {
     published: number;
     underReview: number;
     totalViews: number;
+};
+
+export type SystemResearchFilterOptions = {
+    agencies: string[];
+    years: string[];
+    categories: string[];
+    sdgs: string[];
 };
 
 export type SystemResearchExportOptions = {

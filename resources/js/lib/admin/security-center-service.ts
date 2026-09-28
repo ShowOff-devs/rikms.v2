@@ -42,6 +42,7 @@ type ApiSecuritySummary = {
     locked_accounts: number;
     active_admin_sessions: number;
     security_alerts: number;
+    high_priority_alerts: number;
 };
 
 type ApiQueueHealth = {
@@ -51,9 +52,6 @@ type ApiQueueHealth = {
     oldest_pending_job_age_minutes: number | null;
     status: QueueHealth['status'];
 };
-
-let cachedEvents: ApiSecurityEvent[] = [];
-let eventsRequest: Promise<ApiSecurityEvent[]> | null = null;
 
 function title(value: string) {
     return value
@@ -137,24 +135,22 @@ function toTimelineEvent(event: ApiSecurityEvent): SecurityEvent {
     };
 }
 
-async function loadEvents() {
-    if (cachedEvents.length) {
-        return cachedEvents;
-    }
+async function loadEvents(query = '') {
+    const events: ApiSecurityEvent[] = [];
+    let page = 1;
+    let lastPage = 1;
 
-    eventsRequest ??= fetchApi<ApiSecurityEvent[]>(
-        '/api/admin/security/events?per_page=100',
-    )
-        .then((response) => {
-            cachedEvents = response.data;
+    do {
+        const response = await fetchApi<
+            ApiSecurityEvent[],
+            { pagination?: { last_page?: number } }
+        >(`/api/admin/security/events?per_page=100&page=${page}${query}`);
+        events.push(...response.data);
+        lastPage = Math.max(1, response.meta.pagination?.last_page ?? 1);
+        page += 1;
+    } while (page <= lastPage);
 
-            return cachedEvents;
-        })
-        .finally(() => {
-            eventsRequest = null;
-        });
-
-    return eventsRequest;
+    return events;
 }
 
 export async function getSecuritySummary(): Promise<SecuritySummary> {
@@ -170,6 +166,7 @@ export async function getSecuritySummary(): Promise<SecuritySummary> {
         lockedAccounts: summary.locked_accounts,
         activeAdminSessions: summary.active_admin_sessions,
         securityAlerts: summary.security_alerts,
+        highPriorityAlerts: summary.high_priority_alerts,
     };
 }
 
@@ -189,7 +186,9 @@ export async function getQueueHealth(): Promise<QueueHealth> {
 }
 
 export async function getSecurityAlerts() {
-    const events = await loadEvents();
+    const events = await loadEvents(
+        '&resolved=false&alerts=true&prioritize_severity=true',
+    );
 
     return events.map(toAlert);
 }
@@ -198,9 +197,6 @@ export async function acknowledgeSecurityAlert(id: string) {
     const response = await fetchApi<ApiSecurityEvent>(
         `/api/admin/security/events/${id}/acknowledge`,
         { method: 'POST' },
-    );
-    cachedEvents = cachedEvents.map((event) =>
-        String(event.id) === id ? response.data : event,
     );
 
     return toAlert(response.data);
@@ -211,9 +207,6 @@ export async function resolveSecurityAlert(id: string) {
         `/api/admin/security/events/${id}/resolve`,
         { method: 'POST' },
     );
-    cachedEvents = cachedEvents.map((event) =>
-        String(event.id) === id ? response.data : event,
-    );
 
     return toAlert(response.data);
 }
@@ -223,15 +216,12 @@ export async function reopenSecurityAlert(id: string) {
         `/api/admin/security/events/${id}/reopen`,
         { method: 'POST' },
     );
-    cachedEvents = cachedEvents.map((event) =>
-        String(event.id) === id ? response.data : event,
-    );
 
     return toAlert(response.data);
 }
 
 export async function getLoginActivity(): Promise<LoginActivity[]> {
-    const events = cachedEvents.length ? cachedEvents : await loadEvents();
+    const events = await loadEvents('&category=login');
 
     return events
         .filter((event) => event.event_type.includes('login'))
@@ -241,7 +231,9 @@ export async function getLoginActivity(): Promise<LoginActivity[]> {
             role:
                 event.user?.role === 'super_admin'
                     ? 'Super Admin'
-                    : 'Agency Admin',
+                    : event.user?.role === 'agency_admin'
+                      ? 'Agency Admin'
+                      : 'Unknown',
             ipAddress:
                 event.ip_address ?? String(event.metadata?.ip_address ?? ''),
             location: event.location ?? 'Unknown',
@@ -281,7 +273,7 @@ export async function revokeAdminSession(id: string) {
 }
 
 export async function getSecurityEvents() {
-    const events = cachedEvents.length ? cachedEvents : await loadEvents();
+    const events = await loadEvents();
 
     return events.map(toTimelineEvent);
 }
@@ -302,8 +294,25 @@ export async function exportSecurityReport(
         params.set('end_date', options.endDate);
     }
 
+    params.set('include_summary', String(options.includeSummary));
+    params.set('include_alerts', String(options.includeAlerts));
+    params.set('include_login_activity', String(options.includeLoginActivity));
+    params.set(
+        'include_active_sessions',
+        String(options.includeActiveSessions),
+    );
+    params.set(
+        'include_security_events',
+        String(options.includeSecurityEvents),
+    );
+    params.set('include_failed_logins', String(options.includeFailedLogins));
+    params.set(
+        'include_permission_changes',
+        String(options.includePermissionChanges),
+    );
+
     const response = await fetch(
-        `/api/admin/reports/security/export?${params.toString()}`,
+        `/api/admin/security/export?${params.toString()}`,
         {
             credentials: 'same-origin',
             headers: {

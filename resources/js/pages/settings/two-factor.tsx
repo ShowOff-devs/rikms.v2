@@ -1,6 +1,7 @@
-import { Form, Head } from '@inertiajs/react';
+import { Form, Head, usePage } from '@inertiajs/react';
 import { ShieldBan, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
+import { SuperAdminTwoFactorPage } from '@/components/admin/account-settings/SuperAdminTwoFactorPage';
 import SettingsSection from '@/components/settings/settings-section';
 import TwoFactorRecoveryCodes from '@/components/two-factor-recovery-codes';
 import TwoFactorSetupModal from '@/components/two-factor-setup-modal';
@@ -39,6 +40,19 @@ export default function TwoFactor({
         errors,
     } = useTwoFactorAuth();
     const [showSetupModal, setShowSetupModal] = useState<boolean>(false);
+    const { auth } = usePage().props;
+
+    if (auth.adminPermissions?.includes('*')) {
+        return (
+            <>
+                <Head title="Two-factor Authentication" />
+                <SuperAdminTwoFactorPage
+                    requiresConfirmation={requiresConfirmation}
+                    twoFactorEnabled={twoFactorEnabled}
+                />
+            </>
+        );
+    }
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>

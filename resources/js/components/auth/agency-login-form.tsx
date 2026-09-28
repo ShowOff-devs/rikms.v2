@@ -125,27 +125,27 @@ export default function AgencyLoginForm({ agencies }: AgencyLoginFormProps) {
                 <img
                     src={usepSeal}
                     alt="University of Southeastern Philippines"
-                    className="size-[52px] rounded-full object-contain"
+                    className="size-12 rounded-full object-contain"
                 />
                 <div className="h-8 w-px bg-[#d1d5db]" />
                 <img
                     src={dostSeal}
                     alt="Department of Science and Technology Region XI"
-                    className="h-[52px] w-[58px] object-contain"
+                    className="h-12 w-[54px] object-contain"
                 />
             </div>
 
-            <div className="mt-6 text-center">
-                <h1 className="text-[26.4px] leading-[39.6px] font-bold text-[#1e3a8a]">
+            <div className="mt-5 text-center">
+                <h1 className="text-[28px] leading-9 font-bold tracking-[-0.02em] text-[#1e3a8a]">
                     Welcome Back
                 </h1>
-                <p className="mx-auto mt-2 max-w-[419px] text-sm leading-5 text-[#6b7280]">
+                <p className="mx-auto mt-2 max-w-[380px] text-sm leading-6 text-[#64748b]">
                     Please select your agency and enter your credentials to
                     access the portal.
                 </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+            <form onSubmit={handleSubmit} className="mt-7 space-y-4">
                 {submissionError && (
                     <AlertError
                         errors={[submissionError]}
@@ -164,6 +164,7 @@ export default function AgencyLoginForm({ agencies }: AgencyLoginFormProps) {
                         <Building2 className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-[#9ca3af]" />
                         <Select
                             value={form.agencyId}
+                            disabled={agencies.length === 0}
                             onValueChange={(value) =>
                                 updateField('agencyId', value)
                             }
@@ -171,7 +172,7 @@ export default function AgencyLoginForm({ agencies }: AgencyLoginFormProps) {
                             <SelectTrigger
                                 id="agency"
                                 aria-invalid={Boolean(errors.agencyId)}
-                                className="h-[42px] w-full rounded-[10px] border-[#e5e7eb] bg-white pr-10 pl-11 text-left text-sm text-[#111827] shadow-none"
+                                className="h-11 w-full rounded-[10px] border-[#dbe1e8] bg-white pr-10 pl-11 text-left text-sm text-[#111827] shadow-none transition-colors focus-visible:border-[#1e3a8a] focus-visible:ring-2 focus-visible:ring-[#1e3a8a]/10 disabled:bg-[#f8fafc]"
                             >
                                 <SelectValue placeholder="Select your agency" />
                             </SelectTrigger>
@@ -211,8 +212,7 @@ export default function AgencyLoginForm({ agencies }: AgencyLoginFormProps) {
                         }
                         aria-invalid={Boolean(errors.email)}
                         autoComplete="email"
-                        autoFocus
-                        className="h-[42px] rounded-[10px] border-[#e5e7eb] bg-white px-4 text-sm shadow-none placeholder:text-[rgba(10,10,10,0.5)]"
+                        className="h-11 rounded-[10px] border-[#dbe1e8] bg-white px-4 text-sm shadow-none transition-colors placeholder:text-[#94a3b8] focus-visible:border-[#1e3a8a] focus-visible:ring-2 focus-visible:ring-[#1e3a8a]/10"
                         placeholder={
                             selectedAgency
                                 ? `Enter your ${selectedAgency.shortName} email`
@@ -237,13 +237,13 @@ export default function AgencyLoginForm({ agencies }: AgencyLoginFormProps) {
                         }
                         aria-invalid={Boolean(errors.password)}
                         autoComplete="current-password"
-                        className="h-[42px] rounded-[10px] border-[#e5e7eb] bg-white px-4 pr-11 text-sm shadow-none placeholder:text-[rgba(10,10,10,0.5)]"
+                        className="h-11 rounded-[10px] border-[#dbe1e8] bg-white px-4 pr-11 text-sm shadow-none transition-colors placeholder:text-[#94a3b8] focus-visible:border-[#1e3a8a] focus-visible:ring-2 focus-visible:ring-[#1e3a8a]/10"
                         placeholder="Enter your password"
                     />
                     <InputError message={errors.password} />
                 </div>
 
-                <div className="flex items-center justify-between gap-4 text-sm">
+                <div className="flex items-center justify-between gap-4 pt-1 text-sm">
                     <label className="flex items-center gap-2 text-[#6b7280]">
                         <Checkbox
                             checked={form.remember}
@@ -265,14 +265,14 @@ export default function AgencyLoginForm({ agencies }: AgencyLoginFormProps) {
                 <Button
                     type="submit"
                     disabled={isSubmitting || agencies.length === 0}
-                    className="h-12 w-full rounded-[10px] bg-[#1e3a8a] text-base font-semibold text-white hover:bg-[#1b347b]"
+                    className="mt-1 h-12 w-full rounded-[10px] bg-[#1e3a8a] text-base font-semibold text-white shadow-sm transition-colors hover:bg-[#1b347b] focus-visible:ring-2 focus-visible:ring-[#1e3a8a]/25"
                 >
                     {isSubmitting ? <Spinner /> : null}
                     Sign In to Portal
                 </Button>
             </form>
 
-            <div className="mt-6 space-y-3 text-center">
+            <div className="mt-6 space-y-2.5 border-t border-[#eef2f7] pt-5 text-center">
                 <div className="flex items-center justify-center gap-1.5 text-[12px] font-medium text-[#9ca3af]">
                     <ShieldCheck className="size-3.5" />
                     <span>Secure 256-bit encrypted connection</span>

@@ -39,7 +39,7 @@ export type MostAccessedResearch = {
     id: string;
     title: string;
     category: string;
-    year: number;
+    year: number | null;
     downloads: number;
     views: number;
 };
@@ -48,6 +48,8 @@ export type AccessRequestBreakdown = {
     approved: number;
     pending: number;
     denied: number;
+    expired: number;
+    cancelled: number;
 };
 
 export type DownloadTrend = {
@@ -61,9 +63,9 @@ export type AnalyticsResearchRecord = {
     id: string;
     title: string;
     category: string;
-    year: number;
+    year: number | null;
     documentType: string;
-    sdgs: number[];
+    sdgs: string[];
     status: AnalyticsResearchStatus;
     accessType: string;
     downloads: number;

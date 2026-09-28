@@ -129,4 +129,9 @@ class AccessRequest extends Model
     {
         return $this->belongsTo(User::class, 'restored_by');
     }
+
+    public function auditLogs()
+    {
+        return $this->morphMany(AuditLog::class, 'auditable')->latest('created_at');
+    }
 }

@@ -64,7 +64,11 @@ export function SystemResearchViewModal({
                                 />
                                 <DetailItem
                                     label="Year"
-                                    value={String(record.year)}
+                                    value={
+                                        record.year
+                                            ? String(record.year)
+                                            : 'Unavailable'
+                                    }
                                 />
                                 <DetailItem
                                     label="Category"

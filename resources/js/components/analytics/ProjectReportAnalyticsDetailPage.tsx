@@ -13,7 +13,10 @@ import { useEffect, useState } from 'react';
 import AgencyAdminLayout from '@/components/agency/AgencyAdminLayout';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getProjectReportDetail } from '@/lib/analytics/project-report-analytics-service';
+import {
+    getProjectReportDetail,
+    projectReportReturnPath,
+} from '@/lib/analytics/project-report-analytics-service';
 import { ApiError, apiMessage } from '@/lib/api-client';
 import { useAgencySession } from '@/lib/auth/agency-auth';
 import type {
@@ -143,7 +146,7 @@ function DetailHeader({ data }: { data: ProjectReportAnalyticsDetail | null }) {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
                     <Link
-                        href="/agency/analytics"
+                        href={projectReportReturnPath('/agency/analytics')}
                         className="inline-flex items-center gap-2 text-sm font-medium text-[#1e3a8a] hover:underline"
                     >
                         <ArrowLeft className="size-4" />

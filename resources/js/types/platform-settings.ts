@@ -24,6 +24,7 @@ export type BackupReadiness = {
 };
 
 export type PlatformSettings = {
+    versions: Record<string, string | null>;
     general: {
         systemName: string;
         shortName: string;

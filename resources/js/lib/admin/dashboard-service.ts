@@ -1,4 +1,5 @@
 import { fetchApi } from '@/lib/api-client';
+import { downloadResponseFile } from '@/lib/download-file';
 import type {
     AdminDashboardIcon,
     AdminDashboardMetric,
@@ -63,10 +64,7 @@ type DashboardModerationItem = {
 
 type AdminDashboardApiData = {
     metrics: AdminDashboardMetrics;
-    recent_research: Array<Record<string, unknown>>;
-    recent_agencies: Array<Record<string, unknown>>;
     recent_audit_logs: DashboardAuditLog[];
-    recent_security_events: Array<Record<string, unknown>>;
     pending_moderation_items: DashboardModerationItem[];
     research_by_agency: ResearchByAgency[];
     research_uploads_by_year: ResearchUploadByYear[];
@@ -121,9 +119,15 @@ const quickManagementActions: QuickManagementAction[] = [
 ];
 
 async function getAdminDashboardApiData() {
-    dashboardRequest ??= fetchApi<AdminDashboardApiData>(
-        '/api/admin/dashboard',
-    ).then(({ data }) => data);
+    if (!dashboardRequest) {
+        dashboardRequest = fetchApi<AdminDashboardApiData>(
+            '/api/admin/dashboard',
+        )
+            .then(({ data }) => data)
+            .finally(() => {
+                dashboardRequest = null;
+            });
+    }
 
     return dashboardRequest;
 }
@@ -257,17 +261,39 @@ export async function getSecurityStatus() {
     return status;
 }
 
+export async function getUnreadNotificationCount() {
+    const data = await getAdminDashboardApiData();
+
+    return data.metrics.unread_notifications_count;
+}
+
 export async function getQuickManagementActions() {
     return quickManagementActions;
 }
 
 export async function generateSystemReport(): Promise<GeneratedSystemReport> {
+    const response = await fetch('/api/admin/dashboard/export', {
+        credentials: 'same-origin',
+        headers: {
+            Accept: 'application/pdf',
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+    });
+
+    if (!response.ok) {
+        throw new Error('Unable to generate the system report.');
+    }
+
     const generatedAt = new Date().toISOString();
     const dateStamp = generatedAt.slice(0, 10);
+    const { fileName } = await downloadResponseFile(
+        response,
+        `rikms-system-report-${dateStamp}.pdf`,
+    );
 
     return {
         id: `system-report-${Date.now()}`,
-        fileName: `rikms-system-report-${dateStamp}.pdf`,
+        fileName,
         format: 'pdf',
         generatedAt,
         status: 'ready',

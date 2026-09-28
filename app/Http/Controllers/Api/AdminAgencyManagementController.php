@@ -12,9 +12,11 @@ use App\Support\AuditLogger;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Unique;
+use Illuminate\Validation\ValidationException;
 
 class AdminAgencyManagementController extends Controller
 {
@@ -32,26 +34,34 @@ class AdminAgencyManagementController extends Controller
             'agency_admin_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
         ]);
 
-        $agency = Agency::query()->create([
-            'slug' => $this->uniqueSlug($validated['short_name'] ?: $validated['name']),
-            'name' => trim($validated['name']),
-            'short_name' => trim($validated['short_name']),
-            'full_name' => trim($validated['name']),
-            'type' => $this->displayType($validated['type']),
-            'description' => $validated['description'] ?? null,
-            'website' => $validated['website'] ?? null,
-            'email' => $validated['email'] ?? null,
-            'address' => $validated['address'] ?? null,
-            'status' => $validated['status'],
-        ]);
+        $admin = ! empty($validated['agency_admin_id'])
+            ? $this->eligibleAgencyAdmin((int) $validated['agency_admin_id'], 'agency_admin_id')
+            : null;
 
-        if (! empty($validated['agency_admin_id'])) {
-            $this->assignAdminToAgency($request, $agency, (int) $validated['agency_admin_id']);
-        }
+        $agency = DB::transaction(function () use ($request, $validated, $admin): Agency {
+            $agency = Agency::query()->create([
+                'slug' => $this->uniqueSlug($validated['short_name'] ?: $validated['name']),
+                'name' => trim($validated['name']),
+                'short_name' => trim($validated['short_name']),
+                'full_name' => trim($validated['name']),
+                'type' => $this->displayType($validated['type']),
+                'description' => $validated['description'] ?? null,
+                'website' => $validated['website'] ?? null,
+                'email' => $validated['email'] ?? null,
+                'address' => $validated['address'] ?? null,
+                'status' => $validated['status'],
+            ]);
 
-        AuditLogger::record($request, 'agency.created', $agency, null, $agency->only([
-            'id', 'name', 'short_name', 'type', 'status',
-        ]));
+            if ($admin) {
+                $this->assignAdminToAgency($request, $agency, $admin, 'agency_admin_id');
+            }
+
+            AuditLogger::record($request, 'agency.created', $agency, null, $agency->only([
+                'id', 'name', 'short_name', 'type', 'status',
+            ]));
+
+            return $agency;
+        });
 
         return ApiResponse::success(
             'Agency created.',
@@ -77,35 +87,38 @@ class AdminAgencyManagementController extends Controller
             'agency_admin_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
         ]);
 
-        $oldValues = $agency->only(['name', 'short_name', 'type', 'description', 'website', 'email', 'address', 'status']);
+        $admin = ! empty($validated['agency_admin_id'])
+            ? $this->eligibleAgencyAdmin((int) $validated['agency_admin_id'], 'agency_admin_id')
+            : null;
 
-        $agency->forceFill([
-            'name' => trim($validated['name']),
-            'short_name' => trim($validated['short_name']),
-            'full_name' => trim($validated['name']),
-            'type' => $this->displayType($validated['type']),
-            'description' => $validated['description'] ?? null,
-            'website' => $validated['website'] ?? null,
-            'email' => $validated['email'] ?? null,
-            'address' => $validated['address'] ?? null,
-            'status' => $validated['status'],
-        ])->save();
+        $agency = DB::transaction(function () use ($request, $validated, $agency, $admin): Agency {
+            $agency = Agency::query()->lockForUpdate()->findOrFail($agency->id);
+            $oldValues = $agency->only(['name', 'short_name', 'type', 'description', 'website', 'email', 'address', 'status']);
 
-        User::query()
-            ->where('agency_id', $agency->id)
-            ->where(function (Builder $query): void {
-                $query->where('role', 'agency_admin')
-                    ->orWhereHas('roles', fn (Builder $query) => $query->where('slug', 'agency_admin'));
-            })
-            ->update(['agency_id' => null]);
+            $agency->forceFill([
+                'name' => trim($validated['name']),
+                'short_name' => trim($validated['short_name']),
+                'full_name' => trim($validated['name']),
+                'type' => $this->displayType($validated['type']),
+                'description' => $validated['description'] ?? null,
+                'website' => $validated['website'] ?? null,
+                'email' => $validated['email'] ?? null,
+                'address' => $validated['address'] ?? null,
+                'status' => $validated['status'],
+            ])->save();
 
-        if (! empty($validated['agency_admin_id'])) {
-            $this->assignAdminToAgency($request, $agency, (int) $validated['agency_admin_id']);
-        }
+            if ($admin) {
+                $this->assignAdminToAgency($request, $agency, $admin, 'agency_admin_id');
+            } else {
+                $this->unassignAgencyAdmins($agency);
+            }
 
-        AuditLogger::record($request, 'agency.updated', $agency, $oldValues, $agency->only([
-            'name', 'short_name', 'type', 'description', 'website', 'email', 'address', 'status',
-        ]));
+            AuditLogger::record($request, 'agency.updated', $agency, $oldValues, $agency->only([
+                'name', 'short_name', 'type', 'description', 'website', 'email', 'address', 'status',
+            ]));
+
+            return $agency;
+        });
 
         return ApiResponse::success('Agency updated.', $this->agencyResource($request, $agency));
     }
@@ -156,7 +169,14 @@ class AdminAgencyManagementController extends Controller
             'admin_user_id' => ['required', 'integer', Rule::exists('users', 'id')],
         ]);
 
-        $this->assignAdminToAgency($request, $agency, (int) $validated['admin_user_id']);
+        abort_if($agency->archived_at !== null, 404);
+
+        $admin = $this->eligibleAgencyAdmin((int) $validated['admin_user_id'], 'admin_user_id');
+
+        DB::transaction(function () use ($request, $agency, $admin): void {
+            $lockedAgency = Agency::query()->lockForUpdate()->findOrFail($agency->id);
+            $this->assignAdminToAgency($request, $lockedAgency, $admin, 'admin_user_id');
+        });
 
         return ApiResponse::success(
             'Agency admin assigned.',
@@ -164,20 +184,14 @@ class AdminAgencyManagementController extends Controller
         );
     }
 
-    private function assignAdminToAgency(Request $request, Agency $agency, int $adminUserId): void
+    private function assignAdminToAgency(Request $request, Agency $agency, User $admin, string $field): void
     {
-        $admin = User::query()
-            ->with('roles')
-            ->whereKey($adminUserId)
-            ->firstOrFail();
+        $admin = User::query()->with('roles')->lockForUpdate()->findOrFail($admin->id);
 
         if (! $admin->isAgencyAdmin() || $admin->status !== 'active' || $admin->archived_at !== null) {
-            abort(response()->json([
-                'message' => 'Selected user is not an active agency admin.',
-                'errors' => [
-                    'admin_user_id' => ['Selected user is not an active agency admin.'],
-                ],
-            ], 422));
+            throw ValidationException::withMessages([
+                $field => ['Selected user is not an active agency admin.'],
+            ]);
         }
 
         $oldAdmins = User::query()
@@ -221,6 +235,35 @@ class AdminAgencyManagementController extends Controller
                 'agency_admin_id' => $admin->id,
             ],
         );
+    }
+
+    private function unassignAgencyAdmins(Agency $agency): void
+    {
+        User::query()
+            ->where('agency_id', $agency->id)
+            ->where(function (Builder $query): void {
+                $query->where('role', 'agency_admin')
+                    ->orWhereHas('roles', fn (Builder $query) => $query->where('slug', 'agency_admin'));
+            })
+            ->update(['agency_id' => null]);
+    }
+
+    private function eligibleAgencyAdmin(int $adminUserId, string $field): User
+    {
+        $admin = User::query()
+            ->with('roles')
+            ->whereKey($adminUserId)
+            ->whereNull('archived_at')
+            ->where('status', 'active')
+            ->first();
+
+        if (! $admin || ! $admin->isAgencyAdmin()) {
+            throw ValidationException::withMessages([
+                $field => ['Selected user is not an active agency admin.'],
+            ]);
+        }
+
+        return $admin;
     }
 
     private function updateStatus(Request $request, Agency $agency, string $status): JsonResponse

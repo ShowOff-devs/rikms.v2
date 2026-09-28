@@ -38,12 +38,37 @@ class HandleInertiaRequests extends Middleware
     {
         $user = $request->user()?->loadMissing(['agency', 'roles']);
         $uploadLimits = app(UploadLimitService::class)->limits();
+        $adminPermissions = [];
+
+        if ($user?->isSuperAdmin()) {
+            $adminPermissions = ['*'];
+        } elseif ($user) {
+            $rolePermissions = $user->roles()
+                ->where('roles.is_active', true)
+                ->with('permissions:id,slug')
+                ->get()
+                ->flatMap->permissions
+                ->pluck('slug');
+            $directPermissions = $user->directPermissions()
+                ->where(function ($query): void {
+                    $query->whereNull('permission_user.expires_at')
+                        ->orWhere('permission_user.expires_at', '>', now());
+                })
+                ->pluck('permissions.slug');
+            $adminPermissions = $rolePermissions
+                ->merge($directPermissions)
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+        }
 
         return [
             ...parent::share($request),
             'name' => config('app.name'),
             'auth' => [
                 'user' => $user,
+                'adminPermissions' => $adminPermissions,
             ],
             'uploadLimits' => [
                 'configuredMb' => $uploadLimits['configured_mb'],

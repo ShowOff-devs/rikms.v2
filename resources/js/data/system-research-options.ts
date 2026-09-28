@@ -8,8 +8,12 @@ export const systemResearchStatusLabels: Record<SystemResearchStatus, string> =
     {
         published: 'Published',
         'under-review': 'Under Review',
+        submitted: 'Submitted',
+        approved: 'Approved',
+        rejected: 'Rejected',
         draft: 'Draft',
         archived: 'Archived',
+        superseded: 'Superseded',
     };
 
 export const systemResearchDocumentTypeLabels: Record<

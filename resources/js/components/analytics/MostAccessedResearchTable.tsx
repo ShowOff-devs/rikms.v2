@@ -63,7 +63,7 @@ export function MostAccessedResearchTable({
                                         {record.category}
                                     </td>
                                     <td className="px-4 py-4 text-[#6a7282]">
-                                        {record.year}
+                                        {record.year ?? 'Unknown'}
                                     </td>
                                     <td className="px-4 py-4">
                                         <span className="inline-flex items-center gap-1 font-semibold text-[#1e2939]">

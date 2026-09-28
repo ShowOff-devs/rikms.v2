@@ -3,7 +3,9 @@ import { fetchApi } from '@/lib/api-client';
 import type {
     FlaggedResearchRecord,
     ModerationActionPayload,
+    ModerationFilters,
     ModerationIssueType,
+    ModerationSummary,
 } from '@/types/research-moderation';
 
 export type AdminResearchApiRecord = {
@@ -15,6 +17,7 @@ export type AdminResearchApiRecord = {
     publication_year?: number | null;
     category?: string | null;
     status: string;
+    moderation_decision_status?: string | null;
     moderation_issue_type?: string | null;
     moderation_note?: string | null;
     moderated_at?: string | null;
@@ -23,18 +26,72 @@ export type AdminResearchApiRecord = {
     created_at?: string | null;
 };
 
-export async function getAdminModerationResearchRecords() {
-    const { data } = await fetchApi<AdminResearchApiRecord[]>(
-        '/api/admin/research?per_page=100',
-    );
+type ModerationResearchMeta = {
+    pagination: {
+        current_page: number;
+        per_page: number;
+        total: number;
+        last_page: number;
+    };
+    summary: {
+        flagged_research_records: number;
+        pending_review: number;
+        resolved_issues: number;
+    };
+    filter_options: {
+        agencies: string[];
+        years: string[];
+    };
+};
 
-    return data
-        .filter((record) =>
-            ['submitted', 'under_review', 'approved', 'rejected'].includes(
-                record.status,
-            ),
-        )
-        .map(mapModerationRecordFromApi);
+export async function getAdminModerationResearchRecords(
+    filters: Partial<ModerationFilters> = {},
+    page = 1,
+    perPage = 8,
+) {
+    const params = new URLSearchParams({
+        moderation: '1',
+        page: String(page),
+        per_page: String(perPage),
+    });
+
+    if (filters.search?.trim()) {
+        params.set('keyword', filters.search.trim());
+    }
+
+    if (filters.agency && filters.agency !== 'all') {
+        params.set('agency', filters.agency);
+    }
+
+    if (filters.issueType && filters.issueType !== 'all') {
+        params.set('issue_type', filters.issueType);
+    }
+
+    if (filters.year && filters.year !== 'all') {
+        params.set('year', filters.year);
+    }
+
+    if (filters.status && filters.status !== 'all') {
+        params.set('moderation_status', filters.status);
+    }
+
+    const { data, meta } = await fetchApi<
+        AdminResearchApiRecord[],
+        ModerationResearchMeta
+    >(`/api/admin/research?${params.toString()}`);
+
+    const summary: Omit<ModerationSummary, 'duplicateResearchAlerts'> = {
+        flaggedResearchRecords: meta.summary.flagged_research_records,
+        pendingReview: meta.summary.pending_review,
+        resolvedIssues: meta.summary.resolved_issues,
+    };
+
+    return {
+        records: data.map(mapModerationRecordFromApi),
+        pagination: meta.pagination,
+        summary,
+        filterOptions: meta.filter_options,
+    };
 }
 
 export async function approveAdminResearch(
@@ -133,7 +190,10 @@ export async function archiveAdminResearch(
 function mapModerationRecordFromApi(
     record: AdminResearchApiRecord,
 ): FlaggedResearchRecord {
-    const status = mapModerationStatus(record.status);
+    const status =
+        record.moderation_decision_status === 'flagged'
+            ? 'flagged'
+            : mapModerationStatus(record.status);
     const metadataAssessment = assessMetadata(record);
     const issueType = getIssueType(record, metadataAssessment.issueType);
     const issueDescription = getIssueDescription(
@@ -222,7 +282,10 @@ function getIssueType(
     record: AdminResearchApiRecord,
     assessedIssueType: ModerationIssueType,
 ): ModerationIssueType {
-    if (record.status !== 'rejected') {
+    if (
+        record.status !== 'rejected' &&
+        record.moderation_decision_status !== 'flagged'
+    ) {
         return assessedIssueType;
     }
 
@@ -244,7 +307,10 @@ function getIssueDescription(
     issueType: ModerationIssueType,
     missingFields: string[],
 ): string {
-    if (record.status === 'rejected') {
+    if (
+        record.status === 'rejected' ||
+        record.moderation_decision_status === 'flagged'
+    ) {
         return (
             record.moderation_note?.trim() ||
             `This record was flagged as ${issueType.replaceAll('_', ' ')} and requires moderator follow-up.`
@@ -279,6 +345,10 @@ function getRecommendedAction(
     issueType: ModerationIssueType,
     missingFields: string[],
 ) {
+    if (issueType === 'possible_duplicate') {
+        return 'Compare the linked records and decide whether the match is a duplicate or a valid separate submission.';
+    }
+
     if (status === 'approved') {
         return 'Publish approved research when ready.';
     }

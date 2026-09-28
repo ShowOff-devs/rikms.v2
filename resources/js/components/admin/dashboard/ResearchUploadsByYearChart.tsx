@@ -1,4 +1,8 @@
 import {
+    chartPosition,
+    chartScale,
+} from '@/components/admin/dashboard/dashboard-chart-utils';
+import {
     ChartSkeleton,
     ChartTitle,
     EmptyChartState,
@@ -14,11 +18,10 @@ export function ResearchUploadsByYearChart({
 }) {
     const width = 480;
     const height = 208;
-    const yMax = 320;
-    const yAxisTicks = [320, 240, 160, 80, 0];
+    const scale = chartScale(data.map((item) => item.count));
     const points = data.map((item, index) => {
         const x = data.length <= 1 ? 0 : (index / (data.length - 1)) * width;
-        const y = height - (item.count / yMax) * height;
+        const y = height - chartPosition(item.count, scale.maximum, height);
 
         return { ...item, x, y };
     });
@@ -43,7 +46,7 @@ export function ResearchUploadsByYearChart({
             ) : (
                 <div className="mt-6 grid h-[240px] grid-cols-[36px_1fr] gap-2">
                     <div className="flex h-[208px] flex-col justify-between text-right text-[10px] leading-3 text-[#99a1af]">
-                        {yAxisTicks.map((tick) => (
+                        {scale.ticks.map((tick) => (
                             <span key={tick}>{tick}</span>
                         ))}
                     </div>
@@ -54,13 +57,27 @@ export function ResearchUploadsByYearChart({
                             className="absolute inset-0 size-full overflow-visible"
                             aria-label="Research uploads by year"
                         >
-                            {yAxisTicks.slice(0, -1).map((tick) => (
+                            {scale.ticks.slice(0, -1).map((tick) => (
                                 <line
                                     key={tick}
                                     x1="0"
                                     x2={width}
-                                    y1={height - (tick / yMax) * height}
-                                    y2={height - (tick / yMax) * height}
+                                    y1={
+                                        height -
+                                        chartPosition(
+                                            tick,
+                                            scale.maximum,
+                                            height,
+                                        )
+                                    }
+                                    y2={
+                                        height -
+                                        chartPosition(
+                                            tick,
+                                            scale.maximum,
+                                            height,
+                                        )
+                                    }
                                     stroke="#eef2f7"
                                     strokeDasharray="4 4"
                                 />

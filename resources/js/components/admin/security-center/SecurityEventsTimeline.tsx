@@ -3,17 +3,28 @@ import {
     severityStyles,
     toTitleCase,
 } from '@/components/admin/security-center/security-center-display';
+import { SecurityCenterPagination } from '@/components/admin/security-center/SecurityCenterPagination';
 import { cn } from '@/lib/utils';
 import type { SecurityEvent } from '@/types/security-center';
 
 type SecurityEventsTimelineProps = {
     events: SecurityEvent[];
     isLoading: boolean;
+    currentPage: number;
+    totalPages: number;
+    totalResults: number;
+    rowsPerPage: number;
+    onPageChange: (page: number) => void;
 };
 
 export function SecurityEventsTimeline({
     events,
     isLoading,
+    currentPage,
+    totalPages,
+    totalResults,
+    rowsPerPage,
+    onPageChange,
 }: SecurityEventsTimelineProps) {
     return (
         <section className="mt-6 overflow-hidden rounded-[14px] border border-[#e5e7eb] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_-1px_rgba(0,0,0,0.1)]">
@@ -102,6 +113,17 @@ export function SecurityEventsTimeline({
                     })
                 )}
             </div>
+
+            {!isLoading && (
+                <SecurityCenterPagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalResults={totalResults}
+                    rowsPerPage={rowsPerPage}
+                    itemLabel="security events"
+                    onPageChange={onPageChange}
+                />
+            )}
         </section>
     );
 }

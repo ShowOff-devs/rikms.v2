@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import {
     Archive,
     BarChart3,
@@ -19,10 +19,11 @@ import type { LucideIcon } from 'lucide-react';
 import { useCurrentUrl } from '@/hooks/use-current-url';
 import { cn } from '@/lib/utils';
 
-type AdminNavItem = {
+export type AdminNavItem = {
     label: string;
     href: string;
     icon: LucideIcon;
+    permission: string;
 };
 
 type AdminSidebarProps = {
@@ -30,51 +31,95 @@ type AdminSidebarProps = {
     onToggle: () => void;
 };
 
-const adminNavItems: AdminNavItem[] = [
-    { label: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
-    { label: 'Agency Management', href: '/admin/agencies', icon: Building2 },
+export const adminNavItems: AdminNavItem[] = [
+    {
+        label: 'Dashboard',
+        href: '/admin/dashboard',
+        icon: LayoutDashboard,
+        permission: 'dashboard.view',
+    },
+    {
+        label: 'Agency Management',
+        href: '/admin/agencies',
+        icon: Building2,
+        permission: 'agencies.view',
+    },
     {
         label: 'Agency Admin Users',
         href: '/admin/users',
         icon: Users,
+        permission: 'users.view',
     },
     {
         label: 'System Research',
         href: '/admin/research',
         icon: FileText,
+        permission: 'research_moderation.view',
     },
     {
         label: 'Research Integrity & Moderation',
         href: '/admin/moderation',
         icon: FileSearch,
+        permission: 'research_moderation.view',
     },
     {
         label: 'Access Request Monitoring',
         href: '/admin/access-requests',
         icon: ClipboardList,
+        permission: 'access_monitoring.view',
     },
-    { label: 'System Analytics', href: '/admin/analytics', icon: BarChart3 },
+    {
+        label: 'System Analytics',
+        href: '/admin/analytics',
+        icon: BarChart3,
+        permission: 'analytics.view',
+    },
     {
         label: 'System Notifications & Activity Logs',
         href: '/admin/audit-logs',
         icon: Bell,
+        permission: 'audit_logs.view',
     },
-    { label: 'RBAC Management', href: '/admin/rbac', icon: KeyRound },
+    {
+        label: 'RBAC Management',
+        href: '/admin/rbac',
+        icon: KeyRound,
+        permission: 'rbac.view',
+    },
     {
         label: 'Security Center',
         href: '/admin/security',
         icon: ShieldCheck,
+        permission: 'security.view',
     },
-    { label: 'Archive', href: '/admin/archive', icon: Archive },
+    {
+        label: 'Archive',
+        href: '/admin/archive',
+        icon: Archive,
+        permission: 'archive.view',
+    },
     {
         label: 'Platform Settings',
         href: '/admin/settings',
         icon: Settings,
+        permission: 'platform_settings.view',
     },
 ];
 
+export function visibleAdminNavItems(permissions: string[] = []) {
+    if (permissions.includes('*')) {
+        return adminNavItems;
+    }
+
+    return adminNavItems.filter((item) =>
+        permissions.includes(item.permission),
+    );
+}
+
 export function AdminSidebar({ isCollapsed, onToggle }: AdminSidebarProps) {
     const { currentUrl, isCurrentOrParentUrl, isCurrentUrl } = useCurrentUrl();
+    const { auth } = usePage().props;
+    const navigationItems = visibleAdminNavItems(auth.adminPermissions);
 
     return (
         <aside
@@ -89,7 +134,7 @@ export function AdminSidebar({ isCollapsed, onToggle }: AdminSidebarProps) {
                     isCollapsed ? 'px-3' : 'px-2',
                 )}
             >
-                {adminNavItems.map((item) => {
+                {navigationItems.map((item) => {
                     const isActive =
                         item.href === '/admin/dashboard'
                             ? isCurrentUrl(item.href, currentUrl)

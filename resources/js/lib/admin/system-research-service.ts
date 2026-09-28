@@ -4,6 +4,7 @@ import type {
     SystemResearchExportOptions,
     SystemResearchExportResult,
     SystemResearchFilters,
+    SystemResearchFilterOptions,
     SystemResearchRecord,
     SystemResearchSummary,
 } from '@/types/system-research';
@@ -24,8 +25,26 @@ type AdminResearchApiRecord = {
     abstract?: string | null;
     access_level?: string | null;
     downloads: number;
+    views?: number;
+    document_type?: string;
     created_at?: string | null;
     published_at?: string | null;
+};
+
+type SystemResearchMeta = {
+    pagination: {
+        current_page: number;
+        per_page: number;
+        total: number;
+        last_page: number;
+    };
+    summary: {
+        total_records: number;
+        published: number;
+        under_review: number;
+        total_views: number;
+    };
+    filter_options: SystemResearchFilterOptions;
 };
 
 function isFilterActive(value?: string) {
@@ -134,20 +153,66 @@ export function createSystemResearchSummary(
 
 export async function getSystemResearchRecords(
     filters: SystemResearchFilters = {},
-): Promise<SystemResearchRecord[]> {
-    const { data } = await fetchApi<AdminResearchApiRecord[]>(
-        '/api/admin/research?per_page=100',
-    );
+    page = 1,
+    perPage = 10,
+) {
+    const params = new URLSearchParams({
+        page: String(page),
+        per_page: String(perPage),
+    });
 
-    return filterSystemResearchRecords(data.map(mapResearchFromApi), filters);
+    if (filters.search?.trim()) {
+        params.set('keyword', filters.search.trim());
+    }
+
+    if (filters.agency && filters.agency !== 'all') {
+        params.set('agency', filters.agency);
+    }
+
+    if (filters.status && filters.status !== 'all') {
+        params.set('status', filters.status);
+    }
+
+    if (filters.year && filters.year !== 'all') {
+        params.set('year', filters.year);
+    }
+
+    if (filters.category && filters.category !== 'all') {
+        params.set('category', filters.category);
+    }
+
+    if (filters.sdg && filters.sdg !== 'all') {
+        params.set('sdg', filters.sdg);
+    }
+
+    if (filters.documentType && filters.documentType !== 'all') {
+        params.set('document_type', filters.documentType);
+    }
+
+    const { data, meta } = await fetchApi<
+        AdminResearchApiRecord[],
+        SystemResearchMeta
+    >(`/api/admin/research?${params.toString()}`);
+
+    return {
+        records: data.map(mapResearchFromApi),
+        pagination: meta.pagination,
+        summary: {
+            totalRecords: meta.summary.total_records,
+            published: meta.summary.published,
+            underReview: meta.summary.under_review,
+            totalViews: meta.summary.total_views,
+        },
+        filterOptions: meta.filter_options,
+    };
 }
 
 export async function getSystemResearchSummary(
     filters: SystemResearchFilters = {},
 ): Promise<SystemResearchSummary> {
-    const records = await getSystemResearchRecords(filters);
+    const result = await getSystemResearchRecords(filters, 1, 1);
 
-    return createSystemResearchSummary(records);
+    return result.summary;
 }
 
 export async function getSystemResearchRecordById(
@@ -228,7 +293,7 @@ function addSystemResearchFilters(
     }
 
     if (options.includeUnderReview) {
-        statuses.push('under_review');
+        statuses.push('submitted', 'under_review');
     }
 
     if (options.includeDraft) {
@@ -297,26 +362,51 @@ function mapResearchFromApi(
         agencyName: record.agency?.name ?? 'Unknown agency',
         agencyShortName:
             record.agency?.short_name ?? record.agency?.name ?? 'Unknown',
-        year: record.publication_year ?? new Date().getFullYear(),
+        year: record.publication_year ?? null,
         status: mapResearchStatus(record.status),
         category: record.category ?? 'Uncategorized',
         sdgs: record.sdgs ?? [],
         abstract: record.abstract ?? undefined,
-        documentType: 'research-study',
+        documentType: mapDocumentType(record.document_type),
         accessType: mapAccessType(record.access_level),
         downloads: record.downloads,
-        views: record.downloads,
-        uploadedAt: record.created_at ?? new Date().toISOString(),
+        views: record.views ?? 0,
+        uploadedAt: record.created_at ?? '',
         publishedAt: record.published_at ?? undefined,
     };
 }
 
 function mapResearchStatus(status: string): SystemResearchRecord['status'] {
-    if (status === 'published' || status === 'draft' || status === 'archived') {
+    if (status === 'under_review' || status === 'pending-review') {
+        return 'under-review';
+    }
+
+    if (
+        status === 'published' ||
+        status === 'submitted' ||
+        status === 'approved' ||
+        status === 'rejected' ||
+        status === 'draft' ||
+        status === 'archived' ||
+        status === 'superseded'
+    ) {
         return status;
     }
 
-    return 'under-review';
+    return 'draft';
+}
+
+function mapDocumentType(
+    documentType?: string,
+): SystemResearchRecord['documentType'] {
+    if (
+        documentType === 'terminal-report' ||
+        documentType === 'project-accomplishment'
+    ) {
+        return documentType;
+    }
+
+    return 'research-study';
 }
 
 function mapAccessType(

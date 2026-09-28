@@ -77,7 +77,7 @@ export function GeneralPlatformSettings({
                             <input
                                 ref={fileInputRef}
                                 type="file"
-                                accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                                accept="image/png,image/jpeg,image/webp"
                                 className="hidden"
                                 onChange={handleLogoSelect}
                             />
@@ -90,7 +90,7 @@ export function GeneralPlatformSettings({
                                 Upload Logo
                             </button>
                             <span className="text-xs leading-4 text-[#99a1af]">
-                                PNG, SVG, or JPG. Max 2MB.
+                                PNG, JPG, or WebP. Max 2MB.
                             </span>
                         </div>
                     </div>

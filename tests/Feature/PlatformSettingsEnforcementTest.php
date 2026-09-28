@@ -12,6 +12,7 @@ use App\Models\ResearchFile;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\PlatformSettingsService;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Storage;
 
@@ -135,6 +136,77 @@ test('unknown and invalid platform setting updates are rejected', function () {
             'settings' => [PlatformSettingsService::UPLOAD_MAX_FILE_SIZE_MB => 0],
         ])
         ->assertUnprocessable();
+});
+
+test('maintenance mode requires an explicit confirmation when being enabled', function () {
+    $admin = platformSettingsUser('super_admin', null, true);
+
+    $this->actingAs($admin)
+        ->postJson('/api/admin/platform-settings/bulk-update', [
+            'settings' => [PlatformSettingsService::MAINTENANCE_ENABLED => true],
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['confirm_maintenance_mode']);
+
+    $this->actingAs($admin)
+        ->postJson('/api/admin/platform-settings/bulk-update', [
+            'settings' => [PlatformSettingsService::MAINTENANCE_ENABLED => true],
+            'confirm_maintenance_mode' => true,
+        ])
+        ->assertOk();
+
+    expect(app(PlatformSettingsService::class)->maintenanceEnabled())->toBeTrue();
+});
+
+test('platform logo settings reject executable URLs and svg uploads', function () {
+    $admin = platformSettingsUser('super_admin', null, true);
+
+    $this->actingAs($admin)
+        ->postJson('/api/admin/platform-settings/bulk-update', [
+            'settings' => ['site.logo_url' => 'javascript:alert(1)'],
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['settings.site.logo_url']);
+
+    $this->actingAs($admin)
+        ->post('/api/admin/platform-settings/logo', [
+            'logo' => UploadedFile::fake()->createWithContent(
+                'unsafe.svg',
+                '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
+            ),
+        ], ['Accept' => 'application/json'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['logo']);
+});
+
+test('stale platform settings cannot overwrite a newer administrator update', function () {
+    $admin = platformSettingsUser('super_admin', null, true);
+    platformSettingsSet('site.name', 'Original Name', 'string');
+    $setting = PlatformSetting::query()->where('key', 'site.name')->firstOrFail();
+    $staleVersion = hash('sha256', implode("\0", [
+        $setting->key,
+        $setting->value,
+        $setting->type,
+        $setting->updated_at->toISOString(),
+    ]));
+
+    $this->actingAs($admin)
+        ->postJson('/api/admin/platform-settings/bulk-update', [
+            'settings' => ['site.name' => 'First Administrator'],
+            'expected_versions' => ['site.name' => $staleVersion],
+        ])
+        ->assertOk();
+
+    $this->actingAs($admin)
+        ->postJson('/api/admin/platform-settings/bulk-update', [
+            'settings' => ['site.name' => 'Stale Administrator'],
+            'expected_versions' => ['site.name' => $staleVersion],
+        ])
+        ->assertStatus(409)
+        ->assertJsonPath('message', 'Platform settings changed while you were editing. Refresh before saving again.');
+
+    expect(PlatformSetting::query()->where('key', 'site.name')->value('value'))
+        ->toBe('First Administrator');
 });
 
 test('disabled public access requests reject submissions without records or notifications', function () {

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Api\Concerns\ExportsProjectReportAnalytics;
 use App\Http\Controllers\Api\Concerns\RespondsWithApiPagination;
 use App\Http\Controllers\Api\Concerns\ValidatesProjectReportAnalyticsFilters;
 use App\Http\Controllers\Controller;
@@ -11,12 +12,15 @@ use App\Models\Research;
 use App\Services\Analytics\ProjectReportAnalyticsService;
 use App\Services\Analytics\ReportTypeResolver;
 use App\Support\ApiResponse;
+use App\Support\AuditLogger;
 use App\Support\Statuses;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
 
 class AgencyProjectReportAnalyticsController extends Controller
 {
+    use ExportsProjectReportAnalytics;
     use RespondsWithApiPagination;
     use ValidatesProjectReportAnalyticsFilters;
 
@@ -32,6 +36,16 @@ class AgencyProjectReportAnalyticsController extends Controller
         return ApiResponse::success(
             'Agency project report analytics summary retrieved.',
             $this->analytics->summary($filters, $request->user()->agency_id),
+        );
+    }
+
+    public function overview(Request $request): JsonResponse
+    {
+        $filters = $this->reportAnalyticsFilters($request);
+
+        return ApiResponse::success(
+            'Agency project report analytics overview retrieved.',
+            $this->analytics->overview($filters, $request->user()->agency_id),
         );
     }
 
@@ -64,6 +78,32 @@ class AgencyProjectReportAnalyticsController extends Controller
             $this->analytics->records($filters, $request->user()->agency_id),
             ProjectReportAnalyticsRecordResource::class,
             $request,
+        );
+    }
+
+    public function export(Request $request): Response
+    {
+        $request->validate(['format' => ['nullable', 'in:csv,pdf']]);
+        $filters = $this->reportAnalyticsFilters($request);
+        $format = $request->string('format', 'pdf')->toString();
+        $agencyId = (int) $request->user()->agency_id;
+
+        AuditLogger::record($request, 'project_report_analytics.exported', null, null, null, [
+            'format' => $format,
+            'filters' => collect($filters)->except(['page', 'per_page'])->all(),
+            'scope' => 'agency',
+        ]);
+
+        return $this->projectReportAnalyticsExport(
+            $request,
+            $this->analytics,
+            $filters,
+            $agencyId,
+            allowAgencyFilter: false,
+            includeAgencies: false,
+            filenamePrefix: 'agency-project-report-analytics',
+            scopeLabel: 'Agency Terminal Report and Project Accomplishment Report metrics',
+            footerLabel: 'RIKMS — Agency project report analytics export',
         );
     }
 

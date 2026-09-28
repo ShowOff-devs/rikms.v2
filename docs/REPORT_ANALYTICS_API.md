@@ -1,25 +1,29 @@
 # Report Analytics API
 
-Phase 4 adds authenticated, read-only analytics endpoints for Terminal Reports and Project Accomplishment Reports.
-
-No dashboards, exports, mock data, or database columns are introduced by these endpoints.
+The project-report analytics feature provides authenticated dashboards and read-only analytics endpoints for Terminal Reports and Project Accomplishment Reports. PDF and CSV downloads export the same filtered, authorized dataset; no mock data or analytics-only database columns are introduced.
 
 ## Routes
 
 Agency Admin routes:
 
 - `GET /api/agency/analytics/project-reports/summary`
+- `GET /api/agency/analytics/project-reports/overview`
 - `GET /api/agency/analytics/project-reports/status`
 - `GET /api/agency/analytics/project-reports/budget`
 - `GET /api/agency/analytics/project-reports/records`
+- `GET /api/agency/analytics/project-reports/export`
+- `GET /api/agency/analytics/project-reports/{research}`
 
 Super Admin routes:
 
 - `GET /api/admin/analytics/project-reports/summary`
+- `GET /api/admin/analytics/project-reports/overview`
 - `GET /api/admin/analytics/project-reports/status`
 - `GET /api/admin/analytics/project-reports/budget`
 - `GET /api/admin/analytics/project-reports/agencies`
 - `GET /api/admin/analytics/project-reports/records`
+- `GET /api/admin/analytics/project-reports/export`
+- `GET /api/admin/analytics/project-reports/{research}`
 
 ## Middleware And Access
 
@@ -53,8 +57,8 @@ Supported filters:
 - `budget_classification`: `not_reported`, `not_utilized`, `low`, `moderate`, `high`, `fully_utilized`, `overutilized`
 - `accomplishment_classification`: `not_reported`, `not_started`, `in_progress`, `substantially_complete`, `complete`
 - `funding_source`
-- `date_from`
-- `date_to`
+- `date_from`: inclusive lower bound on `research.created_at`
+- `date_to`: inclusive upper bound on `research.created_at`
 - `page`
 - `per_page`, maximum `100`
 - `sort`
@@ -118,6 +122,10 @@ Monetary values are JSON decimal strings. Percentages are numeric values or `nul
 ## Agency Comparison
 
 `GET /api/admin/analytics/project-reports/agencies` returns agency-level aggregates for Super Admins only. It is not exposed through Agency Admin routes.
+
+## Export
+
+Both portals support `format=pdf` and `format=csv` on their project-report export endpoint. Exports apply the same filters as the dashboard. Agency Admin exports are always scoped to the authenticated user's agency; a supplied `agency_id` is ignored because it is not an accepted Agency Admin filter. CSV streams the complete matching dataset, while PDF is limited to the first 500 matching records and displays a truncation notice when necessary.
 
 ## Records
 

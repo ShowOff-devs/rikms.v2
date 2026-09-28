@@ -12,6 +12,7 @@ import type { AgencyAdminUser } from '@/types/admin-users';
 type UserStatusConfirmModalProps = {
     user: AgencyAdminUser | null;
     isSaving: boolean;
+    serverError?: string | null;
     onOpenChange: (open: boolean) => void;
     onConfirm: () => void;
 };
@@ -19,6 +20,7 @@ type UserStatusConfirmModalProps = {
 export function UserStatusConfirmModal({
     user,
     isSaving,
+    serverError = null,
     onOpenChange,
     onConfirm,
 }: UserStatusConfirmModalProps) {
@@ -42,6 +44,15 @@ export function UserStatusConfirmModal({
                 {user && (
                     <p className="rounded-[8px] bg-[#f9fafb] px-3 py-2 text-sm text-[#4a5565]">
                         {user.fullName} - {user.agencyShortName}
+                    </p>
+                )}
+
+                {serverError && (
+                    <p
+                        role="alert"
+                        className="rounded-[8px] border border-[#fecaca] bg-[#fef2f2] px-3 py-2 text-sm text-[#b91c1c]"
+                    >
+                        {serverError}
                     </p>
                 )}
 

@@ -302,9 +302,8 @@ export function ExportActivityLogModal({
                             Include Sections
                         </p>
                         <p className="mt-1 text-xs leading-5 text-[#6a7282]">
-                            Section customization is not available during the
-                            pilot. The CSV uses the fixed implemented activity
-                            log columns.
+                            Choose which persisted activity sections to include
+                            in the CSV.
                         </p>
                         <div className="mt-3 grid gap-3 sm:grid-cols-2">
                             {[
@@ -321,7 +320,6 @@ export function ExportActivityLogModal({
                                     className="flex items-center gap-2 text-sm text-[#4a5565]"
                                 >
                                     <Checkbox
-                                        disabled
                                         checked={
                                             form[
                                                 key as keyof ExportFormState

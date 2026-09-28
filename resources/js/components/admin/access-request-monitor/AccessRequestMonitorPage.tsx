@@ -1,17 +1,19 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AdminLayout } from '@/components/admin/layout/AdminLayout';
 import {
     auditAccessDecision,
-    buildAccessRequestMonitorSummary,
     exportAccessRequestReport,
-    filterAccessRequestMonitorRecords,
     getAccessRequestMonitorRecords,
     overrideAccessRequestDecision,
 } from '@/lib/admin/access-request-monitor-service';
+import { apiMessage } from '@/lib/api-client';
 import type {
     AccessReportExportOptions,
+    AccessRequestMonitorFilterOptions,
     AccessRequestMonitorFilters,
     AccessRequestMonitorRecord,
+    AccessRequestMonitorSummary,
+    AccessRequestsByAgency,
 } from '@/types/access-request-monitor';
 import { AccessRequestFilters } from './AccessRequestFilters';
 import { AccessRequestMonitorHeader } from './AccessRequestMonitorHeader';
@@ -34,26 +36,17 @@ const initialFilters: AccessRequestMonitorFilters = {
     organization: 'all',
 };
 
-function buildAgencyChartData(records: AccessRequestMonitorRecord[]) {
-    const counts = records.reduce<Record<string, number>>(
-        (accumulator, record) => {
-            accumulator[record.agencyShortName] =
-                (accumulator[record.agencyShortName] ?? 0) + 1;
+const emptySummary: AccessRequestMonitorSummary = {
+    total: 0,
+    pending: 0,
+    approved: 0,
+    denied: 0,
+};
 
-            return accumulator;
-        },
-        {},
-    );
-
-    const agencies = Array.from(new Set(Object.keys(counts)));
-
-    return agencies
-        .map((agency) => ({
-            agency,
-            count: counts[agency] ?? 0,
-        }))
-        .filter((item) => item.count > 0);
-}
+const emptyFilterOptions: AccessRequestMonitorFilterOptions = {
+    agencies: [],
+    organizations: [],
+};
 
 export function AccessRequestMonitorPage() {
     const [topbarSearch, setTopbarSearch] = useState('');
@@ -73,34 +66,66 @@ export function AccessRequestMonitorPage() {
     const [isActionLoading, setIsActionLoading] = useState(false);
     const [isExportOpen, setIsExportOpen] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
+    const [summary, setSummary] =
+        useState<AccessRequestMonitorSummary>(emptySummary);
+    const [agencyChartData, setAgencyChartData] = useState<
+        AccessRequestsByAgency[]
+    >([]);
+    const [filterOptions, setFilterOptions] =
+        useState<AccessRequestMonitorFilterOptions>(emptyFilterOptions);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalResults, setTotalResults] = useState(0);
+    const [reloadVersion, setReloadVersion] = useState(0);
 
     useEffect(() => {
         let isCurrent = true;
+        const search = [filters.search, topbarSearch]
+            .filter(Boolean)
+            .join(' ')
+            .trim();
+        const timeout = window.setTimeout(() => {
+            setIsLoading(true);
 
-        getAccessRequestMonitorRecords()
-            .then((loadedRecords) => {
-                if (!isCurrent) {
-                    return;
-                }
+            getAccessRequestMonitorRecords(
+                { ...filters, search },
+                currentPage,
+                rowsPerPage,
+            )
+                .then((result) => {
+                    if (!isCurrent) {
+                        return;
+                    }
 
-                setRecords(loadedRecords);
-                setError(null);
-            })
-            .catch(() => {
-                if (isCurrent) {
-                    setError('Unable to load access request monitoring data.');
-                }
-            })
-            .finally(() => {
-                if (isCurrent) {
-                    setIsLoading(false);
-                }
-            });
+                    setRecords(result.records);
+                    setSummary(result.summary);
+                    setAgencyChartData(result.requestsByAgency);
+                    setFilterOptions(result.filterOptions);
+                    setTotalPages(Math.max(1, result.pagination.last_page));
+                    setTotalResults(result.pagination.total);
+                    setError(null);
+                })
+                .catch((caughtError: unknown) => {
+                    if (isCurrent) {
+                        setError(
+                            apiMessage(
+                                caughtError,
+                                'Unable to load access request monitoring data.',
+                            ),
+                        );
+                    }
+                })
+                .finally(() => {
+                    if (isCurrent) {
+                        setIsLoading(false);
+                    }
+                });
+        }, 250);
 
         return () => {
             isCurrent = false;
+            window.clearTimeout(timeout);
         };
-    }, []);
+    }, [currentPage, filters, reloadVersion, topbarSearch]);
 
     useEffect(() => {
         setCurrentPage(1);
@@ -116,46 +141,7 @@ export function AccessRequestMonitorPage() {
         return () => window.clearTimeout(timeout);
     }, [feedback]);
 
-    const organizations = useMemo(
-        () =>
-            Array.from(
-                new Set(records.map((record) => record.organization)),
-            ).sort((left, right) => left.localeCompare(right)),
-        [records],
-    );
-
-    const agencies = useMemo(
-        () =>
-            Array.from(
-                new Set(records.map((record) => record.agencyShortName)),
-            ).sort((left, right) => left.localeCompare(right)),
-        [records],
-    );
-
-    const filteredRecords = useMemo(
-        () => filterAccessRequestMonitorRecords(records, filters, topbarSearch),
-        [filters, records, topbarSearch],
-    );
-
-    const summary = useMemo(
-        () => buildAccessRequestMonitorSummary(filteredRecords),
-        [filteredRecords],
-    );
-
-    const agencyChartData = useMemo(
-        () => buildAgencyChartData(filteredRecords),
-        [filteredRecords],
-    );
-
-    const totalPages = Math.max(
-        1,
-        Math.ceil(filteredRecords.length / rowsPerPage),
-    );
     const effectiveCurrentPage = Math.min(currentPage, totalPages);
-    const paginatedRecords = filteredRecords.slice(
-        (effectiveCurrentPage - 1) * rowsPerPage,
-        effectiveCurrentPage * rowsPerPage,
-    );
 
     const updateRecord = (updatedRecord: AccessRequestMonitorRecord) => {
         setRecords((current) =>
@@ -176,6 +162,7 @@ export function AccessRequestMonitorPage() {
 
     const handleMarkReviewed = async (record: AccessRequestMonitorRecord) => {
         setIsActionLoading(true);
+        setError(null);
 
         try {
             const updatedRecord = await auditAccessDecision(record.id, {
@@ -183,6 +170,8 @@ export function AccessRequestMonitorPage() {
             });
             updateRecord(updatedRecord);
             setFeedback(`${record.researchTitle} audit was marked reviewed.`);
+        } catch (caughtError: unknown) {
+            setError(apiMessage(caughtError, 'Unable to mark audit reviewed.'));
         } finally {
             setIsActionLoading(false);
         }
@@ -193,6 +182,7 @@ export function AccessRequestMonitorPage() {
         reason: string,
     ) => {
         setIsActionLoading(true);
+        setError(null);
 
         try {
             const updatedRecord = await overrideAccessRequestDecision(
@@ -207,6 +197,11 @@ export function AccessRequestMonitorPage() {
             setFeedback(
                 `${record.requesterName}'s request was overridden and denied.`,
             );
+            setReloadVersion((version) => version + 1);
+        } catch (caughtError: unknown) {
+            setError(
+                apiMessage(caughtError, 'Unable to override access decision.'),
+            );
         } finally {
             setIsActionLoading(false);
         }
@@ -216,10 +211,21 @@ export function AccessRequestMonitorPage() {
         setIsExporting(true);
 
         try {
-            const result = await exportAccessRequestReport(options, filters);
+            const result = await exportAccessRequestReport(options, {
+                ...filters,
+                search: [filters.search, topbarSearch]
+                    .filter(Boolean)
+                    .join(' ')
+                    .trim(),
+            });
 
             setFeedback(`${result.fileName} was downloaded.`);
             setIsExportOpen(false);
+            setError(null);
+        } catch (caughtError: unknown) {
+            setError(
+                apiMessage(caughtError, 'Unable to export access report.'),
+            );
         } finally {
             setIsExporting(false);
         }
@@ -256,17 +262,17 @@ export function AccessRequestMonitorPage() {
                     <section className="overflow-hidden rounded-[14px] border border-[#e5e7eb] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_-1px_rgba(0,0,0,0.1)]">
                         <AccessRequestFilters
                             filters={filters}
-                            agencies={agencies}
-                            organizations={organizations}
+                            agencies={filterOptions.agencies}
+                            organizations={filterOptions.organizations}
                             onFiltersChange={setFilters}
                             onClearFilters={() => setFilters(initialFilters)}
                         />
                         <AccessRequestMonitorTable
-                            records={paginatedRecords}
+                            records={records}
                             isLoading={isLoading}
                             currentPage={effectiveCurrentPage}
                             totalPages={totalPages}
-                            totalResults={filteredRecords.length}
+                            totalResults={totalResults}
                             rowsPerPage={rowsPerPage}
                             onPageChange={(page) =>
                                 setCurrentPage(

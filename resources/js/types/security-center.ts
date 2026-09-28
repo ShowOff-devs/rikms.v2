@@ -4,7 +4,7 @@ export type SecurityAlertStatus = 'open' | 'acknowledged' | 'resolved';
 
 export type LoginStatus = 'success' | 'failed';
 
-export type AdminRole = 'Super Admin' | 'Agency Admin';
+export type AdminRole = 'Super Admin' | 'Agency Admin' | 'Custom Admin';
 
 export type LoginActivityRole = AdminRole | 'Unknown';
 
@@ -15,6 +15,7 @@ export type SecuritySummary = {
     lockedAccounts: number;
     activeAdminSessions: number;
     securityAlerts: number;
+    highPriorityAlerts: number;
 };
 
 export type QueueHealth = {

@@ -77,6 +77,7 @@ export const loginStatusStyles = {
 export const roleStyles = {
     'Super Admin': 'bg-[#fffbeb] text-[#bb4d00]',
     'Agency Admin': 'bg-[#eff6ff] text-[#1e3a8a]',
+    'Custom Admin': 'bg-[#f3e8ff] text-[#6b21a8]',
     Unknown: 'bg-[#fef2f2] text-[#c10007]',
 };
 

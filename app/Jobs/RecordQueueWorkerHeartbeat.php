@@ -3,10 +3,11 @@
 namespace App\Jobs;
 
 use App\Services\RuntimeHeartbeat;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 
-class RecordQueueWorkerHeartbeat implements ShouldQueue
+class RecordQueueWorkerHeartbeat implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
 

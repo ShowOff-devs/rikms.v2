@@ -17,11 +17,12 @@ trait RespondsWithApiPagination
         LengthAwarePaginator $paginator,
         string $resourceClass,
         Request $request,
+        array $meta = [],
     ): JsonResponse {
         return ApiResponse::success(
             $message,
             $resourceClass::collection($paginator->getCollection())->resolve($request),
-            [
+            array_merge($meta, [
                 'pagination' => [
                     'current_page' => $paginator->currentPage(),
                     'per_page' => $paginator->perPage(),
@@ -30,7 +31,7 @@ trait RespondsWithApiPagination
                     'from' => $paginator->firstItem(),
                     'to' => $paginator->lastItem(),
                 ],
-            ],
+            ]),
         );
     }
 

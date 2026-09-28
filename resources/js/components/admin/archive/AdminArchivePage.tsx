@@ -1,14 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AdminLayout } from '@/components/admin/layout/AdminLayout';
 import {
     createArchiveActivity,
     exportArchiveReport,
     getAdminArchiveSummary,
+    getArchiveFilterOptions,
     getArchiveActivityTimeline,
-    getArchivedFileRecords,
-    getArchivedAgencyRecords,
-    getArchivedResearchRecords,
-    getArchivedUserRecords,
+    getArchivedRecordsPage,
     permanentlyDeleteArchivedRecord,
     restoreArchivedRecord,
 } from '@/lib/admin/archive-service';
@@ -19,10 +17,6 @@ import type {
     ArchiveActivity,
     ArchiveExportOptions,
     ArchiveRecordType,
-    ArchivedAgencyRecord,
-    ArchivedFileRecord,
-    ArchivedResearchRecord,
-    ArchivedUserRecord,
 } from '@/types/admin-archive';
 import { AdminArchiveHeader } from './AdminArchiveHeader';
 import { getArchivedRecordTitle } from './archive-record-display';
@@ -46,151 +40,22 @@ const initialFilters: AdminArchiveFilters = {
     recordType: 'all',
 };
 
-function normalize(value: string | number | undefined) {
-    return String(value ?? '').toLowerCase();
-}
-
-function getRecordSearchValues(record: AdminArchivedRecord) {
-    if (record.type === 'research') {
-        return [
-            record.title,
-            record.agency,
-            record.authors.join(' '),
-            record.year,
-            record.archivedBy,
-            record.archiveDate,
-            record.status,
-        ];
-    }
-
-    if (record.type === 'agency') {
-        return [
-            record.name,
-            record.shortName,
-            record.agencyType,
-            record.archivedBy,
-            record.archiveDate,
-            record.status,
-        ];
-    }
-
-    if (record.type === 'file') {
-        return [
-            record.fileName,
-            record.researchTitle,
-            record.agency,
-            record.fileType,
-            record.archivedBy,
-            record.archiveDate,
-            record.status,
-        ];
-    }
-
-    return [
-        record.fullName,
-        record.email,
-        record.role,
-        record.agency,
-        record.archivedBy,
-        record.archiveDate,
-        record.status,
-    ];
-}
-
-function getRecordAgency(record: AdminArchivedRecord) {
-    if (record.type === 'agency') {
-        return record.shortName;
-    }
-
-    return record.agency ?? 'System';
-}
-
-function dateMatchesFilter(value: string, filter: AdminArchiveFilters['date']) {
-    if (filter === 'all') {
-        return true;
-    }
-
-    const archiveDate = new Date(value);
-    const now = new Date();
-    const daysOld =
-        (now.getTime() - archiveDate.getTime()) / (1000 * 60 * 60 * 24);
-
-    if (filter === 'last-7-days') {
-        return daysOld >= 0 && daysOld <= 7;
-    }
-
-    if (filter === 'last-30-days') {
-        return daysOld >= 0 && daysOld <= 30;
-    }
-
-    if (filter === 'this-month') {
-        return (
-            archiveDate.getFullYear() === now.getFullYear() &&
-            archiveDate.getMonth() === now.getMonth()
-        );
-    }
-
-    return archiveDate.getFullYear() === 2026;
-}
-
-function filterRecords(
-    records: AdminArchivedRecord[],
-    filters: AdminArchiveFilters,
-    topbarSearch: string,
-) {
-    const queries = [filters.search, topbarSearch]
-        .map((value) => value.trim())
-        .filter(Boolean)
-        .map((value) => value.toLowerCase());
-
-    return records.filter((record) => {
-        const searchableText = getRecordSearchValues(record)
-            .map(normalize)
-            .join(' ');
-        const searchMatches = queries.every((query) =>
-            searchableText.includes(query),
-        );
-        const agencyMatches =
-            filters.agency === 'all' ||
-            getRecordAgency(record) === filters.agency;
-        const dateMatches = dateMatchesFilter(record.archiveDate, filters.date);
-        const statusMatches =
-            filters.status === 'all' || record.status === filters.status;
-        const recordTypeMatches =
-            filters.recordType === 'all' || record.type === filters.recordType;
-
-        return (
-            searchMatches &&
-            agencyMatches &&
-            dateMatches &&
-            statusMatches &&
-            recordTypeMatches
-        );
-    });
-}
-
-function uniqueSorted(values: string[]) {
-    return Array.from(new Set(values)).sort((left, right) =>
-        left.localeCompare(right),
-    );
-}
-
 export function AdminArchivePage() {
     const [topbarSearch, setTopbarSearch] = useState('');
     const [summary, setSummary] = useState<AdminArchiveSummary | null>(null);
-    const [researchRecords, setResearchRecords] = useState<
-        ArchivedResearchRecord[]
-    >([]);
-    const [agencyRecords, setAgencyRecords] = useState<ArchivedAgencyRecord[]>(
-        [],
-    );
-    const [fileRecords, setFileRecords] = useState<ArchivedFileRecord[]>([]);
-    const [userRecords, setUserRecords] = useState<ArchivedUserRecord[]>([]);
+    const [records, setRecords] = useState<AdminArchivedRecord[]>([]);
+    const [agencies, setAgencies] = useState<string[]>([]);
     const [activities, setActivities] = useState<ArchiveActivity[]>([]);
+    const [activityPage, setActivityPage] = useState(1);
+    const [activityLastPage, setActivityLastPage] = useState(1);
+    const [isLoadingMoreActivity, setIsLoadingMoreActivity] = useState(false);
     const [activeTab, setActiveTab] = useState<ArchiveRecordType>('research');
     const [filters, setFilters] = useState<AdminArchiveFilters>(initialFilters);
     const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalResults, setTotalResults] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
+    const [isRecordsLoading, setIsRecordsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [feedback, setFeedback] = useState<string | null>(null);
     const [selectedViewRecord, setSelectedViewRecord] =
@@ -210,34 +75,21 @@ export function AdminArchivePage() {
 
         Promise.all([
             getAdminArchiveSummary(),
-            getArchivedResearchRecords(),
-            getArchivedFileRecords(),
-            getArchivedAgencyRecords(),
-            getArchivedUserRecords(),
+            getArchiveFilterOptions(),
             getArchiveActivityTimeline(),
         ])
-            .then(
-                ([
-                    loadedSummary,
-                    loadedResearch,
-                    loadedFiles,
-                    loadedAgencies,
-                    loadedUsers,
-                    loadedActivities,
-                ]) => {
-                    if (!isCurrent) {
-                        return;
-                    }
+            .then(([loadedSummary, loadedAgencies, loadedActivities]) => {
+                if (!isCurrent) {
+                    return;
+                }
 
-                    setSummary(loadedSummary);
-                    setResearchRecords(loadedResearch);
-                    setFileRecords(loadedFiles);
-                    setAgencyRecords(loadedAgencies);
-                    setUserRecords(loadedUsers);
-                    setActivities(loadedActivities);
-                    setError(null);
-                },
-            )
+                setSummary(loadedSummary);
+                setAgencies(loadedAgencies);
+                setActivities(loadedActivities.activities);
+                setActivityPage(loadedActivities.currentPage);
+                setActivityLastPage(loadedActivities.lastPage);
+                setError(null);
+            })
             .catch(() => {
                 if (isCurrent) {
                     setError('Unable to load archive and recovery data.');
@@ -255,6 +107,50 @@ export function AdminArchivePage() {
     }, []);
 
     useEffect(() => {
+        let isCurrent = true;
+        setIsRecordsLoading(true);
+
+        const timerId = window.setTimeout(() => {
+            getArchivedRecordsPage(activeTab, {
+                page: currentPage,
+                perPage: rowsPerPage,
+                filters,
+                topbarSearch,
+            })
+                .then((result) => {
+                    if (!isCurrent) {
+                        return;
+                    }
+
+                    setRecords(result.records);
+                    setTotalPages(result.lastPage);
+                    setTotalResults(result.total);
+
+                    if (currentPage > result.lastPage) {
+                        setCurrentPage(Math.max(1, result.lastPage));
+                    }
+
+                    setError(null);
+                })
+                .catch(() => {
+                    if (isCurrent) {
+                        setError('Unable to load archived records.');
+                    }
+                })
+                .finally(() => {
+                    if (isCurrent) {
+                        setIsRecordsLoading(false);
+                    }
+                });
+        }, 250);
+
+        return () => {
+            isCurrent = false;
+            window.clearTimeout(timerId);
+        };
+    }, [activeTab, currentPage, filters, topbarSearch]);
+
+    useEffect(() => {
         setCurrentPage(1);
     }, [activeTab, filters, topbarSearch]);
 
@@ -268,76 +164,6 @@ export function AdminArchivePage() {
         return () => window.clearTimeout(timerId);
     }, [feedback]);
 
-    const recordsByTab = useMemo(
-        () => ({
-            research: researchRecords,
-            file: fileRecords,
-            agency: agencyRecords,
-            user: userRecords,
-        }),
-        [agencyRecords, fileRecords, researchRecords, userRecords],
-    );
-
-    const activeRecords = recordsByTab[activeTab];
-
-    const filteredRecords = useMemo(
-        () => filterRecords(activeRecords, filters, topbarSearch),
-        [activeRecords, filters, topbarSearch],
-    );
-
-    const totalPages = Math.max(
-        1,
-        Math.ceil(filteredRecords.length / rowsPerPage),
-    );
-    const effectiveCurrentPage = Math.min(currentPage, totalPages);
-    const paginatedRecords = filteredRecords.slice(
-        (effectiveCurrentPage - 1) * rowsPerPage,
-        effectiveCurrentPage * rowsPerPage,
-    );
-
-    const allRecords = useMemo(
-        () => [
-            ...researchRecords,
-            ...fileRecords,
-            ...agencyRecords,
-            ...userRecords,
-        ],
-        [agencyRecords, fileRecords, researchRecords, userRecords],
-    );
-
-    const agencies = useMemo(
-        () =>
-            uniqueSorted(
-                allRecords
-                    .map(getRecordAgency)
-                    .filter((agency) => agency !== 'System'),
-            ),
-        [allRecords],
-    );
-
-    const displayedSummary = useMemo<AdminArchiveSummary | null>(() => {
-        if (!summary) {
-            return null;
-        }
-
-        return {
-            archivedResearchRecords: researchRecords.length,
-            archivedFiles: fileRecords.length,
-            archivedAgencies: agencyRecords.length,
-            archivedUserAccounts: userRecords.length,
-            recentlyRestored: activities.filter(
-                (activity) => activity.type === 'record-restored',
-            ).length,
-        };
-    }, [
-        activities,
-        agencyRecords.length,
-        fileRecords.length,
-        researchRecords.length,
-        summary,
-        userRecords.length,
-    ]);
-
     const hasActiveFilters =
         Boolean(filters.search.trim()) ||
         Boolean(topbarSearch.trim()) ||
@@ -347,29 +173,27 @@ export function AdminArchivePage() {
         filters.recordType !== 'all';
 
     const removeRecordFromState = (record: AdminArchivedRecord) => {
-        if (record.type === 'research') {
-            setResearchRecords((current) =>
-                current.filter((item) => item.id !== record.id),
-            );
-        }
+        setRecords((current) =>
+            current.filter((item) => item.id !== record.id),
+        );
+        setTotalResults((current) => Math.max(0, current - 1));
+        setSummary((current) => {
+            if (!current) {
+                return current;
+            }
 
-        if (record.type === 'agency') {
-            setAgencyRecords((current) =>
-                current.filter((item) => item.id !== record.id),
-            );
-        }
+            const field = {
+                research: 'archivedResearchRecords',
+                file: 'archivedFiles',
+                agency: 'archivedAgencies',
+                user: 'archivedUserAccounts',
+            }[record.type] as keyof AdminArchiveSummary;
 
-        if (record.type === 'file') {
-            setFileRecords((current) =>
-                current.filter((item) => item.id !== record.id),
-            );
-        }
-
-        if (record.type === 'user') {
-            setUserRecords((current) =>
-                current.filter((item) => item.id !== record.id),
-            );
-        }
+            return {
+                ...current,
+                [field]: Math.max(0, current[field] - 1),
+            };
+        });
     };
 
     const handleResetFilters = () => {
@@ -395,6 +219,14 @@ export function AdminArchivePage() {
                 selectedRestoreRecord.id,
             );
             removeRecordFromState(selectedRestoreRecord);
+            setSummary((current) =>
+                current
+                    ? {
+                          ...current,
+                          recentlyRestored: current.recentlyRestored + 1,
+                      }
+                    : current,
+            );
             setActivities((current) => [
                 createArchiveActivity('record-restored', selectedRestoreRecord),
                 ...current,
@@ -469,6 +301,31 @@ export function AdminArchivePage() {
         }
     };
 
+    const handleLoadMoreActivity = async () => {
+        if (activityPage >= activityLastPage || isLoadingMoreActivity) {
+            return;
+        }
+
+        setIsLoadingMoreActivity(true);
+
+        try {
+            const result = await getArchiveActivityTimeline(activityPage + 1);
+            setActivities((current) => [
+                ...current,
+                ...result.activities.filter(
+                    (activity) =>
+                        !current.some((item) => item.id === activity.id),
+                ),
+            ]);
+            setActivityPage(result.currentPage);
+            setActivityLastPage(result.lastPage);
+        } catch {
+            setError('Unable to load older archive activity.');
+        } finally {
+            setIsLoadingMoreActivity(false);
+        }
+    };
+
     return (
         <AdminLayout search={topbarSearch} onSearchChange={setTopbarSearch}>
             <main className="px-4 py-8 lg:px-8">
@@ -491,19 +348,16 @@ export function AdminArchivePage() {
                     </div>
                 )}
 
-                <ArchiveSummaryCards
-                    summary={displayedSummary}
-                    isLoading={isLoading}
-                />
+                <ArchiveSummaryCards summary={summary} isLoading={isLoading} />
 
                 <section className="mt-6 overflow-hidden rounded-[10px] border border-[#e5e7eb] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.1),0_1px_2px_-1px_rgba(0,0,0,0.1)]">
                     <ArchiveTabs
                         activeTab={activeTab}
                         counts={{
-                            research: researchRecords.length,
-                            file: fileRecords.length,
-                            agency: agencyRecords.length,
-                            user: userRecords.length,
+                            research: summary?.archivedResearchRecords ?? 0,
+                            file: summary?.archivedFiles ?? 0,
+                            agency: summary?.archivedAgencies ?? 0,
+                            user: summary?.archivedUserAccounts ?? 0,
                         }}
                         onTabChange={setActiveTab}
                     />
@@ -516,11 +370,11 @@ export function AdminArchivePage() {
                     />
                     <ArchiveTable
                         activeTab={activeTab}
-                        records={paginatedRecords}
-                        isLoading={isLoading}
-                        currentPage={effectiveCurrentPage}
+                        records={records}
+                        isLoading={isRecordsLoading}
+                        currentPage={currentPage}
                         totalPages={totalPages}
-                        totalResults={filteredRecords.length}
+                        totalResults={totalResults}
                         rowsPerPage={rowsPerPage}
                         onPageChange={(page) =>
                             setCurrentPage(
@@ -537,6 +391,9 @@ export function AdminArchivePage() {
                 <ArchiveActivityTimeline
                     activities={activities}
                     isLoading={isLoading}
+                    hasMore={activityPage < activityLastPage}
+                    isLoadingMore={isLoadingMoreActivity}
+                    onLoadMore={handleLoadMoreActivity}
                 />
             </main>
 

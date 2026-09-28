@@ -18,6 +18,8 @@ import type { AgencyAdminUser } from '@/types/admin-users';
 
 type AgencyAdminUserActionsProps = {
     user: AgencyAdminUser;
+    canEdit: boolean;
+    canManage: boolean;
     onView: (user: AgencyAdminUser) => void;
     onEdit: (user: AgencyAdminUser) => void;
     onToggleStatus: (user: AgencyAdminUser) => void;
@@ -27,6 +29,8 @@ type AgencyAdminUserActionsProps = {
 
 export function AgencyAdminUserActions({
     user,
+    canEdit,
+    canManage,
     onView,
     onEdit,
     onToggleStatus,
@@ -51,30 +55,41 @@ export function AgencyAdminUserActions({
                     <Eye className="size-4" aria-hidden="true" />
                     View Details
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => onEdit(user)}>
-                    <Edit3 className="size-4" aria-hidden="true" />
-                    Edit User
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => onToggleStatus(user)}>
-                    {isActive ? (
-                        <UserX className="size-4" aria-hidden="true" />
-                    ) : (
-                        <UserCheck className="size-4" aria-hidden="true" />
-                    )}
-                    {isActive ? 'Deactivate' : 'Activate'}
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => onResetPassword(user)}>
-                    <KeyRound className="size-4" aria-hidden="true" />
-                    Reset Password
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                    variant="destructive"
-                    onSelect={() => onRemove(user)}
-                >
-                    <Trash2 className="size-4" aria-hidden="true" />
-                    Remove User
-                </DropdownMenuItem>
+                {canEdit && (
+                    <DropdownMenuItem onSelect={() => onEdit(user)}>
+                        <Edit3 className="size-4" aria-hidden="true" />
+                        Edit User
+                    </DropdownMenuItem>
+                )}
+                {canManage && (
+                    <>
+                        <DropdownMenuItem onSelect={() => onToggleStatus(user)}>
+                            {isActive ? (
+                                <UserX className="size-4" aria-hidden="true" />
+                            ) : (
+                                <UserCheck
+                                    className="size-4"
+                                    aria-hidden="true"
+                                />
+                            )}
+                            {isActive ? 'Deactivate' : 'Activate'}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                            onSelect={() => onResetPassword(user)}
+                        >
+                            <KeyRound className="size-4" aria-hidden="true" />
+                            Reset Password
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                            variant="destructive"
+                            onSelect={() => onRemove(user)}
+                        >
+                            <Trash2 className="size-4" aria-hidden="true" />
+                            Remove User
+                        </DropdownMenuItem>
+                    </>
+                )}
             </DropdownMenuContent>
         </DropdownMenu>
     );

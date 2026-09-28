@@ -33,16 +33,36 @@ const activityStyles = {
 };
 
 function formatActivityTimestamp(timestamp: string) {
+    const timestampValue = new Date(timestamp).getTime();
+
+    if (!Number.isFinite(timestampValue)) {
+        return 'Recently';
+    }
+
     const minutes = Math.max(
         1,
-        Math.round((Date.now() - new Date(timestamp).getTime()) / 60000),
+        Math.floor((Date.now() - timestampValue) / 60000),
     );
 
     if (minutes < 60) {
-        return `${minutes} minutes ago`;
+        return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
     }
 
-    return `${Math.round(minutes / 60)} hours ago`;
+    const hours = Math.floor(minutes / 60);
+
+    if (hours < 24) {
+        return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+    }
+
+    const days = Math.floor(hours / 24);
+
+    return `${days} ${days === 1 ? 'day' : 'days'} ago`;
+}
+
+export function formatActivityAction(action: string) {
+    const actionSegment = action.split('.').at(-1) ?? action;
+
+    return actionSegment.replace(/[_-]+/g, ' ').trim().toLowerCase();
 }
 
 export function SystemActivityFeed({
@@ -110,7 +130,7 @@ export function SystemActivityFeed({
                                         <span className="font-semibold text-[#0f172a]">
                                             {activity.actor}
                                         </span>{' '}
-                                        {activity.action}{' '}
+                                        {formatActivityAction(activity.action)}{' '}
                                         <span className="font-semibold text-[#1e3a8a]">
                                             {activity.target}
                                         </span>
@@ -121,6 +141,12 @@ export function SystemActivityFeed({
                                                 activity.timestamp,
                                             )}
                                         </span>
+                                        {activity.agency && (
+                                            <span aria-hidden="true">•</span>
+                                        )}
+                                        {activity.agency && (
+                                            <span>{activity.agency}</span>
+                                        )}
                                     </div>
                                 </div>
                             </div>

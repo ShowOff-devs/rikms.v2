@@ -5,15 +5,26 @@ import {
     getRoleAccent,
     roleChangeTypeLabels,
 } from '@/components/admin/rbac/rbac-display';
+import { RbacPagination } from '@/components/admin/rbac/RbacPagination';
 import type { RoleChangeHistory as RoleChangeHistoryType } from '@/types/rbac';
 
 type RoleChangeHistoryProps = {
     changes: RoleChangeHistoryType[];
+    currentPage: number;
+    totalPages: number;
+    totalResults: number;
+    rowsPerPage: number;
+    onPageChange: (page: number) => void;
     onViewDiff: (change: RoleChangeHistoryType) => void;
 };
 
 export function RoleChangeHistory({
     changes,
+    currentPage,
+    totalPages,
+    totalResults,
+    rowsPerPage,
+    onPageChange,
     onViewDiff,
 }: RoleChangeHistoryProps) {
     return (
@@ -118,6 +129,15 @@ export function RoleChangeHistory({
                     </tbody>
                 </table>
             </div>
+
+            <RbacPagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalResults={totalResults}
+                rowsPerPage={rowsPerPage}
+                itemLabel="role changes"
+                onPageChange={onPageChange}
+            />
         </section>
     );
 }

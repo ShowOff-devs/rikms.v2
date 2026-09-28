@@ -200,7 +200,7 @@ export default function ResearchDetailPage({
             <div className="min-h-screen bg-[#f3f4f6] text-[#0f172a]">
                 <PortalNavbar activeNav="browse-research" />
 
-                <main className="mx-auto w-full max-w-[1200px] px-4 pt-8 pb-16 sm:px-6">
+                <main className="mx-auto w-full max-w-[1200px] px-4 pt-6 pb-14 sm:px-6 sm:pt-8 sm:pb-16">
                     <Link
                         href="/browse-research"
                         className="inline-flex items-center gap-2 text-sm font-medium text-[#1e3a8a] hover:underline"
@@ -227,8 +227,8 @@ export default function ResearchDetailPage({
                     ) : null}
 
                     {!isLoading && research ? (
-                        <article className="mt-6 rounded-[14px] border border-[#f3f4f6] bg-white px-6 py-6 shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_0px_rgba(0,0,0,0.1)]">
-                            <div className="flex flex-wrap gap-2">
+                        <article className="mt-5 rounded-[14px] border border-[#e5e7eb] bg-white px-5 py-5 shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_0px_rgba(0,0,0,0.1)] sm:px-7 sm:py-7 lg:px-8">
+                            <div className="flex flex-wrap gap-1.5">
                                 {research.tags.map((tag) => (
                                     <span
                                         key={tag.label}
@@ -247,16 +247,16 @@ export default function ResearchDetailPage({
                                 </span>
                             </div>
 
-                            <h1 className="mt-3 max-w-[900px] text-[28px] leading-9 font-bold text-[#1e3a8a]">
+                            <h1 className="mt-4 max-w-[1000px] text-2xl leading-8 font-bold text-[#1e3a8a] sm:text-[30px] sm:leading-[38px]">
                                 {research.title}
                             </h1>
                             {research.authors.length > 0 ? (
-                                <p className="mt-2 text-sm leading-5 text-[#6b7280]">
+                                <p className="mt-2 max-w-[90ch] text-sm leading-6 text-[#6b7280]">
                                     {research.authors.join(', ')}
                                 </p>
                             ) : null}
 
-                            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm leading-5 text-[#6b7280]">
+                            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm leading-5 text-[#6b7280]">
                                 <span className="inline-flex items-center gap-1.5">
                                     <Building2 className="size-4" />
                                     {research.agency}
@@ -275,7 +275,7 @@ export default function ResearchDetailPage({
                             </div>
 
                             {research.abstract.trim() ? (
-                                <section className="mt-6 border-t border-[#f3f4f6] pt-6">
+                                <section className="mt-7 border-t border-[#e5e7eb] pt-6">
                                     <h2 className="text-base leading-6 font-semibold text-[#1e3a8a]">
                                         Abstract
                                     </h2>
@@ -284,7 +284,7 @@ export default function ResearchDetailPage({
                             ) : null}
 
                             {supplementalPublicMetadata.length > 0 ? (
-                                <section className="mt-6 border-t border-[#f3f4f6] pt-6">
+                                <section className="mt-7 border-t border-[#e5e7eb] pt-6">
                                     <h2 className="text-base leading-6 font-semibold text-[#1e3a8a]">
                                         Public Metadata
                                     </h2>
@@ -301,13 +301,13 @@ export default function ResearchDetailPage({
                                 </section>
                             ) : null}
 
-                            <section className="mt-6 border-t border-[#f3f4f6] pt-6">
+                            <section className="mt-7 border-t border-[#e5e7eb] pt-6">
                                 <h2 className="text-base leading-6 font-semibold text-[#1e3a8a]">
                                     Access
                                 </h2>
                                 {research.accessLevel === 'public' ? (
-                                    <div className="mt-3 flex flex-wrap items-center gap-3">
-                                        <p className="text-sm text-[#374151]">
+                                    <div className="mt-4 flex flex-col gap-4 rounded-[12px] bg-[#f8fafc] p-4 sm:flex-row sm:items-center sm:justify-between">
+                                        <p className="max-w-[760px] text-sm leading-6 text-[#374151]">
                                             This record is marked for public
                                             download.
                                         </p>
@@ -315,7 +315,7 @@ export default function ResearchDetailPage({
                                             type="button"
                                             disabled={isDownloading}
                                             onClick={handleDownload}
-                                            className="inline-flex h-10 items-center gap-2 rounded-[10px] bg-[#1e3a8a] px-4 text-sm font-medium text-white"
+                                            className="inline-flex h-10 shrink-0 items-center justify-center gap-2 self-start rounded-[10px] bg-[#1e3a8a] px-4 text-sm font-medium text-white sm:self-auto"
                                         >
                                             <Download className="size-4" />
                                             {isDownloading
@@ -323,7 +323,7 @@ export default function ResearchDetailPage({
                                                 : 'Download PDF'}
                                         </button>
                                         {downloadError ? (
-                                            <p className="basis-full text-sm leading-5 text-[#b91c1c]">
+                                            <p className="text-sm leading-5 text-[#b91c1c] sm:basis-full">
                                                 {downloadError}
                                             </p>
                                         ) : null}
@@ -331,8 +331,8 @@ export default function ResearchDetailPage({
                                 ) : null}
                                 {research.accessLevel === 'external' &&
                                 research.externalUrl ? (
-                                    <div className="mt-3 flex flex-wrap items-center gap-3">
-                                        <p className="text-sm text-[#374151]">
+                                    <div className="mt-4 flex flex-col gap-4 rounded-[12px] bg-[#f8fafc] p-4 sm:flex-row sm:items-center sm:justify-between">
+                                        <p className="max-w-[760px] text-sm leading-6 text-[#374151]">
                                             This record is hosted by an external
                                             public source.
                                         </p>
@@ -340,7 +340,7 @@ export default function ResearchDetailPage({
                                             href={research.externalUrl}
                                             target="_blank"
                                             rel="noreferrer"
-                                            className="inline-flex h-10 items-center gap-2 rounded-[10px] bg-[#1e3a8a] px-4 text-sm font-medium text-white"
+                                            className="inline-flex h-10 shrink-0 items-center justify-center gap-2 self-start rounded-[10px] bg-[#1e3a8a] px-4 text-sm font-medium text-white sm:self-auto"
                                         >
                                             <ExternalLink className="size-4" />
                                             Open Source
@@ -350,9 +350,9 @@ export default function ResearchDetailPage({
                                 {research.accessLevel === 'restricted' ? (
                                     <div
                                         id="request-access"
-                                        className="mt-3 flex flex-wrap items-center gap-3"
+                                        className="mt-4 flex flex-col gap-4 rounded-[12px] bg-[#f8fafc] p-4 sm:flex-row sm:items-center sm:justify-between"
                                     >
-                                        <p className="text-sm text-[#374151]">
+                                        <p className="max-w-[760px] text-sm leading-6 text-[#374151]">
                                             {accessRequestsEnabled
                                                 ? 'This record requires agency approval before files can be shared.'
                                                 : 'Public access requests are currently unavailable.'}
@@ -363,7 +363,7 @@ export default function ResearchDetailPage({
                                                 onClick={() =>
                                                     setRequestOpen(true)
                                                 }
-                                                className="inline-flex h-10 items-center gap-2 rounded-[10px] bg-[#1e3a8a] px-4 text-sm font-medium text-white"
+                                                className="inline-flex h-10 shrink-0 items-center justify-center gap-2 self-start rounded-[10px] bg-[#1e3a8a] px-4 text-sm font-medium text-white sm:self-auto"
                                             >
                                                 <Lock className="size-4" />
                                                 Request Access
@@ -374,9 +374,9 @@ export default function ResearchDetailPage({
                                 {research.accessLevel === 'embargo' ? (
                                     <div
                                         id="request-access"
-                                        className="mt-3 flex flex-wrap items-center gap-3"
+                                        className="mt-4 flex flex-col gap-4 rounded-[12px] bg-[#f8fafc] p-4 sm:flex-row sm:items-center sm:justify-between"
                                     >
-                                        <p className="text-sm text-[#374151]">
+                                        <p className="max-w-[760px] text-sm leading-6 text-[#374151]">
                                             {accessRequestsEnabled
                                                 ? `This record is embargoed${research.embargoUntil ? ` until ${research.embargoUntil}` : ''}. You may still submit an access inquiry for agency review.`
                                                 : 'Public access requests are currently unavailable.'}
@@ -387,7 +387,7 @@ export default function ResearchDetailPage({
                                                 onClick={() =>
                                                     setRequestOpen(true)
                                                 }
-                                                className="inline-flex h-10 items-center gap-2 rounded-[10px] bg-[#1e3a8a] px-4 text-sm font-medium text-white"
+                                                className="inline-flex h-10 shrink-0 items-center justify-center gap-2 self-start rounded-[10px] bg-[#1e3a8a] px-4 text-sm font-medium text-white sm:self-auto"
                                             >
                                                 <Lock className="size-4" />
                                                 Request Access
@@ -619,11 +619,12 @@ function PublicLongText({ value }: { value: string }) {
         .filter(Boolean);
 
     return (
-        <div className="mt-2 max-w-[900px] space-y-3 text-sm leading-6 text-[#374151]">
+        <div className="mt-3 w-full space-y-4 text-[15px] leading-7 text-[#374151]">
             {paragraphs.map((paragraph, index) => (
                 <p
                     key={`${index}-${paragraph.slice(0, 24)}`}
-                    className="text-justify"
+                    className="hyphens-auto"
+                    style={{ textAlign: 'justify' }}
                 >
                     {paragraph}
                 </p>

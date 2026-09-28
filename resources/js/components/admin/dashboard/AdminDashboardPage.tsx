@@ -11,13 +11,16 @@ import { SystemActivityFeed } from '@/components/admin/dashboard/SystemActivityF
 import { AdminLayout } from '@/components/admin/layout/AdminLayout';
 import {
     getAdminDashboardMetrics,
+    generateSystemReport,
     getPendingModerationItems,
     getQuickManagementActions,
     getResearchByAgency,
     getResearchUploadsByYear,
     getSecurityStatus,
     getSystemActivityFeed,
+    getUnreadNotificationCount,
 } from '@/lib/admin/dashboard-service';
+import { apiMessage } from '@/lib/api-client';
 import type {
     AdminDashboardMetric,
     ModerationItem,
@@ -36,6 +39,7 @@ type AdminDashboardState = {
     moderationItems: ModerationItem[];
     securityStatus: SecurityStatus | null;
     quickActions: QuickManagementAction[];
+    unreadNotificationsCount: number;
 };
 
 const emptyAdminDashboardState: AdminDashboardState = {
@@ -46,6 +50,7 @@ const emptyAdminDashboardState: AdminDashboardState = {
     moderationItems: [],
     securityStatus: null,
     quickActions: [],
+    unreadNotificationsCount: 0,
 };
 
 function matchesSearch(value: string, search: string) {
@@ -57,8 +62,11 @@ export function AdminDashboardPage() {
         emptyAdminDashboardState,
     );
     const [isLoading, setIsLoading] = useState(true);
+    const [isExporting, setIsExporting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [feedback, setFeedback] = useState<string | null>(null);
     const [search, setSearch] = useState('');
+    const [reloadKey, setReloadKey] = useState(0);
     const [selectedModerationItem, setSelectedModerationItem] =
         useState<ModerationItem | null>(null);
 
@@ -73,6 +81,7 @@ export function AdminDashboardPage() {
             getPendingModerationItems(),
             getSecurityStatus(),
             getQuickManagementActions(),
+            getUnreadNotificationCount(),
         ])
             .then(
                 ([
@@ -83,6 +92,7 @@ export function AdminDashboardPage() {
                     moderationItems,
                     security,
                     quickActions,
+                    unreadNotificationsCount,
                 ]) => {
                     if (!isCurrent) {
                         return;
@@ -96,16 +106,19 @@ export function AdminDashboardPage() {
                         moderationItems,
                         securityStatus: security,
                         quickActions,
+                        unreadNotificationsCount,
                     });
                     setError(null);
                 },
             )
-            .catch(() => {
+            .catch((requestError: unknown) => {
                 if (!isCurrent) {
                     return;
                 }
 
-                setError('Unable to load dashboard data.');
+                setError(
+                    apiMessage(requestError, 'Unable to load dashboard data.'),
+                );
             })
             .finally(() => {
                 if (isCurrent) {
@@ -116,9 +129,35 @@ export function AdminDashboardPage() {
         return () => {
             isCurrent = false;
         };
-    }, []);
+    }, [reloadKey]);
 
     const normalizedSearch = search.trim().toLowerCase();
+
+    const retryDashboard = () => {
+        setIsLoading(true);
+        setError(null);
+        setReloadKey((key) => key + 1);
+    };
+
+    const handleExport = async () => {
+        setIsExporting(true);
+        setError(null);
+        setFeedback(null);
+
+        try {
+            const report = await generateSystemReport();
+            setFeedback(`${report.fileName} is ready for download.`);
+        } catch (requestError: unknown) {
+            setError(
+                apiMessage(
+                    requestError,
+                    'Unable to generate the system report. Please try again.',
+                ),
+            );
+        } finally {
+            setIsExporting(false);
+        }
+    };
 
     const filteredActivityFeed = useMemo(() => {
         if (!normalizedSearch) {
@@ -161,13 +200,40 @@ export function AdminDashboardPage() {
     }, [dashboard.moderationItems, normalizedSearch]);
 
     return (
-        <AdminLayout search={search} onSearchChange={setSearch}>
+        <AdminLayout
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Filter recent activity and moderation..."
+            unreadNotificationsCount={dashboard.unreadNotificationsCount}
+        >
             <main className="px-4 py-8 lg:px-8">
-                <AdminDashboardHeader />
+                <AdminDashboardHeader
+                    isExporting={isExporting}
+                    onExport={handleExport}
+                />
 
                 {error && (
-                    <div className="mt-6 rounded-[10px] border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-sm text-[#b91c1c]">
-                        {error}
+                    <div
+                        role="alert"
+                        className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-sm text-[#b91c1c]"
+                    >
+                        <span>{error}</span>
+                        <button
+                            type="button"
+                            onClick={retryDashboard}
+                            className="rounded-[8px] border border-[#b91c1c]/30 px-3 py-1.5 text-xs font-semibold transition hover:bg-[#fee2e2] focus-visible:ring-2 focus-visible:ring-[#b91c1c] focus-visible:outline-none"
+                        >
+                            Retry
+                        </button>
+                    </div>
+                )}
+
+                {feedback && (
+                    <div
+                        role="status"
+                        className="mt-6 rounded-[10px] border border-[#bbf7d0] bg-[#f0fdf4] px-4 py-3 text-sm text-[#166534]"
+                    >
+                        {feedback}
                     </div>
                 )}
 
@@ -199,7 +265,7 @@ export function AdminDashboardPage() {
                     />
                 </section>
 
-                <section className="mt-6 grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+                <section className="mt-6 space-y-6">
                     <SecurityStatusPanel
                         status={dashboard.securityStatus}
                         isLoading={isLoading}

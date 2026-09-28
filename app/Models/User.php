@@ -67,6 +67,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'notification_preferences' => 'array',
             'security_preferences' => 'array',
             'deactivation_requested_at' => 'datetime',
+            'last_login_at' => 'datetime',
             'archived_at' => 'datetime',
             'restored_at' => 'datetime',
         ];

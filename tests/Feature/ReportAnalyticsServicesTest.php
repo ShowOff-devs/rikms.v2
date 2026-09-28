@@ -253,6 +253,19 @@ test('BudgetUtilization returns not reported when no financial data exists', fun
         ->and($result['utilization_percentage'])->toBeNull();
 });
 
+test('BudgetUtilization does not treat a financial as-of date alone as financial data', function () {
+    $result = app(BudgetUtilizationService::class)->calculate(reportAnalyticsResearch([], [
+        'allotted_budget' => null,
+        'released_amount' => null,
+        'obligated_amount' => null,
+        'utilized_amount' => null,
+        'financial_as_of_date' => '2026-06-30',
+    ]));
+
+    expect($result['data_status'])->toBe('not_reported')
+        ->and($result['classification'])->toBe('not_reported');
+});
+
 test('BudgetUtilization handles allotted budget only', function () {
     $result = app(BudgetUtilizationService::class)->calculate(reportAnalyticsResearch([], [
         'released_amount' => null,
@@ -277,6 +290,21 @@ test('BudgetUtilization protects zero allotted and zero utilized from division b
     expect($result['remaining_balance'])->toBe('0.00')
         ->and($result['utilization_percentage'])->toBeNull()
         ->and($result['classification'])->toBe('not_utilized');
+});
+
+test('BudgetUtilization classifies positive utilization against zero budget as overutilized', function () {
+    $result = app(BudgetUtilizationService::class)->calculate(reportAnalyticsResearch([], [
+        'allotted_budget' => 0,
+        'released_amount' => 0,
+        'obligated_amount' => 0,
+        'utilized_amount' => 100,
+    ], []));
+
+    expect($result['data_status'])->toBe('reported')
+        ->and($result['remaining_balance'])->toBe('-100.00')
+        ->and($result['utilization_percentage'])->toBeNull()
+        ->and($result['classification'])->toBe('overutilized')
+        ->and($result['warnings'])->toContain('utilized_exceeds_allotted');
 });
 
 test('BudgetUtilization classifies threshold percentages', function (string $utilized, string $classification, ?float $percentage) {

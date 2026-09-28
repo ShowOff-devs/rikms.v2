@@ -39,12 +39,67 @@ type ArchiveAgencyApiRecord = {
     archived_at: string;
 };
 
-export async function getAgencies() {
-    const { data } = await fetchApi<AdminAgencyApiRecord[]>(
-        '/api/admin/agencies?per_page=100',
-    );
+type AgencyListMeta = {
+    pagination: {
+        current_page: number;
+        per_page: number;
+        total: number;
+        last_page: number;
+    };
+    summary: {
+        total_agencies: number;
+        active_agencies: number;
+        inactive_agencies: number;
+        total_research_records: number;
+    };
+};
 
-    return data.map(mapAgencyFromApi);
+export type AgencyListFilters = {
+    page?: number;
+    perPage?: number;
+    keyword?: string;
+    type?: string;
+    status?: string;
+    updatedDays?: string;
+};
+
+export async function getAgencies(filters: AgencyListFilters = {}) {
+    const params = new URLSearchParams({
+        page: String(filters.page ?? 1),
+        per_page: String(filters.perPage ?? 9),
+    });
+
+    if (filters.keyword?.trim()) {
+        params.set('keyword', filters.keyword.trim());
+    }
+
+    if (filters.type && filters.type !== 'all') {
+        params.set('type', filters.type);
+    }
+
+    if (filters.status && filters.status !== 'all') {
+        params.set('status', filters.status);
+    }
+
+    if (filters.updatedDays && filters.updatedDays !== 'all') {
+        params.set('updated_days', filters.updatedDays);
+    }
+
+    const { data, meta } = await fetchApi<
+        AdminAgencyApiRecord[],
+        AgencyListMeta
+    >(`/api/admin/agencies?${params.toString()}`);
+
+    return {
+        agencies: data.map(mapAgencyFromApi),
+        pagination: meta.pagination,
+        summary: {
+            totalAgencies: meta.summary.total_agencies,
+            activeAgencies: meta.summary.active_agencies,
+            inactiveAgencies: meta.summary.inactive_agencies,
+            totalResearchRecords: meta.summary.total_research_records,
+        },
+    };
 }
 
 export async function getAgencyById(id: string) {
@@ -56,11 +111,22 @@ export async function getAgencyById(id: string) {
 }
 
 export async function getAgencyAdminOptions(): Promise<AgencyAdminOption[]> {
-    const { data } = await fetchApi<AdminUserApiRecord[]>(
-        '/api/admin/agency-admin-users?per_page=100',
-    );
+    const admins: AdminUserApiRecord[] = [];
+    let page = 1;
+    let lastPage = 1;
 
-    return data.map((admin) => ({
+    do {
+        const response = await fetchApi<
+            AdminUserApiRecord[],
+            { pagination?: { last_page?: number } }
+        >(`/api/admin/agency-admin-users?per_page=100&page=${page}`);
+
+        admins.push(...response.data);
+        lastPage = response.meta.pagination?.last_page ?? page;
+        page += 1;
+    } while (page <= lastPage);
+
+    return admins.map((admin) => ({
         id: String(admin.id),
         fullName: admin.name,
         email: admin.email,

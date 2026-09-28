@@ -89,7 +89,29 @@ export function SystemAnalyticsPage() {
     const [headerRange, setHeaderRange] = useState('this-year');
     const [isExportOpen, setIsExportOpen] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
-    const [activeView, setActiveView] = useState<AnalyticsView>('system');
+    const [activeView, setActiveView] = useState<AnalyticsView>(() =>
+        typeof window !== 'undefined' &&
+        new URLSearchParams(window.location.search).get('view') ===
+            'project-reports'
+            ? 'project-reports'
+            : 'system',
+    );
+
+    useEffect(() => {
+        const url = new URL(window.location.href);
+
+        if (activeView === 'project-reports') {
+            url.searchParams.set('view', 'project-reports');
+        } else {
+            url.searchParams.delete('view');
+        }
+
+        window.history.replaceState(
+            window.history.state,
+            '',
+            `${url.pathname}${url.search}`,
+        );
+    }, [activeView]);
 
     useEffect(() => {
         if (activeView !== 'system') {
@@ -100,7 +122,7 @@ export function SystemAnalyticsPage() {
 
         setIsLoading(true);
 
-        getSystemAnalytics(filters)
+        getSystemAnalytics(filters, headerRange)
             .then((payload) => {
                 if (!isCurrent) {
                     return;
@@ -125,7 +147,7 @@ export function SystemAnalyticsPage() {
         return () => {
             isCurrent = false;
         };
-    }, [activeView, filters]);
+    }, [activeView, filters, headerRange]);
 
     useEffect(() => {
         if (!feedback) {
@@ -154,6 +176,10 @@ export function SystemAnalyticsPage() {
 
             setFeedback(`${result.fileName} was downloaded.`);
             setIsExportOpen(false);
+        } catch {
+            setError(
+                'Unable to export the analytics report. Please try again.',
+            );
         } finally {
             setIsExporting(false);
         }
