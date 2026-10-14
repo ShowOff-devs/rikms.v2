@@ -15,6 +15,7 @@ import {
     updatePlatformSettings,
     uploadPlatformLogo,
 } from '@/lib/admin/platform-settings-service';
+import { apiMessage, ApiError } from '@/lib/api-client';
 import type {
     PlatformSettings,
     PlatformSettingsErrors,
@@ -112,6 +113,40 @@ function validateSettings(settings: PlatformSettings): PlatformSettingsErrors {
 
 function hasErrors(errors: PlatformSettingsErrors) {
     return Object.keys(errors).length > 0;
+}
+
+const apiSettingErrorFields: Record<string, string> = {
+    'site.name': 'systemName',
+    'site.short_name': 'shortName',
+    'site.logo_url': 'platformLogoUrl',
+    'uploads.max_file_size_mb': 'maxUploadSizeMb',
+    'uploads.allowed_file_types': 'allowedFileTypes',
+    'research.default_status': 'defaultResearchStatus',
+    'access_requests.default_policy': 'defaultAccessPolicy',
+    'access_requests.embargo_duration_months': 'embargoDurationMonths',
+    'security.failed_login_threshold': 'failedLoginThreshold',
+    'security.lockout_duration_minutes': 'lockoutDurationMinutes',
+    'security.session_timeout_minutes': 'sessionTimeoutMinutes',
+    'maintenance.notice_text': 'maintenanceMessage',
+    'backup.frequency': 'backupFrequency',
+    'backup.destination_label': 'backupDestinationLabel',
+    'backup.retention_days': 'backupRetentionDays',
+};
+
+export function platformSettingsValidationErrors(
+    apiErrors: ApiError['errors'],
+): PlatformSettingsErrors {
+    return Object.fromEntries(
+        Object.entries(apiErrors).flatMap(([key, messages]) => {
+            const settingKey = key.startsWith('settings.')
+                ? key.slice('settings.'.length)
+                : key;
+            const field = apiSettingErrorFields[settingKey];
+            const message = Array.isArray(messages) ? messages[0] : messages;
+
+            return field && message ? [[field, message]] : [];
+        }),
+    );
 }
 
 export function PlatformSettingsPage() {
@@ -280,7 +315,7 @@ export function PlatformSettingsPage() {
     };
 
     const handleSave = async () => {
-        if (!settings) {
+        if (!settings || !initialSettings) {
             return;
         }
 
@@ -312,6 +347,7 @@ export function PlatformSettingsPage() {
 
             const savedSettings = await updatePlatformSettings(
                 payload,
+                initialSettings,
                 maintenanceEnableConfirmed,
             );
 
@@ -327,11 +363,43 @@ export function PlatformSettingsPage() {
 
             setFeedback('Platform settings have been saved.');
         } catch (saveError) {
-            setError(
-                saveError instanceof Error
-                    ? saveError.message
-                    : 'Unable to save platform settings.',
-            );
+            if (saveError instanceof ApiError && saveError.status === 422) {
+                setErrors(platformSettingsValidationErrors(saveError.errors));
+                setError(
+                    apiMessage(
+                        saveError,
+                        'Review the highlighted settings before saving.',
+                    ),
+                );
+            } else if (
+                saveError instanceof ApiError &&
+                saveError.status === 409
+            ) {
+                try {
+                    const refreshedSettings = await getPlatformSettings();
+                    setSettings(refreshedSettings);
+                    setInitialSettings(cloneSettings(refreshedSettings));
+                    setLogoFile(null);
+
+                    if (logoPreviewUrl) {
+                        URL.revokeObjectURL(logoPreviewUrl);
+                    }
+
+                    setLogoPreviewUrl(null);
+                    setMaintenanceEnableConfirmed(false);
+                    setErrors({});
+                } catch {
+                    // Keep the conflict response as the actionable error.
+                }
+
+                setError(
+                    'Platform settings changed while you were editing. The latest settings were loaded; review them before saving again.',
+                );
+            } else {
+                setError(
+                    apiMessage(saveError, 'Unable to save platform settings.'),
+                );
+            }
         } finally {
             setIsSaving(false);
         }

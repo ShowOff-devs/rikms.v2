@@ -380,6 +380,34 @@ function toApiSettings(settings: PlatformSettings) {
     };
 }
 
+export type PlatformSettingsUpdate = {
+    settings: Record<string, unknown>;
+    expected_versions: Record<string, string | null>;
+};
+
+export function buildPlatformSettingsUpdate(
+    settings: PlatformSettings,
+    initialSettings: PlatformSettings,
+): PlatformSettingsUpdate {
+    const currentValues: Record<string, unknown> = toApiSettings(settings);
+    const initialValues: Record<string, unknown> =
+        toApiSettings(initialSettings);
+    const changedEntries = Object.entries(currentValues).filter(
+        ([key, value]) =>
+            JSON.stringify(value) !== JSON.stringify(initialValues[key]),
+    );
+
+    return {
+        settings: Object.fromEntries(changedEntries),
+        expected_versions: Object.fromEntries(
+            changedEntries.map(([key]) => [
+                key,
+                initialSettings.versions[key] ?? null,
+            ]),
+        ),
+    };
+}
+
 export async function getPlatformSettings(): Promise<PlatformSettings> {
     const response = await fetchApi<ApiSetting[]>(
         '/api/admin/platform-settings?per_page=100',
@@ -398,21 +426,25 @@ export async function getBackupReadiness(): Promise<BackupReadiness> {
 
 export async function updatePlatformSettings(
     payload: PlatformSettings,
+    initialSettings: PlatformSettings,
     confirmMaintenanceMode = false,
 ): Promise<PlatformSettings> {
-    const response = await fetchApi<ApiSetting[]>(
-        '/api/admin/platform-settings/bulk-update',
-        {
-            method: 'POST',
-            body: JSON.stringify({
-                settings: toApiSettings(payload),
-                confirm_maintenance_mode: confirmMaintenanceMode,
-                expected_versions: payload.versions,
-            }),
-        },
-    );
+    const update = buildPlatformSettingsUpdate(payload, initialSettings);
 
-    return toPlatformSettings(response.data);
+    if (Object.keys(update.settings).length === 0) {
+        return initialSettings;
+    }
+
+    await fetchApi<ApiSetting[]>('/api/admin/platform-settings/bulk-update', {
+        method: 'POST',
+        body: JSON.stringify({
+            settings: update.settings,
+            confirm_maintenance_mode: confirmMaintenanceMode,
+            expected_versions: update.expected_versions,
+        }),
+    });
+
+    return getPlatformSettings();
 }
 
 export async function uploadPlatformLogo(file: File): Promise<string> {
@@ -453,6 +485,7 @@ export async function enableMaintenanceMode(
                 maintenanceMessage: message,
             },
         },
+        settings,
         true,
     );
 }
@@ -460,11 +493,14 @@ export async function enableMaintenanceMode(
 export async function disableMaintenanceMode(): Promise<PlatformSettings> {
     const settings = await getPlatformSettings();
 
-    return updatePlatformSettings({
-        ...settings,
-        maintenance: {
-            ...settings.maintenance,
-            maintenanceModeEnabled: false,
+    return updatePlatformSettings(
+        {
+            ...settings,
+            maintenance: {
+                ...settings.maintenance,
+                maintenanceModeEnabled: false,
+            },
         },
-    });
+        settings,
+    );
 }
