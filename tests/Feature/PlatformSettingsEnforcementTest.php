@@ -209,6 +209,42 @@ test('stale platform settings cannot overwrite a newer administrator update', fu
         ->toBe('First Administrator');
 });
 
+test('bulk update version checks must exactly correspond to updated writable settings', function () {
+    $admin = platformSettingsUser('super_admin', null, true);
+    platformSettingsSet('site.name', 'Original Name', 'string');
+    platformSettingsSet('site.short_name', 'RIKMS', 'string');
+    $settings = PlatformSetting::query()
+        ->whereIn('key', ['site.name', 'site.short_name'])
+        ->get()
+        ->keyBy('key');
+    $version = function (PlatformSetting $setting): string {
+        return hash('sha256', implode("\0", [
+            $setting->key,
+            $setting->value,
+            $setting->type,
+            $setting->updated_at->toISOString(),
+        ]));
+    };
+
+    $this->actingAs($admin)
+        ->postJson('/api/admin/platform-settings/bulk-update', [
+            'settings' => ['site.name' => 'Updated Name'],
+            'expected_versions' => [
+                'site.name' => $version($settings['site.name']),
+                'site.short_name' => $version($settings['site.short_name']),
+            ],
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['expected_versions']);
+
+    $this->actingAs($admin)
+        ->postJson('/api/admin/platform-settings/bulk-update', [
+            'settings' => ['backup.status' => 'completed'],
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['settings.backup.status']);
+});
+
 test('disabled public access requests reject submissions without records or notifications', function () {
     platformSettingsSet(PlatformSettingsService::ACCESS_REQUESTS_ENABLED, false);
 
