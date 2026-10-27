@@ -64,8 +64,6 @@ class PermissionSeeder extends Seeder
 
         $superAdmin = Role::where('slug', 'super_admin')->first();
         $agencyAdmin = Role::where('slug', 'agency_admin')->first();
-        $publicUser = Role::where('slug', 'public_user')->first();
-
         $superAdmin?->permissions()->sync($permissions->pluck('id'));
 
         $agencyAdmin?->permissions()->syncWithoutDetaching(
@@ -81,13 +79,6 @@ class PermissionSeeder extends Seeder
                     'notifications',
                     'archive',
                 ])
-                ->pluck('id'),
-        );
-
-        $publicUser?->permissions()->syncWithoutDetaching(
-            $permissions
-                ->where('module', 'research')
-                ->where('slug', 'research.view')
                 ->pluck('id'),
         );
     }

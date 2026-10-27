@@ -88,14 +88,14 @@ test('public registration is disabled', function () {
 
     $this->get('/register')->assertNotFound();
     $this->post('/register', [
-        'name' => 'Public User',
-        'email' => 'public-user@example.test',
+        'name' => 'Unregistered Visitor',
+        'email' => 'visitor@example.test',
         'password' => 'password',
         'password_confirmation' => 'password',
     ])->assertNotFound();
 
     $this->assertGuest();
-    $this->assertDatabaseMissing('users', ['email' => 'public-user@example.test']);
+    $this->assertDatabaseMissing('users', ['email' => 'visitor@example.test']);
 });
 
 test('local MongoDB AI record test route is not registered', function () {

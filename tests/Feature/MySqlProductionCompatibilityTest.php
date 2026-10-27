@@ -32,7 +32,8 @@ test('required production seeders are repeatable', function () {
     $this->seed(DatabaseSeeder::class);
     $this->seed(DatabaseSeeder::class);
 
-    expect(Role::query()->whereIn('slug', ['super_admin', 'agency_admin', 'public_user'])->count())->toBe(3)
+    expect(Role::query()->whereIn('slug', ['super_admin', 'agency_admin'])->count())->toBe(2)
+        ->and(Role::query()->where('slug', 'public_user')->exists())->toBeFalse()
         ->and(DB::table('permissions')->count())->toBeGreaterThan(0)
         ->and(DB::table('permission_role')->count())->toBeGreaterThan(0)
         ->and(DB::table('platform_settings')->count())->toBeGreaterThan(0);

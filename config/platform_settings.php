@@ -145,7 +145,7 @@ return [
             'default' => true,
             'group' => 'access_control',
             'label' => 'Access Requests Enabled',
-            'description' => 'Allow public users to submit access requests for restricted research.',
+            'description' => 'Allow anonymous visitors to submit access requests for restricted research.',
             'is_public' => true,
             'operational' => true,
             'enforced' => true,

@@ -598,11 +598,11 @@ test('admin can restore and delete archived agencies users and files', function 
     $this->assertDatabaseHas('audit_logs', ['event' => 'admin.user.restored']);
 });
 
-test('archive recovery preserves the original user role instead of granting agency admin', function () {
+test('archive recovery preserves the original custom role instead of granting agency admin', function () {
     $superAdmin = createPhase5User('super_admin');
-    $publicUser = createPhase5User('public_user');
+    $recordsOfficer = createPhase5User('records_officer');
 
-    $publicUser->forceFill([
+    $recordsOfficer->forceFill([
         'status' => 'inactive',
         'archived_at' => now(),
         'archived_by' => $superAdmin->id,
@@ -612,10 +612,10 @@ test('archive recovery preserves the original user role instead of granting agen
     AuditLog::create([
         'user_id' => $superAdmin->id,
         'event' => 'agency_admin_user.removed',
-        'auditable_type' => $publicUser->getMorphClass(),
-        'auditable_id' => $publicUser->id,
+        'auditable_type' => $recordsOfficer->getMorphClass(),
+        'auditable_id' => $recordsOfficer->id,
         'old_values' => [
-            'role' => 'public_user',
+            'role' => 'records_officer',
             'agency_id' => null,
         ],
         'new_values' => ['status' => 'inactive'],
@@ -623,13 +623,13 @@ test('archive recovery preserves the original user role instead of granting agen
     ]);
 
     $this->actingAs($superAdmin)
-        ->postJson("/api/admin/users/{$publicUser->id}/restore")
+        ->postJson("/api/admin/users/{$recordsOfficer->id}/restore")
         ->assertOk()
-        ->assertJsonPath('data.role', 'public_user')
-        ->assertJsonPath('data.roles.0', 'public_user');
+        ->assertJsonPath('data.role', 'records_officer')
+        ->assertJsonPath('data.roles.0', 'records_officer');
 
-    expect($publicUser->fresh()->role)->toBe('public_user')
-        ->and($publicUser->fresh()->roles()->pluck('slug')->all())->toBe(['public_user']);
+    expect($recordsOfficer->fresh()->role)->toBe('records_officer')
+        ->and($recordsOfficer->fresh()->roles()->pluck('slug')->all())->toBe(['records_officer']);
 });
 
 test('records deleted from the archive cannot be restored through direct endpoints', function () {
@@ -675,7 +675,7 @@ test('records deleted from the archive cannot be restored through direct endpoin
 test('notification mark read endpoints only update notifications in scope', function () {
     $agency = createPhase5Agency('phase-five-notifications');
     $agencyAdmin = createPhase5User('agency_admin', $agency);
-    $otherUser = createPhase5User('public_user');
+    $otherUser = createPhase5User('other_agency_user');
     $superAdmin = createPhase5User('super_admin');
     $ownNotification = Notification::create([
         'user_id' => $agencyAdmin->id,

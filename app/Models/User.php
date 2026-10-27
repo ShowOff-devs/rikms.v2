@@ -253,7 +253,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
         return $this->roles()
             ->where('roles.is_active', true)
-            ->whereNotIn('roles.slug', ['agency_admin', 'public_user'])
+            ->where('roles.slug', '!=', 'agency_admin')
             ->whereHas('permissions')
             ->exists();
     }

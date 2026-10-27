@@ -1506,7 +1506,7 @@ function AccessStep({
                     Public Repository Contact Preview
                 </p>
                 <p className="mb-4 text-xs text-[#6a7282]">
-                    What public users will see in the research repository:
+                    What visitors will see in the research repository:
                 </p>
                 <div className="rounded-[10px] border border-[#bfdbfe] bg-[#f8faff] p-4">
                     <div className="mb-3 flex items-center gap-3">

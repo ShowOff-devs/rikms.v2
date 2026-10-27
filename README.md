@@ -1,6 +1,6 @@
 # RIKMS v2
 
-RIKMS v2 is a regional knowledge-management application for submitting, reviewing, publishing, discovering, archiving, and reporting on research records. The implemented roles are `super_admin`, `agency_admin`, and `public_user`; anonymous visitors can browse public metadata and request controlled access where enabled. Backend authorization remains authoritative even when the interface hides an action.
+RIKMS v2 is a regional knowledge-management application for submitting, reviewing, publishing, discovering, archiving, and reporting on research records. The built-in roles are `super_admin` and `agency_admin`; anonymous visitors can browse public metadata and request controlled access where enabled. Backend authorization remains authoritative even when the interface hides an action.
 
 This document describes the current repository state. Production-readiness evidence and unresolved gates are tracked in [docs/PRODUCTION_READINESS_EVIDENCE.md](docs/PRODUCTION_READINESS_EVIDENCE.md).
 

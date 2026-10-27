@@ -29,14 +29,6 @@ class RoleSeeder extends Seeder
                 'is_system' => true,
                 'is_active' => true,
             ],
-            [
-                'slug' => 'public_user',
-                'name' => 'Public User',
-                'display_name' => 'Public User',
-                'description' => 'Authenticated public user for future saved requests and access workflows.',
-                'is_system' => true,
-                'is_active' => true,
-            ],
         ])->each(fn (array $role) => Role::updateOrCreate(
             ['slug' => $role['slug']],
             $role,

@@ -91,7 +91,6 @@ Default roles seeded:
 
 - `super_admin`
 - `agency_admin`
-- `public_user`
 
 Default permission modules seeded:
 

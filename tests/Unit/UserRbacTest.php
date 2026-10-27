@@ -20,12 +20,12 @@ function createUnitRbacRole(string $slug): Role
 
 test('user has role through normalized role relationship', function () {
     $role = createUnitRbacRole('agency_admin');
-    $user = User::factory()->create(['role' => 'public_user']);
+    $user = User::factory()->create(['role' => 'research_viewer']);
 
     $user->roles()->attach($role, ['assigned_at' => now()]);
 
     expect($user->fresh()->hasRole('agency_admin'))->toBeTrue()
-        ->and($user->fresh()->hasAnyRole(['public_user', 'agency_admin']))->toBeTrue()
+        ->and($user->fresh()->hasAnyRole(['research_viewer', 'agency_admin']))->toBeTrue()
         ->and($user->fresh()->isAgencyAdmin())->toBeTrue();
 });
 
@@ -39,9 +39,14 @@ test('user has permission through assigned role', function () {
     ]);
     $role->permissions()->attach($permission);
 
-    $user = User::factory()->create(['role' => 'public_user']);
+    $user = User::factory()->create(['role' => 'research_viewer']);
     $user->roles()->attach($role, ['assigned_at' => now()]);
 
+    dump('dump: user has permission through assigned role', [
+        'hasPermission' => $user->fresh()->hasPermission('research.view'),
+        'hasAnyPermission' => $user->fresh()->hasAnyPermission(['research.view', 'research.manage']),
+    ]);
+    
     expect($user->fresh()->hasPermission('research.view'))->toBeTrue()
         ->and($user->fresh()->hasAnyPermission(['research.manage', 'research.view']))->toBeTrue();
 });

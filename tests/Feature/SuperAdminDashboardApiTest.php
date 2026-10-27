@@ -132,8 +132,8 @@ test('super admin dashboard api returns database metrics and safe recent records
     $inactiveAgency = superAdminDashboardAgency('inactive-dashboard-agency', 'inactive');
     $agencyAdmin = superAdminDashboardUser('agency_admin', $activeAgency);
     $superAdmin = superAdminDashboardUser('super_admin');
-    $publicUser = superAdminDashboardUser('public_user');
-    $publicUser->forceFill(['two_factor_confirmed_at' => now()])->save();
+    $nonAdminUser = superAdminDashboardUser('unprivileged_user');
+    $nonAdminUser->forceFill(['two_factor_confirmed_at' => now()])->save();
 
     $draft = superAdminDashboardResearch($activeAgency, $agencyAdmin, 'draft');
     superAdminDashboardResearch($activeAgency, $agencyAdmin, 'submitted');

@@ -139,7 +139,7 @@ test('super admin can view all agencies and research', function () {
 });
 
 test('user without required role receives forbidden response', function () {
-    $user = createProtectedApiUser('public_user');
+    $user = createProtectedApiUser('unprivileged_user');
 
     $this->actingAs($user)
         ->getJson('/api/admin/dashboard')

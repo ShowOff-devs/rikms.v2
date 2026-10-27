@@ -337,8 +337,8 @@ test('super admin session revocation is scoped to admin sessions and safe storag
     $agency = portalAuditAgency('admin-session-revoke-agency');
     $superAdmin = portalAuditUser('super_admin');
     $agencyAdmin = portalAuditUser('agency_admin', $agency);
-    $publicUser = User::factory()->create([
-        'role' => 'public_user',
+    $nonAdminUser = User::factory()->create([
+        'role' => 'unprivileged_user',
         'status' => 'active',
     ]);
 
@@ -353,7 +353,7 @@ test('super admin session revocation is scoped to admin sessions and safe storag
         ],
         [
             'id' => 'public-session',
-            'user_id' => $publicUser->id,
+            'user_id' => $nonAdminUser->id,
             'ip_address' => '127.0.0.1',
             'user_agent' => 'Mozilla/5.0 Firefox Windows',
             'payload' => '',

@@ -251,7 +251,6 @@ test('access monitoring tracks independent audits and safely revokes overridden 
 test('rbac writes assign remove permissions and protect the last super admin', function () {
     $superRole = createPhase8Role('super_admin');
     $agencyRole = createPhase8Role('agency_admin');
-    $publicRole = createPhase8Role('public_user');
     $editableRole = Role::query()->create([
         'name' => 'Phase 8 Reviewer',
         'slug' => 'phase_8_reviewer',
@@ -286,11 +285,11 @@ test('rbac writes assign remove permissions and protect the last super admin', f
     expect(AuditLog::query()->where('event', 'rbac.permissions.updated')->exists())->toBeTrue();
 
     $this->actingAs($superAdmin)
-        ->putJson("/api/admin/rbac/users/{$secondSuperAdmin->id}/role", ['role_id' => $publicRole->id])
+        ->putJson("/api/admin/rbac/users/{$secondSuperAdmin->id}/role", ['role_id' => $editableRole->id])
         ->assertOk();
 
     $this->actingAs($superAdmin)
-        ->putJson("/api/admin/rbac/users/{$superAdmin->id}/role", ['role_id' => $publicRole->id])
+        ->putJson("/api/admin/rbac/users/{$superAdmin->id}/role", ['role_id' => $editableRole->id])
         ->assertUnprocessable();
 });
 

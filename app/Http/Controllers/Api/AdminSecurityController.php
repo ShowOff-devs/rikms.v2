@@ -246,7 +246,7 @@ class AdminSecurityController extends Controller
                 ->where(function (Builder $query): void {
                     $query->whereIn('roles.slug', ['super_admin', 'agency_admin'])
                         ->orWhere(function (Builder $query): void {
-                            $query->whereNotIn('roles.slug', ['agency_admin', 'public_user'])
+                            $query->where('roles.slug', '!=', 'agency_admin')
                                 ->whereHas('permissions');
                         });
                 }));

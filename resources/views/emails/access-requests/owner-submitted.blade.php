@@ -23,7 +23,7 @@ Message: {{ $data['message'] }}
 Review Access Request
 </x-mail::button>
 
-The research owner email remains hidden from public users. This message was sent internally by RIKMS according to the notification preferences saved with the research record.
+The research owner email remains hidden from visitors. This message was sent internally by RIKMS according to the notification preferences saved with the research record.
 
 This is an automated notification from RIKMS.
 </x-mail::message>

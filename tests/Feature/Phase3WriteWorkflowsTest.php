@@ -137,7 +137,7 @@ test('real admin login session can access authenticated api user endpoint', func
 });
 
 test('authenticated users without agency write role receive forbidden response', function () {
-    $user = createPhase3User('public_user');
+    $user = createPhase3User('unprivileged_user');
 
     $this->actingAs($user)
         ->postJson('/api/agency/research', ['title' => 'Forbidden Draft'])
@@ -536,11 +536,9 @@ test('invalid upload file type is rejected and cross agency upload is forbidden'
 test('agency admin can approve and deny pending access requests for own agency', function () {
     $agency = createPhase3Agency('decision-agency');
     $user = createPhase3User('agency_admin', $agency);
-    $requester = createPhase3User('public_user');
     $research = createPhase3Research($agency, $user, 'published');
     $approveRequest = AccessRequest::create([
         'research_id' => $research->id,
-        'requested_by' => $requester->id,
         'agency_id' => $agency->id,
         'requester_name' => 'Public Researcher',
         'requester_email' => 'public@example.test',

@@ -30,7 +30,7 @@ class UserFactory extends Factory
                 [
                     'name' => str($user->role)->replace('_', ' ')->title(),
                     'display_name' => str($user->role)->replace('_', ' ')->title(),
-                    'is_system' => in_array($user->role, ['super_admin', 'agency_admin', 'public_user'], true),
+                    'is_system' => in_array($user->role, ['super_admin', 'agency_admin'], true),
                     'is_active' => true,
                 ],
             );

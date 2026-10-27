@@ -56,7 +56,7 @@ class ResearchContactNotificationService
                 'agency_id' => $research->agency_id,
                 'type' => 'access_request.submitted',
                 'title' => 'New access request',
-                'message' => 'A public user requested access to a research record.',
+                'message' => 'A visitor requested access to a research record.',
                 'data' => [
                     'research_id' => $research->id,
                     'access_request_id' => $accessRequest->id,
