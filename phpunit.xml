@@ -24,27 +24,49 @@
         </exclude>
     </source>
     <php>
-        <env name="APP_ENV" value="testing"/>
-        <env name="APP_MAINTENANCE_DRIVER" value="file"/>
-        <env name="BCRYPT_ROUNDS" value="4"/>
-        <env name="BROADCAST_CONNECTION" value="null"/>
-        <env name="CACHE_STORE" value="array"/>
-        <env name="DB_CONNECTION" value="sqlite"/>
-        <env name="DB_DATABASE" value=":memory:"/>
-        <env name="DB_URL" value=""/>
-        <env name="MAIL_MAILER" value="array"/>
-        <env name="MALWARE_SCANNER" value="fake"/>
+        <env name="APP_ENV" value="testing" force="true"/>
+        <env name="APP_DEBUG" value="false" force="true"/>
+        <env name="APP_URL" value="http://127.0.0.1" force="true"/>
+        <env name="APP_KEY" value="base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" force="true"/>
+        <env name="APP_MAINTENANCE_DRIVER" value="file" force="true"/>
+        <env name="BCRYPT_ROUNDS" value="4" force="true"/>
+        <env name="BROADCAST_CONNECTION" value="null" force="true"/>
+        <env name="CACHE_STORE" value="array" force="true"/>
+        <env name="DB_CONNECTION" value="sqlite" force="true"/>
+        <env name="DB_DATABASE" value=":memory:" force="true"/>
+        <env name="DB_URL" value="" force="true"/>
+        <env name="MAIL_MAILER" value="array" force="true"/>
+        <env name="MALWARE_SCANNER" value="fake" force="true"/>
         <!-- Preserve the single-disk test harness; focused tests cover cross-disk promotion. -->
-        <env name="UPLOAD_QUARANTINE_DISK" value="local"/>
-        <env name="UPLOAD_STORAGE_DISK" value="local"/>
-        <env name="QUEUE_CONNECTION" value="sync"/>
-        <env name="SESSION_DRIVER" value="array"/>
-        <env name="PULSE_ENABLED" value="false"/>
-        <env name="PUBLIC_ACCESS_REQUESTS_ENABLED" value="true"/>
-        <env name="PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED" value="false"/>
-        <env name="VITE_PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED" value="false"/>
-        <env name="RIKMS_ALLOW_DEV_SEED_ACCOUNTS" value="true"/>
-        <env name="TELESCOPE_ENABLED" value="false"/>
-        <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <env name="UPLOAD_QUARANTINE_DISK" value="local" force="true"/>
+        <env name="UPLOAD_STORAGE_DISK" value="local" force="true"/>
+        <env name="QUEUE_CONNECTION" value="sync" force="true"/>
+        <env name="SESSION_DRIVER" value="array" force="true"/>
+        <env name="SESSION_ENCRYPT" value="true" force="true"/>
+        <env name="SESSION_SECURE_COOKIE" value="true" force="true"/>
+        <env name="SESSION_HTTP_ONLY" value="true" force="true"/>
+        <env name="SESSION_SAME_SITE" value="lax" force="true"/>
+        <env name="SESSION_DOMAIN" value="" force="true"/>
+        <env name="SESSION_PATH" value="/" force="true"/>
+        <env name="MONGODB_URI" value="" force="true"/>
+        <env name="MONGODB_DATABASE" value="rikms_test" force="true"/>
+        <env name="INFRA_REQUIRE_MONGODB" value="false" force="true"/>
+        <env name="DB_HOST" value="127.0.0.1" force="true"/>
+        <env name="DB_PORT" value="3306" force="true"/>
+        <env name="DB_USERNAME" value="rikms_test" force="true"/>
+        <env name="DB_PASSWORD" value="test-only-not-a-secret" force="true"/>
+        <env name="DB_SOCKET" value="" force="true"/>
+        <env name="REDIS_URL" value="" force="true"/>
+        <env name="REDIS_HOST" value="127.0.0.1" force="true"/>
+        <env name="REDIS_PORT" value="6379" force="true"/>
+        <env name="REDIS_USERNAME" value="" force="true"/>
+        <env name="REDIS_PASSWORD" value="null" force="true"/>
+        <env name="PULSE_ENABLED" value="false" force="true"/>
+        <env name="PUBLIC_ACCESS_REQUESTS_ENABLED" value="true" force="true"/>
+        <env name="PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED" value="false" force="true"/>
+        <env name="VITE_PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED" value="false" force="true"/>
+        <env name="RIKMS_ALLOW_DEV_SEED_ACCOUNTS" value="true" force="true"/>
+        <env name="TELESCOPE_ENABLED" value="false" force="true"/>
+        <env name="NIGHTWATCH_ENABLED" value="false" force="true"/>
     </php>
 </phpunit>

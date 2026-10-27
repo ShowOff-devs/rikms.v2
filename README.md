@@ -109,6 +109,8 @@ CSP is centralized in `config/security_headers.php`: local/testing is configurab
 
 ## Quality and security commands
 
+Module 01 deployment QA, opt-in live checks, reports, and sign-off requirements are documented in [docs/QA_MODULE_01.md](docs/QA_MODULE_01.md).
+
 Use the script names committed in this repository:
 
 ```bash
