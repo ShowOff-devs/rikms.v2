@@ -5,6 +5,8 @@
 /public/hot
 /public/storage
 /storage/*.key
+/storage/logs/module01-qa/
+/storage/logs/module01-ci/
 /storage/pail
 /resources/js/actions
 /resources/js/routes

@@ -123,8 +123,20 @@ jobs:
       - name: Build Assets
         run: npm run build
 
+      - name: Module 01 application QA and reports
+        run: php artisan rikms:module01-qa --output-dir=storage/logs/module01-ci
+
       - name: Tests
         run: ./vendor/bin/pest
+
+      - name: Upload Module 01 QA reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: module01-qa-php-${{ matrix.php-version }}
+          path: storage/logs/module01-ci/*
+          if-no-files-found: warn
+          retention-days: 14
 
   coverage-baseline:
     runs-on: ubuntu-latest
