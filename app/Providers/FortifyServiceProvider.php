@@ -107,6 +107,11 @@ class FortifyServiceProvider extends ServiceProvider
 
         Fortify::requestPasswordResetLinkView(fn (Request $request) => Inertia::render('auth/forgot-password', [
             'status' => $request->session()->get('status'),
+            'turnstile' => [
+                'enabled' => config('rikms.turnstile.enabled') === true,
+                'siteKey' => (string) config('rikms.turnstile.site_key'),
+                'action' => (string) config('rikms.turnstile.actions.password_reset'),
+            ],
         ]));
 
         Fortify::verifyEmailView(fn (Request $request) => Inertia::render('auth/verify-email', [

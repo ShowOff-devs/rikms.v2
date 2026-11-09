@@ -3,6 +3,7 @@ import { CheckCircle2, Mail } from 'lucide-react';
 import { useState } from 'react';
 import AlertError from '@/components/alert-error';
 import InputError from '@/components/input-error';
+import TurnstileWidget from '@/components/public/turnstile-widget';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,18 +16,22 @@ import {
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { requestAgencyPasswordReset } from '@/lib/auth/agency-auth';
-import type { AgencyOption } from '@/types/auth';
+import type { AgencyOption, TurnstileConfiguration } from '@/types/auth';
 
-type ForgotPasswordErrors = Partial<Record<'agencyId' | 'email', string>>;
+type ForgotPasswordErrors = Partial<
+    Record<'agencyId' | 'email' | 'captchaToken', string>
+>;
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type AgencyForgotPasswordFormProps = {
     agencies: AgencyOption[];
+    turnstile: TurnstileConfiguration;
 };
 
 export default function AgencyForgotPasswordForm({
     agencies,
+    turnstile,
 }: AgencyForgotPasswordFormProps) {
     const [agencyId, setAgencyId] = useState('');
     const [email, setEmail] = useState('');
@@ -34,6 +39,9 @@ export default function AgencyForgotPasswordForm({
     const [statusMessage, setStatusMessage] = useState<string | null>(null);
     const [requestError, setRequestError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [captchaToken, setCaptchaToken] = useState('');
+    const [captchaError, setCaptchaError] = useState('');
+    const [captchaResetKey, setCaptchaResetKey] = useState(0);
 
     const validate = () => {
         const nextErrors: ForgotPasswordErrors = {};
@@ -50,6 +58,10 @@ export default function AgencyForgotPasswordForm({
             nextErrors.email = 'Email address is required.';
         } else if (!emailPattern.test(email.trim())) {
             nextErrors.email = 'Enter a valid agency email address.';
+        }
+
+        if (turnstile.enabled && !captchaToken) {
+            nextErrors.captchaToken = 'Complete the security verification.';
         }
 
         setErrors(nextErrors);
@@ -72,10 +84,13 @@ export default function AgencyForgotPasswordForm({
             const response = await requestAgencyPasswordReset({
                 agencyId,
                 email,
+                captchaToken,
             });
 
             setStatusMessage(response.message);
         } catch (error) {
+            setCaptchaToken('');
+            setCaptchaResetKey((current) => current + 1);
             setRequestError(
                 error instanceof Error
                     ? error.message
@@ -179,9 +194,37 @@ export default function AgencyForgotPasswordForm({
                     <InputError message={errors.email} />
                 </div>
 
+                {turnstile.enabled ? (
+                    <div>
+                        <TurnstileWidget
+                            id="agency-password-reset-turnstile"
+                            enabled
+                            siteKey={turnstile.siteKey}
+                            action={turnstile.action}
+                            resetKey={captchaResetKey}
+                            onTokenChange={(token) => {
+                                setCaptchaToken(token);
+                                setErrors((current) => ({
+                                    ...current,
+                                    captchaToken: undefined,
+                                }));
+                            }}
+                            onError={setCaptchaError}
+                        />
+                        <InputError
+                            message={errors.captchaToken || captchaError}
+                        />
+                    </div>
+                ) : null}
+
                 <Button
                     type="submit"
-                    disabled={isSubmitting || agencies.length === 0}
+                    disabled={
+                        isSubmitting ||
+                        agencies.length === 0 ||
+                        (turnstile.enabled &&
+                            (!turnstile.siteKey || !captchaToken))
+                    }
                     className="h-12 w-full rounded-[10px] bg-[#1e3a8a] text-base font-semibold text-white hover:bg-[#1b347b]"
                 >
                     {isSubmitting ? <Spinner /> : <Mail className="size-4.5" />}

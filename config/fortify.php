@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\ThrottlePasswordResetRequests;
+use App\Http\Middleware\VerifyTurnstileFortifyRequests;
 use Laravel\Fortify\Features;
 
 return [
@@ -102,7 +103,7 @@ return [
     |
     */
 
-    'middleware' => ['web', ThrottlePasswordResetRequests::class],
+    'middleware' => ['web', ThrottlePasswordResetRequests::class, VerifyTurnstileFortifyRequests::class],
 
     /*
     |--------------------------------------------------------------------------

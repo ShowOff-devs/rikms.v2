@@ -5,20 +5,14 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Public\StorePublicContactRequest;
 use App\Notifications\PublicContactInquiryNotification;
-use App\Services\PublicAccessRequestCaptchaVerifier;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class PublicContactController extends Controller
 {
-    public function __construct(
-        private readonly PublicAccessRequestCaptchaVerifier $captcha,
-    ) {}
-
     public function store(StorePublicContactRequest $request): JsonResponse
     {
         $supportEmail = trim((string) config('rikms.public_contact.support_email'));
@@ -29,12 +23,6 @@ class PublicContactController extends Controller
                 ['code' => 'PUBLIC_CONTACT_UNAVAILABLE'],
                 503,
             );
-        }
-
-        if (! $this->captcha->verify($request, 'rikms.public_contact.captcha')) {
-            throw ValidationException::withMessages([
-                'captcha_token' => ['We could not verify the submission. Please try again.'],
-            ]);
         }
 
         $inquiry = $request->safe()->except(['website', 'captcha_token']);

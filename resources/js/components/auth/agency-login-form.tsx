@@ -4,6 +4,7 @@ import { useState } from 'react';
 import AlertError from '@/components/alert-error';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
+import TurnstileWidget from '@/components/public/turnstile-widget';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -17,10 +18,10 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { sessionExpiredMessageFromLocation } from '@/lib/api-client';
 import { signInToAgencyPortal } from '@/lib/auth/agency-auth';
-import type { AgencyOption } from '@/types/auth';
+import type { AgencyOption, TurnstileConfiguration } from '@/types/auth';
 
 type AgencyLoginFieldErrors = Partial<
-    Record<'agencyId' | 'email' | 'password', string>
+    Record<'agencyId' | 'email' | 'password' | 'captchaToken', string>
 >;
 
 type AgencyLoginFormState = {
@@ -36,9 +37,13 @@ const dostSeal = '/assets/figma/dost-xi-logo.png';
 
 type AgencyLoginFormProps = {
     agencies: AgencyOption[];
+    turnstile: TurnstileConfiguration;
 };
 
-export default function AgencyLoginForm({ agencies }: AgencyLoginFormProps) {
+export default function AgencyLoginForm({
+    agencies,
+    turnstile,
+}: AgencyLoginFormProps) {
     const [form, setForm] = useState<AgencyLoginFormState>({
         agencyId: '',
         email: '',
@@ -50,6 +55,9 @@ export default function AgencyLoginForm({ agencies }: AgencyLoginFormProps) {
         sessionExpiredMessageFromLocation,
     );
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [captchaToken, setCaptchaToken] = useState('');
+    const [captchaError, setCaptchaError] = useState('');
+    const [captchaResetKey, setCaptchaResetKey] = useState(0);
 
     const selectedAgency = agencies.find(
         (agency) => agency.id === form.agencyId,
@@ -84,6 +92,10 @@ export default function AgencyLoginForm({ agencies }: AgencyLoginFormProps) {
             nextErrors.password = 'Password is required.';
         }
 
+        if (turnstile.enabled && !captchaToken) {
+            nextErrors.captchaToken = 'Complete the security verification.';
+        }
+
         setErrors(nextErrors);
 
         return Object.keys(nextErrors).length === 0;
@@ -105,10 +117,13 @@ export default function AgencyLoginForm({ agencies }: AgencyLoginFormProps) {
                 email: form.email,
                 password: form.password,
                 remember: form.remember,
+                captchaToken,
             });
 
             router.visit(session.redirect ?? '/agency/dashboard');
         } catch (error) {
+            setCaptchaToken('');
+            setCaptchaResetKey((current) => current + 1);
             setSubmissionError(
                 error instanceof Error
                     ? error.message
@@ -262,9 +277,37 @@ export default function AgencyLoginForm({ agencies }: AgencyLoginFormProps) {
                     </Link>
                 </div>
 
+                {turnstile.enabled ? (
+                    <div>
+                        <TurnstileWidget
+                            id="agency-login-turnstile"
+                            enabled
+                            siteKey={turnstile.siteKey}
+                            action={turnstile.action}
+                            resetKey={captchaResetKey}
+                            onTokenChange={(token) => {
+                                setCaptchaToken(token);
+                                setErrors((current) => ({
+                                    ...current,
+                                    captchaToken: undefined,
+                                }));
+                            }}
+                            onError={setCaptchaError}
+                        />
+                        <InputError
+                            message={errors.captchaToken || captchaError}
+                        />
+                    </div>
+                ) : null}
+
                 <Button
                     type="submit"
-                    disabled={isSubmitting || agencies.length === 0}
+                    disabled={
+                        isSubmitting ||
+                        agencies.length === 0 ||
+                        (turnstile.enabled &&
+                            (!turnstile.siteKey || !captchaToken))
+                    }
                     className="mt-1 h-12 w-full rounded-[10px] bg-[#1e3a8a] text-base font-semibold text-white shadow-sm transition-colors hover:bg-[#1b347b] focus-visible:ring-2 focus-visible:ring-[#1e3a8a]/25"
                 >
                     {isSubmitting ? <Spinner /> : null}

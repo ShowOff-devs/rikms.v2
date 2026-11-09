@@ -134,6 +134,7 @@ export async function signInToAgencyPortal(payload: AgencyLoginPayload) {
             email: normalizedEmail,
             password: payload.password,
             remember: payload.remember,
+            captcha_token: payload.captchaToken,
         }),
     }).then(async (response) => {
         const body = (await response.json().catch(() => ({}))) as
@@ -197,6 +198,7 @@ export async function requestAgencyPasswordReset(
         body: JSON.stringify({
             agency: payload.agencyId,
             email: payload.email.trim().toLowerCase(),
+            captcha_token: payload.captchaToken,
         }),
     });
 

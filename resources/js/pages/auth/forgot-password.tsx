@@ -1,7 +1,9 @@
 // Components
 import { Form, Head } from '@inertiajs/react';
 import { LoaderCircle } from 'lucide-react';
+import { useState } from 'react';
 import InputError from '@/components/input-error';
+import TurnstileWidget from '@/components/public/turnstile-widget';
 import TextLink from '@/components/text-link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,8 +11,19 @@ import { Label } from '@/components/ui/label';
 import AuthLayout from '@/layouts/auth-layout';
 import { login } from '@/routes';
 import { email } from '@/routes/password';
+import type { TurnstileConfiguration } from '@/types/auth';
 
-export default function ForgotPassword({ status }: { status?: string }) {
+export default function ForgotPassword({
+    status,
+    turnstile,
+}: {
+    status?: string;
+    turnstile: TurnstileConfiguration;
+}) {
+    const [captchaToken, setCaptchaToken] = useState('');
+    const [captchaError, setCaptchaError] = useState('');
+    const [captchaResetKey, setCaptchaResetKey] = useState(0);
+
     return (
         <AuthLayout
             title="Forgot your password?"
@@ -28,7 +41,13 @@ export default function ForgotPassword({ status }: { status?: string }) {
             )}
 
             <div className="space-y-6">
-                <Form {...email.form()}>
+                <Form
+                    {...email.form()}
+                    onError={() => {
+                        setCaptchaToken('');
+                        setCaptchaResetKey((current) => current + 1);
+                    }}
+                >
                     {({ processing, errors }) => (
                         <>
                             <div className="grid gap-2">
@@ -45,10 +64,39 @@ export default function ForgotPassword({ status }: { status?: string }) {
                                 <InputError message={errors.email} />
                             </div>
 
+                            <input
+                                type="hidden"
+                                name="captcha_token"
+                                value={captchaToken}
+                            />
+                            {turnstile.enabled ? (
+                                <div>
+                                    <TurnstileWidget
+                                        id="password-reset-turnstile"
+                                        enabled
+                                        siteKey={turnstile.siteKey}
+                                        action={turnstile.action}
+                                        resetKey={captchaResetKey}
+                                        onTokenChange={setCaptchaToken}
+                                        onError={setCaptchaError}
+                                    />
+                                    <InputError
+                                        message={
+                                            errors.captcha_token || captchaError
+                                        }
+                                    />
+                                </div>
+                            ) : null}
+
                             <div className="my-6 flex items-center justify-start">
                                 <Button
                                     className="w-full"
-                                    disabled={processing}
+                                    disabled={
+                                        processing ||
+                                        (turnstile.enabled &&
+                                            (!turnstile.siteKey ||
+                                                !captchaToken))
+                                    }
                                     data-test="email-password-reset-link-button"
                                 >
                                     {processing && (

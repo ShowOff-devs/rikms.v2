@@ -55,6 +55,8 @@ class SecurityEventLogger
             $metadata['code'],
             $metadata['recovery_code'],
             $metadata['_token'],
+            $metadata['captcha_token'],
+            $metadata['cf-turnstile-response'],
         );
 
         return array_filter([

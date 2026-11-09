@@ -268,11 +268,11 @@ class AppServiceProvider extends ServiceProvider
         $frontendCaptchaEnabled = config('rikms.public_access_requests.captcha.frontend_enabled') === true;
 
         if (! $captchaEnabled) {
-            $violations[] = 'PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED must be true';
+            $violations[] = 'TURNSTILE_ENABLED must be true';
         }
 
         if ($frontendCaptchaEnabled !== $captchaEnabled) {
-            $violations[] = 'VITE_PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED must match PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED';
+            $violations[] = 'Turnstile frontend and backend configuration must match';
         }
 
         if (config('rikms.public_access_requests.captcha.provider') !== 'turnstile') {
@@ -280,26 +280,26 @@ class AppServiceProvider extends ServiceProvider
         }
 
         if (trim((string) config('rikms.public_access_requests.captcha.site_key')) === '') {
-            $violations[] = 'VITE_CAPTCHA_SITE_KEY must be configured';
+            $violations[] = 'TURNSTILE_SITE_KEY must be configured';
         }
 
         if (trim((string) config('rikms.public_access_requests.captcha.secret_key')) === '') {
-            $violations[] = 'CAPTCHA_SECRET_KEY must be configured';
+            $violations[] = 'TURNSTILE_SECRET_KEY must be configured';
         }
 
         if ((float) config('rikms.public_access_requests.captcha.timeout_seconds') <= 0) {
-            $violations[] = 'CAPTCHA_VERIFY_TIMEOUT_SECONDS must be greater than zero';
+            $violations[] = 'TURNSTILE_TIMEOUT_SECONDS must be greater than zero';
         }
 
         $captchaHostnames = config('rikms.public_access_requests.captcha.allowed_hostnames', []);
 
         if (! is_array($captchaHostnames) || $captchaHostnames === []) {
-            $violations[] = 'CAPTCHA_ALLOWED_HOSTNAMES must contain at least one hostname';
+            $violations[] = 'TURNSTILE_EXPECTED_HOSTNAMES must contain at least one hostname';
         } else {
             foreach ($captchaHostnames as $captchaHostname) {
                 if (! is_string($captchaHostname)
                     || filter_var($captchaHostname, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) === false) {
-                    $violations[] = 'CAPTCHA_ALLOWED_HOSTNAMES must contain only valid hostnames';
+                    $violations[] = 'TURNSTILE_EXPECTED_HOSTNAMES must contain only valid hostnames';
                     break;
                 }
             }

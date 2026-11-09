@@ -14,6 +14,7 @@ use App\Http\Middleware\EnsureUserHasPermission;
 use App\Http\Middleware\EnsureUserHasRole;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\VerifyTurnstile;
 use App\Support\ApiResponse;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
@@ -46,6 +47,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => EnsureUserHasPermission::class,
             'role' => EnsureUserHasRole::class,
             'super_admin.2fa' => EnsureSuperAdminHasTwoFactor::class,
+            'turnstile' => VerifyTurnstile::class,
         ]);
 
         $middleware->web(append: [
