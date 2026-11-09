@@ -8,19 +8,16 @@ use App\Http\Requests\Public\StorePublicAccessRequestRequest;
 use App\Http\Resources\AccessRequestResource;
 use App\Models\Research;
 use App\Services\PlatformSettingsService;
-use App\Services\PublicAccessRequestCaptchaVerifier;
 use App\Services\PublicAccessRequestSubmissionService;
 use App\Support\ApiResponse;
 use App\Support\Statuses;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Validation\ValidationException;
 
 class PublicAccessRequestController extends Controller
 {
     public function __construct(
         private readonly PublicAccessRequestSubmissionService $submissions,
-        private readonly PublicAccessRequestCaptchaVerifier $captcha,
         private readonly PlatformSettingsService $settings,
     ) {}
 
@@ -53,12 +50,6 @@ class PublicAccessRequestController extends Controller
 
         if (! $this->requiresAccessRequest($researchRecord)) {
             return ApiResponse::error('This research record does not require an access request.', [], 422);
-        }
-
-        if (! $this->captcha->verify($request)) {
-            throw ValidationException::withMessages([
-                'captcha_token' => ['We could not verify the submission. Please try again.'],
-            ]);
         }
 
         try {

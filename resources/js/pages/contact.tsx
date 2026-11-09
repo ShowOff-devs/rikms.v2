@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiError } from '@/lib/api-client';
 import { submitPublicContactInquiry } from '@/lib/public/contact-service';
+import type { TurnstileConfiguration } from '@/types/auth';
 
 const concernOptions = [
     { value: 'general_inquiry', label: 'General Inquiry' },
@@ -35,15 +36,10 @@ const validConcernTypes = new Set<string>(
     concernOptions.map((option) => option.value),
 );
 
-const captchaEnabled =
-    import.meta.env.VITE_PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED === 'true';
-const captchaSiteKey = import.meta.env.VITE_CAPTCHA_SITE_KEY as
-    | string
-    | undefined;
-
 type ContactPageProps = {
     contactEnabled?: boolean;
     supportEmail?: string | null;
+    turnstile: TurnstileConfiguration;
 };
 
 type ContactForm = {
@@ -73,7 +69,10 @@ type FieldErrors = Partial<Record<keyof ContactForm | 'captchaToken', string>>;
 export default function HelpSupportPage({
     contactEnabled = false,
     supportEmail = null,
+    turnstile,
 }: ContactPageProps) {
+    const captchaEnabled = turnstile.enabled;
+    const captchaSiteKey = turnstile.siteKey;
     const [form, setForm] = useState<ContactForm>(emptyForm);
     const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
     const [submissionError, setSubmissionError] = useState<string | null>(null);
@@ -629,7 +628,7 @@ export default function HelpSupportPage({
                                         id="public-contact-captcha"
                                         enabled
                                         siteKey={captchaSiteKey}
-                                        action="public_contact"
+                                        action={turnstile.action}
                                         resetKey={captchaResetKey}
                                         onTokenChange={setCaptchaToken}
                                         onError={setCaptchaError}

@@ -35,11 +35,19 @@ export type AgencyLoginPayload = {
     email: string;
     password: string;
     remember: boolean;
+    captchaToken?: string;
 };
 
 export type AgencyPasswordResetPayload = {
     agencyId: string;
     email: string;
+    captchaToken?: string;
+};
+
+export type TurnstileConfiguration = {
+    enabled: boolean;
+    siteKey: string;
+    action: string;
 };
 
 export type AgencyAuthSession = {

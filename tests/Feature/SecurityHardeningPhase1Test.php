@@ -119,11 +119,11 @@ test('testing environment resolves only the explicit fake malware scanner', func
 });
 
 test('turnstile frontend and backend use the same fixed action', function () {
-    $expectedAction = (string) config('rikms.public_access_requests.captcha.expected_action');
+    $expectedAction = (string) config('rikms.turnstile.actions.public_access_request');
     $frontend = file_get_contents(resource_path('js/pages/research/show.tsx'));
 
     expect($expectedAction)->toBe('public_access_request')
-        ->and($frontend)->toContain("action=\"{$expectedAction}\"");
+        ->and($frontend)->toContain('action={turnstile.action}');
 });
 
 test('deployed environments reject unsafe security service configuration', function (array $override, string $violation) {
@@ -196,8 +196,8 @@ test('deployed environments reject unsafe security service configuration', funct
     'csp staging evidence missing' => [['security_headers.csp.production_validated' => false], 'CSP_PRODUCTION_VALIDATED must be true before production enforcement'],
     'csp report endpoint missing' => [['security_headers.csp.report_uri' => ''], 'CSP_REPORT_URI must be configured'],
     'internal csp collector disabled' => [['security_headers.csp.collector.enabled' => false], 'CSP_REPORT_COLLECTOR_ENABLED must be true for the internal report URI'],
-    'missing captcha hostname allowlist' => [['rikms.public_access_requests.captcha.allowed_hostnames' => []], 'CAPTCHA_ALLOWED_HOSTNAMES must contain at least one hostname'],
-    'invalid captcha hostname allowlist' => [['rikms.public_access_requests.captcha.allowed_hostnames' => ['https://rikms.example.test']], 'CAPTCHA_ALLOWED_HOSTNAMES must contain only valid hostnames'],
+    'missing captcha hostname allowlist' => [['rikms.public_access_requests.captcha.allowed_hostnames' => []], 'TURNSTILE_EXPECTED_HOSTNAMES must contain at least one hostname'],
+    'invalid captcha hostname allowlist' => [['rikms.public_access_requests.captcha.allowed_hostnames' => ['https://rikms.example.test']], 'TURNSTILE_EXPECTED_HOSTNAMES must contain only valid hostnames'],
     'monitoring enabled without destination' => [['monitoring.alerts_enabled' => true], 'Monitoring alerts require a valid email recipient or HTTPS webhook'],
     'backup readiness gate disabled' => [['infrastructure.require_backup_ready' => false], 'INFRA_REQUIRE_BACKUP_READY must be true in deployed environments'],
 ]);
@@ -342,20 +342,20 @@ test('deployed environments reject inconsistent captcha configuration', function
     'disabled backend' => [[
         'rikms.public_access_requests.captcha.enabled' => false,
         'rikms.public_access_requests.captcha.frontend_enabled' => false,
-    ], 'PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED must be true'],
+    ], 'TURNSTILE_ENABLED must be true'],
     'mismatched flags' => [[
         'rikms.public_access_requests.captcha.frontend_enabled' => false,
-    ], 'VITE_PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED must match PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED'],
+    ], 'Turnstile frontend and backend configuration must match'],
     'missing public site key' => [[
         'rikms.public_access_requests.captcha.site_key' => '',
-    ], 'VITE_CAPTCHA_SITE_KEY must be configured'],
+    ], 'TURNSTILE_SITE_KEY must be configured'],
     'missing backend secret' => [[
         'rikms.public_access_requests.captcha.secret_key' => '',
-    ], 'CAPTCHA_SECRET_KEY must be configured'],
+    ], 'TURNSTILE_SECRET_KEY must be configured'],
     'missing allowed hostnames' => [[
         'rikms.public_access_requests.captcha.allowed_hostnames' => [],
-    ], 'CAPTCHA_ALLOWED_HOSTNAMES must contain at least one hostname'],
+    ], 'TURNSTILE_EXPECTED_HOSTNAMES must contain at least one hostname'],
     'invalid allowed hostname' => [[
         'rikms.public_access_requests.captcha.allowed_hostnames' => ['rikms.example.test/path'],
-    ], 'CAPTCHA_ALLOWED_HOSTNAMES must contain only valid hostnames'],
+    ], 'TURNSTILE_EXPECTED_HOSTNAMES must contain only valid hostnames'],
 ]);

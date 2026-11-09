@@ -3,6 +3,7 @@ import { AlertTriangle, Eye, EyeOff, LockKeyhole } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { useState } from 'react';
 
+import TurnstileWidget from '@/components/public/turnstile-widget';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -13,19 +14,34 @@ import {
     SESSION_EXPIRED_MESSAGE,
     sessionExpiredMessageFromLocation,
 } from '@/lib/api-client';
+import type { TurnstileConfiguration } from '@/types/auth';
 
 const usepLogo = '/assets/figma/usep-seal.png';
 const dostLogo = '/assets/figma/dost-xi-logo.png';
 
-export default function AdminLoginPage() {
+export default function AdminLoginPage({
+    turnstile,
+}: {
+    turnstile: TurnstileConfiguration;
+}) {
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState<string | null>(
         sessionExpiredMessageFromLocation,
     );
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [captchaToken, setCaptchaToken] = useState('');
+    const [captchaError, setCaptchaError] = useState('');
+    const [captchaResetKey, setCaptchaResetKey] = useState(0);
 
     async function handleSubmit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
+
+        if (turnstile.enabled && !captchaToken) {
+            setCaptchaError('Complete the security verification.');
+
+            return;
+        }
+
         const form = new FormData(event.currentTarget);
 
         setError(null);
@@ -49,6 +65,7 @@ export default function AdminLoginPage() {
                     email: form.get('email'),
                     password: form.get('password'),
                     remember: form.get('remember_device') === 'on',
+                    captcha_token: captchaToken,
                 }),
             });
 
@@ -81,6 +98,8 @@ export default function AdminLoginPage() {
 
             router.visit(body.redirect ?? '/admin/dashboard');
         } catch (caught) {
+            setCaptchaToken('');
+            setCaptchaResetKey((current) => current + 1);
             setError(
                 caught instanceof Error
                     ? caught.message
@@ -207,9 +226,35 @@ export default function AdminLoginPage() {
                         </a>
                     </div>
 
+                    {turnstile.enabled ? (
+                        <div>
+                            <TurnstileWidget
+                                id="super-admin-login-turnstile"
+                                enabled
+                                siteKey={turnstile.siteKey}
+                                action={turnstile.action}
+                                resetKey={captchaResetKey}
+                                onTokenChange={setCaptchaToken}
+                                onError={setCaptchaError}
+                            />
+                            {captchaError ? (
+                                <p
+                                    className="mt-1 text-xs text-[#b91c1c]"
+                                    role="alert"
+                                >
+                                    {captchaError}
+                                </p>
+                            ) : null}
+                        </div>
+                    ) : null}
+
                     <Button
                         type="submit"
-                        disabled={isSubmitting}
+                        disabled={
+                            isSubmitting ||
+                            (turnstile.enabled &&
+                                (!turnstile.siteKey || !captchaToken))
+                        }
                         className="h-12 w-full rounded-[10px] bg-[#1e3a8a] text-base leading-6 font-semibold text-white shadow-[0_1px_1.5px_rgba(0,0,0,0.1),0_1px_1px_rgba(0,0,0,0.1)] hover:bg-[#1d3478]"
                     >
                         <LockKeyhole className="size-4" aria-hidden="true" />

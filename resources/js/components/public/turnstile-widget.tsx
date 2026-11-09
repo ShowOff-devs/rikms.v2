@@ -12,6 +12,7 @@ type TurnstileApi = {
         },
     ) => string;
     reset: (widgetId?: string) => void;
+    remove: (widgetId: string) => void;
 };
 
 declare global {
@@ -40,6 +41,13 @@ export default function TurnstileWidget({
     onError,
 }: TurnstileWidgetProps) {
     const widgetId = useRef<string | null>(null);
+    const onTokenChangeRef = useRef(onTokenChange);
+    const onErrorRef = useRef(onError);
+
+    useEffect(() => {
+        onTokenChangeRef.current = onTokenChange;
+        onErrorRef.current = onError;
+    }, [onError, onTokenChange]);
 
     useEffect(() => {
         if (!enabled || !siteKey) {
@@ -47,8 +55,8 @@ export default function TurnstileWidget({
         }
 
         const reportUnavailable = () => {
-            onTokenChange('');
-            onError(
+            onTokenChangeRef.current('');
+            onErrorRef.current(
                 'Verification is temporarily unavailable. Please try again later.',
             );
         };
@@ -68,18 +76,30 @@ export default function TurnstileWidget({
                 sitekey: siteKey,
                 action,
                 callback: (token) => {
-                    onError('');
-                    onTokenChange(token);
+                    onErrorRef.current('');
+                    onTokenChangeRef.current(token);
                 },
-                'expired-callback': () => onTokenChange(''),
+                'expired-callback': () => {
+                    onTokenChangeRef.current('');
+                    onErrorRef.current(
+                        'Verification expired. Please complete it again.',
+                    );
+                },
                 'error-callback': reportUnavailable,
             });
+        };
+
+        const removeWidget = () => {
+            if (widgetId.current && window.turnstile) {
+                window.turnstile.remove(widgetId.current);
+                widgetId.current = null;
+            }
         };
 
         if (window.turnstile) {
             renderWidget();
 
-            return;
+            return removeWidget;
         }
 
         const existingScript = document.querySelector<HTMLScriptElement>(
@@ -97,6 +117,7 @@ export default function TurnstileWidget({
             return () => {
                 existingScript.removeEventListener('load', renderWidget);
                 existingScript.removeEventListener('error', reportUnavailable);
+                removeWidget();
             };
         }
 
@@ -113,19 +134,26 @@ export default function TurnstileWidget({
         return () => {
             script.removeEventListener('load', renderWidget);
             script.removeEventListener('error', reportUnavailable);
+            removeWidget();
         };
-    }, [action, enabled, id, onError, onTokenChange, siteKey]);
+    }, [action, enabled, id, siteKey]);
 
     useEffect(() => {
         if (resetKey > 0 && widgetId.current && window.turnstile) {
             window.turnstile.reset(widgetId.current);
-            onTokenChange('');
+            onTokenChangeRef.current('');
         }
-    }, [onTokenChange, resetKey]);
+    }, [resetKey]);
 
     if (!enabled || !siteKey) {
         return null;
     }
 
-    return <div id={id} className="min-h-[65px]" />;
+    return (
+        <div
+            id={id}
+            className="min-h-[65px] max-w-full overflow-hidden"
+            aria-label="Security verification"
+        />
+    );
 }

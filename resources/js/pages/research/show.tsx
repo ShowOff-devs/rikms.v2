@@ -20,6 +20,7 @@ import {
     getResearchRecord,
     submitPublicAccessRequest,
 } from '@/lib/research/research-service';
+import type { TurnstileConfiguration } from '@/types/auth';
 import type {
     PublicResearchMetadataField,
     ResearchRecord,
@@ -27,6 +28,7 @@ import type {
 
 type ResearchDetailPageProps = {
     researchId?: string;
+    turnstile: TurnstileConfiguration;
 };
 
 const getResearchIdFromPath = () => {
@@ -52,15 +54,12 @@ const optionalText = (value: string) => {
     return trimmed ? trimmed : undefined;
 };
 
-const captchaEnabled =
-    import.meta.env.VITE_PUBLIC_ACCESS_REQUEST_CAPTCHA_ENABLED === 'true';
-const captchaSiteKey = import.meta.env.VITE_CAPTCHA_SITE_KEY as
-    | string
-    | undefined;
-
 export default function ResearchDetailPage({
     researchId: providedResearchId,
+    turnstile,
 }: ResearchDetailPageProps) {
+    const captchaEnabled = turnstile.enabled;
+    const captchaSiteKey = turnstile.siteKey;
     const researchId = useMemo(
         () => providedResearchId ?? getResearchIdFromPath(),
         [providedResearchId],
@@ -558,7 +557,7 @@ export default function ResearchDetailPage({
                                                 requestOpen && captchaEnabled
                                             }
                                             siteKey={captchaSiteKey}
-                                            action="public_access_request"
+                                            action={turnstile.action}
                                             resetKey={captchaResetKey}
                                             onTokenChange={setCaptchaToken}
                                             onError={setCaptchaError}

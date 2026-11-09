@@ -46,12 +46,12 @@ Route::prefix('public')->middleware('throttle:public-api')->group(function () {
     Route::get('/summary', [PublicResearchController::class, 'summary']);
     Route::get('/research', [PublicResearchController::class, 'index']);
     Route::post('/research/{research}/access-requests', [PublicAccessRequestController::class, 'store'])
-        ->middleware('throttle:public-access-requests');
+        ->middleware(['turnstile:public_access_request', 'throttle:public-access-requests']);
     Route::get('/research/{identifier}/download', [PublicResearchController::class, 'download'])
         ->middleware('throttle:public-downloads');
     Route::get('/research/{identifier}', [PublicResearchController::class, 'show']);
     Route::post('/contact', [PublicContactController::class, 'store'])
-        ->middleware('throttle:public-contact')
+        ->middleware(['turnstile:public_contact', 'throttle:public-contact'])
         ->name('public.contact.store');
     Route::get('/agencies', [PublicAgencyController::class, 'index']);
     Route::get('/agencies/types', [PublicAgencyController::class, 'types']);

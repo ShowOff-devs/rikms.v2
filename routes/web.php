@@ -19,6 +19,11 @@ $agencyLoginOptions = fn (): array => Agency::query()
         'fullName' => $agency->full_name ?: $agency->name,
     ])
     ->all();
+$turnstilePageConfiguration = fn (string $action): array => [
+    'enabled' => config('rikms.turnstile.enabled') === true,
+    'siteKey' => (string) config('rikms.turnstile.site_key'),
+    'action' => (string) config("rikms.turnstile.actions.{$action}"),
+];
 
 Route::inertia('/', 'welcome', [
     'canRegister' => Features::enabled(Features::registration()),
@@ -27,6 +32,7 @@ Route::inertia('/browse-research', 'browse-research')->name('browse-research');
 Route::redirect('/browse', '/browse-research')->name('browse');
 Route::get('/browse-research/{research}', fn (string $research) => Inertia::render('research/show', [
     'researchId' => $research,
+    'turnstile' => $turnstilePageConfiguration('public_access_request'),
 ]))->name('research.show');
 Route::get('/research/{research}', fn (string $research) => redirect()->route('research.show', $research));
 Route::inertia('/about', 'about')->name('about');
@@ -37,6 +43,7 @@ Route::get('/agencies/{slug}', fn (string $slug) => Inertia::render('agencies/sh
 Route::get('/help', fn () => Inertia::render('contact', [
     'contactEnabled' => (bool) config('rikms.public_contact.enabled'),
     'supportEmail' => trim((string) config('rikms.public_contact.support_email')) ?: null,
+    'turnstile' => $turnstilePageConfiguration('public_contact'),
 ]))->name('help');
 Route::permanentRedirect('/contact', '/help')->name('contact');
 Route::get('/approved-access/{token}', [ApprovedAccessController::class, 'show'])
@@ -52,7 +59,7 @@ Route::inertia('/submission-guidelines', 'policies/submission-guidelines')->name
 Route::get('/login', function () {
     return redirect()->route('agency.login');
 })->name('login');
-Route::get('/agency/login', function (Request $request) use ($agencyLoginOptions) {
+Route::get('/agency/login', function (Request $request) use ($agencyLoginOptions, $turnstilePageConfiguration) {
     $user = $request->user();
 
     if ($user?->isAgencyAdmin()) {
@@ -65,11 +72,15 @@ Route::get('/agency/login', function (Request $request) use ($agencyLoginOptions
 
     return Inertia::render('agency/login', [
         'agencies' => $agencyLoginOptions(),
+        'turnstile' => $turnstilePageConfiguration('agency_login'),
     ]);
 })->name('agency.login');
-Route::post('/agency/login', [AuthenticatedSessionController::class, 'store'])->name('agency.login.store');
+Route::post('/agency/login', [AuthenticatedSessionController::class, 'store'])
+    ->middleware('turnstile:agency_login')
+    ->name('agency.login.store');
 Route::get('/agency/forgot-password', fn () => Inertia::render('agency/forgot-password', [
     'agencies' => $agencyLoginOptions(),
+    'turnstile' => $turnstilePageConfiguration('password_reset'),
 ]))->name('agency.forgot-password');
 Route::middleware(['auth', 'verified', 'role:agency_admin', 'agency.scope'])->group(function () {
     Route::inertia('/agency/dashboard', 'agency/dashboard')->name('agency.dashboard');
@@ -106,8 +117,8 @@ Route::middleware(['auth', 'verified', 'role:agency_admin', 'agency.scope'])->gr
     Route::inertia('/agency/upload/project-accomplishment', 'agency/upload/project-accomplishment')->name('agency.upload.project-accomplishment');
 });
 
-Route::prefix('admin')->name('admin.')->group(function () {
-    Route::get('/login', function (Request $request) {
+Route::prefix('admin')->name('admin.')->group(function () use ($turnstilePageConfiguration) {
+    Route::get('/login', function (Request $request) use ($turnstilePageConfiguration) {
         $user = $request->user();
 
         if ($user?->isSuperAdmin()) {
@@ -118,9 +129,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
             return redirect('/agency/dashboard');
         }
 
-        return Inertia::render('admin/login');
+        return Inertia::render('admin/login', [
+            'turnstile' => $turnstilePageConfiguration('super_admin_login'),
+        ]);
     })->name('login');
-    Route::post('/login', [AuthenticatedSessionController::class, 'store'])->name('login.store');
+    Route::post('/login', [AuthenticatedSessionController::class, 'store'])
+        ->middleware('turnstile:super_admin_login')
+        ->name('login.store');
 
     Route::middleware(['auth', 'verified', 'admin.portal', 'super_admin.2fa', 'admin.authorize'])->group(function () {
         Route::inertia('/dashboard', 'admin/dashboard')->name('dashboard');
