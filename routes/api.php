@@ -129,7 +129,7 @@ Route::prefix('agency')
 
 Route::prefix('admin')
     ->name('api.admin.')
-    ->middleware(['auth:sanctum', 'verified', 'admin.portal', 'super_admin.2fa', 'admin.authorize'])
+    ->middleware(['auth:sanctum', 'verified', 'admin.portal', 'admin.scope', 'super_admin.2fa', 'admin.authorize'])
     ->group(function () {
         Route::get('/dashboard', AdminDashboardController::class)->name('dashboard');
         Route::get('/dashboard/export', [AdminDashboardController::class, 'export'])->name('dashboard.export');
@@ -236,6 +236,11 @@ Route::prefix('admin')
         Route::get('/rbac/permissions', [AdminRbacController::class, 'permissions'])->middleware('permission:rbac.view')->name('rbac.permissions.index');
         Route::get('/rbac/history', [AdminRbacController::class, 'history'])->middleware('permission:rbac.view')->name('rbac.history.index');
         Route::get('/rbac/users', [AdminRbacController::class, 'users'])->middleware('permission:rbac.view')->name('rbac.users.index');
+        Route::post('/rbac/users', [AdminRbacController::class, 'createAdminUser'])->middleware(['permission:rbac.manage', 'throttle:10,1'])->name('rbac.users.store');
+        Route::post('/rbac/users/{user}/invitation', [AdminRbacController::class, 'resendAdminInvitation'])->middleware(['permission:rbac.manage', 'throttle:6,1'])->name('rbac.users.invitation.store');
+        Route::post('/rbac/users/{user}/suspend', [AdminRbacController::class, 'suspendAdminUser'])->middleware('permission:rbac.manage')->name('rbac.users.suspend');
+        Route::post('/rbac/users/{user}/reactivate', [AdminRbacController::class, 'reactivateAdminUser'])->middleware('permission:rbac.manage')->name('rbac.users.reactivate');
+        Route::delete('/rbac/users/{user}/sessions', [AdminRbacController::class, 'revokeAdminUserSessions'])->middleware('permission:rbac.manage')->name('rbac.users.sessions.destroy');
         Route::put('/rbac/users/{user}/role', [AdminRbacController::class, 'replaceUserRole'])->middleware('permission:rbac.manage')->name('rbac.users.role.update');
         Route::get('/rbac/users/{user}/roles', [AdminRbacController::class, 'userRoles'])->name('rbac.users.roles.index');
         Route::post('/rbac/users/{user}/roles', [AdminRbacController::class, 'assignUserRole'])->middleware('permission:rbac.manage')->name('rbac.users.roles.store');

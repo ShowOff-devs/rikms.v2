@@ -22,8 +22,8 @@ class TwoFactorLoginResponse implements TwoFactorLoginResponseContract
 
     private function redirectPath(?object $user): string
     {
-        if ($user?->isSuperAdmin()) {
-            return route('admin.dashboard', absolute: false);
+        if ($user?->canAccessAdminPortal()) {
+            return $user->adminLandingPath();
         }
 
         if ($user?->isAgencyAdmin()) {

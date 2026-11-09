@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use App\Notifications\AdminAccountInvitation;
 use App\Support\Statuses;
 use Database\Factories\UserFactory;
+use Illuminate\Auth\Notifications\ResetPassword as ResetPasswordNotification;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -13,6 +15,31 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
+    public const ADMIN_PORTAL_DESTINATIONS = [
+        'dashboard.view' => '/admin/dashboard',
+        'agencies.view' => '/admin/agencies',
+        'users.view' => '/admin/users',
+        'research_moderation.view' => '/admin/research',
+        'access_monitoring.view' => '/admin/access-requests',
+        'analytics.view' => '/admin/analytics',
+        'audit_logs.view' => '/admin/audit-logs',
+        'rbac.view' => '/admin/rbac',
+        'security.view' => '/admin/security',
+        'archive.view' => '/admin/archive',
+        'platform_settings.view' => '/admin/settings',
+    ];
+
+    /**
+     * Permissions whose underlying records are constrained by agency scope.
+     * System-wide modules are intentionally excluded until their queries are
+     * implemented with equivalent tenant boundaries.
+     */
+    public const AGENCY_SCOPED_ADMIN_PERMISSIONS = [
+        'agencies.view',
+        'research_moderation.view',
+        'research_moderation.manage',
+    ];
+
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable, SoftDeletes, TwoFactorAuthenticatable;
 
@@ -30,6 +57,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'password',
         'role',
         'status',
+        'mfa_required',
         'profile_photo_path',
         'notification_preferences',
         'security_preferences',
@@ -62,6 +90,7 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return [
             'email_verified_at' => 'datetime',
+            'mfa_required' => 'boolean',
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
             'notification_preferences' => 'array',
@@ -181,7 +210,7 @@ class User extends Authenticatable implements MustVerifyEmail
         if (! $this->relationLoaded('roles')) {
             $this->setRelation(
                 'roles',
-                $this->roles()->get(['roles.id', 'roles.slug', 'roles.name', 'roles.is_active']),
+                $this->roles()->get(['roles.id', 'roles.slug', 'roles.name', 'roles.is_active', 'roles.access_scope']),
             );
         }
 
@@ -209,6 +238,12 @@ class User extends Authenticatable implements MustVerifyEmail
 
         $normalizedPermission = str($permission)->lower()->replace(' ', '_')->toString();
 
+        if (! $this->isAgencyAdmin()
+            && $this->adminAccessScope() === 'agency'
+            && ! in_array($normalizedPermission, self::AGENCY_SCOPED_ADMIN_PERMISSIONS, true)) {
+            return false;
+        }
+
         $directPermissions = $this->directPermissions()
             ->where(function ($query): void {
                 $query->whereNull('permission_user.expires_at')
@@ -222,7 +257,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
         $roles = $this->relationLoaded('roles')
             ? $this->roles
-            : $this->roles()->with('permissions:id,slug,name')->get(['roles.id', 'roles.slug', 'roles.name', 'roles.is_active']);
+            : $this->roles()->with('permissions:id,slug,name')->get(['roles.id', 'roles.slug', 'roles.name', 'roles.is_active', 'roles.access_scope']);
 
         return $roles->contains(function (Role $role) use ($normalizedPermission): bool {
             if (! $role->is_active) {
@@ -251,11 +286,64 @@ class User extends Authenticatable implements MustVerifyEmail
             return true;
         }
 
-        return $this->roles()
-            ->where('roles.is_active', true)
-            ->where('roles.slug', '!=', 'agency_admin')
-            ->whereHas('permissions')
-            ->exists();
+        return ! $this->isAgencyAdmin()
+            && $this->hasAnyPermission(array_keys(self::ADMIN_PORTAL_DESTINATIONS));
+    }
+
+    public function adminLandingPath(): string
+    {
+        foreach (self::ADMIN_PORTAL_DESTINATIONS as $permission => $path) {
+            if ($this->hasPermission($permission)) {
+                return $path;
+            }
+        }
+
+        return '/admin/dashboard';
+    }
+
+    public function requiresAdminMfa(): bool
+    {
+        return $this->isSuperAdmin() || (bool) $this->mfa_required;
+    }
+
+    public function adminAccessScope(): string
+    {
+        if ($this->isSuperAdmin()) {
+            return 'system';
+        }
+
+        if (! $this->relationLoaded('roles')) {
+            $this->setRelation(
+                'roles',
+                $this->roles()->get(['roles.id', 'roles.slug', 'roles.name', 'roles.is_active', 'roles.access_scope']),
+            );
+        }
+
+        $activeRoles = $this->roles->where('is_active', true);
+
+        return $activeRoles->contains(fn (Role $role): bool => $role->access_scope === 'system')
+            ? 'system'
+            : (string) ($activeRoles->first()?->access_scope ?? 'system');
+    }
+
+    public function canAccessAgency(?int $agencyId): bool
+    {
+        if ($this->isSuperAdmin() || $this->adminAccessScope() === 'system') {
+            return true;
+        }
+
+        return $agencyId !== null && (int) $this->agency_id === $agencyId;
+    }
+
+    public function sendPasswordResetNotification($token): void
+    {
+        if ($this->status === Statuses::USER_PENDING_ACTIVATION && ! $this->isAgencyAdmin()) {
+            $this->notify(new AdminAccountInvitation($token));
+
+            return;
+        }
+
+        $this->notify(new ResetPasswordNotification($token));
     }
 
     private function permissionMatches(Permission $permission, string $normalizedPermission): bool

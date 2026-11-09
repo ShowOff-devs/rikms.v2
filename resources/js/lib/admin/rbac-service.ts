@@ -1,6 +1,7 @@
 import { fetchApi } from '@/lib/api-client';
 import type {
     CreateRolePayload,
+    CreateAdminAccountPayload,
     Permission,
     Role,
     RoleChangeHistory,
@@ -55,7 +56,10 @@ export async function createRole(payload: CreateRolePayload): Promise<Role> {
         method: 'POST',
         body: JSON.stringify({
             name: payload.name,
+            slug: payload.slug,
             description: payload.description,
+            access_scope: payload.accessScope,
+            is_active: payload.isActive,
             permission_ids: permissionPayload(payload.permissionIds),
         }),
     });
@@ -74,6 +78,8 @@ export async function updateRole(
             body: JSON.stringify({
                 name: payload.name,
                 description: payload.description,
+                access_scope: payload.accessScope,
+                is_active: payload.isActive,
                 permission_ids: permissionPayload(payload.permissionIds),
             }),
         },
@@ -159,6 +165,64 @@ export async function updateUserRole(
     );
 
     return response.data;
+}
+
+export async function createAdminAccount(
+    payload: CreateAdminAccountPayload,
+): Promise<UserRoleAssignment> {
+    const response = await fetchApi<UserRoleAssignment>(
+        '/api/admin/rbac/users',
+        {
+            method: 'POST',
+            body: JSON.stringify({
+                name: payload.name,
+                email: payload.email,
+                role_id: Number(payload.roleId),
+                agency_id: payload.agencyId ? Number(payload.agencyId) : null,
+                mfa_required: payload.mfaRequired,
+            }),
+        },
+    );
+
+    cachedAssignments = [response.data, ...cachedAssignments];
+
+    return response.data;
+}
+
+export async function resendAdminInvitation(userId: string): Promise<void> {
+    await fetchApi(`/api/admin/rbac/users/${userId}/invitation`, {
+        method: 'POST',
+    });
+}
+
+export async function suspendAdminAccount(
+    userId: string,
+): Promise<UserRoleAssignment> {
+    const response = await fetchApi<UserRoleAssignment>(
+        `/api/admin/rbac/users/${userId}/suspend`,
+        { method: 'POST' },
+    );
+
+    return response.data;
+}
+
+export async function reactivateAdminAccount(
+    userId: string,
+): Promise<UserRoleAssignment> {
+    const response = await fetchApi<UserRoleAssignment>(
+        `/api/admin/rbac/users/${userId}/reactivate`,
+        { method: 'POST' },
+    );
+
+    return response.data;
+}
+
+export async function revokeAdminAccountSessions(
+    userId: string,
+): Promise<void> {
+    await fetchApi(`/api/admin/rbac/users/${userId}/sessions`, {
+        method: 'DELETE',
+    });
 }
 
 export function getPermissionKeyDiff(permissionIds: string[]) {

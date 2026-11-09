@@ -21,6 +21,7 @@ type RoleActionsMenuProps = {
     onEdit: (role: Role) => void;
     onDuplicate: (role: Role) => void;
     onDelete: (role: Role) => void;
+    canManage: boolean;
 };
 
 export function RoleActionsMenu({
@@ -29,6 +30,7 @@ export function RoleActionsMenu({
     onEdit,
     onDuplicate,
     onDelete,
+    canManage,
 }: RoleActionsMenuProps) {
     return (
         <DropdownMenu>
@@ -46,32 +48,40 @@ export function RoleActionsMenu({
                     <Eye className="size-4" aria-hidden="true" />
                     View Role
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                    disabled={role.isSystemRole}
-                    onSelect={() => onEdit(role)}
-                >
-                    <Edit3 className="size-4" aria-hidden="true" />
-                    Edit Role
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => onDuplicate(role)}>
-                    <Copy className="size-4" aria-hidden="true" />
-                    Duplicate Role
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                {role.isSystemRole ? (
-                    <DropdownMenuItem disabled>
-                        <ShieldAlert className="size-4" aria-hidden="true" />
-                        Protected Role
-                    </DropdownMenuItem>
-                ) : (
+                {canManage && (
                     <DropdownMenuItem
-                        variant="destructive"
-                        onSelect={() => onDelete(role)}
+                        disabled={role.isSystemRole}
+                        onSelect={() => onEdit(role)}
                     >
-                        <Trash2 className="size-4" aria-hidden="true" />
-                        Delete Role
+                        <Edit3 className="size-4" aria-hidden="true" />
+                        Edit Role
                     </DropdownMenuItem>
                 )}
+                {canManage && (
+                    <DropdownMenuItem onSelect={() => onDuplicate(role)}>
+                        <Copy className="size-4" aria-hidden="true" />
+                        Duplicate Role
+                    </DropdownMenuItem>
+                )}
+                {canManage && <DropdownMenuSeparator />}
+                {canManage &&
+                    (role.isSystemRole ? (
+                        <DropdownMenuItem disabled>
+                            <ShieldAlert
+                                className="size-4"
+                                aria-hidden="true"
+                            />
+                            Protected Role
+                        </DropdownMenuItem>
+                    ) : (
+                        <DropdownMenuItem
+                            variant="destructive"
+                            onSelect={() => onDelete(role)}
+                        >
+                            <Trash2 className="size-4" aria-hidden="true" />
+                            Delete Role
+                        </DropdownMenuItem>
+                    ))}
             </DropdownMenuContent>
         </DropdownMenu>
     );

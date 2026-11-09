@@ -6,6 +6,7 @@ use App\Http\Middleware\ConfigureTrustedHosts;
 use App\Http\Middleware\ConfigureTrustedProxies;
 use App\Http\Middleware\EnforcePlatformMaintenanceMode;
 use App\Http\Middleware\EnforceUserSessionTimeout;
+use App\Http\Middleware\EnsureAdminResourceScope;
 use App\Http\Middleware\EnsureAgencyScope;
 use App\Http\Middleware\EnsureSuperAdminHasTwoFactor;
 use App\Http\Middleware\EnsureUserCanAccessAdminPortal;
@@ -39,6 +40,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'agency.scope' => EnsureAgencyScope::class,
+            'admin.scope' => EnsureAdminResourceScope::class,
             'admin.portal' => EnsureUserCanAccessAdminPortal::class,
             'admin.authorize' => AuthorizeAdminRoute::class,
             'permission' => EnsureUserHasPermission::class,

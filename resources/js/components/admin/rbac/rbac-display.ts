@@ -11,6 +11,12 @@ export const roleChangeTypeLabels: Record<RoleChangeType, string> = {
     'role-deleted': 'Role Deleted',
 };
 
+export const agencyScopedPermissionKeys = new Set([
+    'agencies.view',
+    'research_moderation.view',
+    'research_moderation.manage',
+]);
+
 export const permissionModuleOrder: PermissionModule[] = [
     'dashboard',
     'research',

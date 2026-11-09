@@ -77,6 +77,16 @@ export function ViewRoleModal({
                             {[
                                 ['Assigned Users', role.userCount],
                                 ['Permissions', role.permissionIds.length],
+                                [
+                                    'Access Scope',
+                                    role.accessScope === 'agency'
+                                        ? 'Assigned agency'
+                                        : 'System-wide',
+                                ],
+                                [
+                                    'Status',
+                                    role.isActive ? 'Active' : 'Inactive',
+                                ],
                                 ['Created', formatRbacDate(role.createdAt)],
                                 [
                                     'Last Updated',

@@ -46,7 +46,6 @@
         <env name="SESSION_SECURE_COOKIE" value="true" force="true"/>
         <env name="SESSION_HTTP_ONLY" value="true" force="true"/>
         <env name="SESSION_SAME_SITE" value="lax" force="true"/>
-        <env name="SESSION_DOMAIN" value="" force="true"/>
         <env name="SESSION_PATH" value="/" force="true"/>
         <env name="MONGODB_URI" value="" force="true"/>
         <env name="MONGODB_DATABASE" value="rikms_test" force="true"/>

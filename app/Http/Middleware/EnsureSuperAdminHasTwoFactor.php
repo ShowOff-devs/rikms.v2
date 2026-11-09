@@ -16,8 +16,10 @@ class EnsureSuperAdminHasTwoFactor
     {
         $user = $request->user();
 
-        if (! $user?->isSuperAdmin()
-            || ! $this->settings->superAdminMfaRequired()
+        $mfaRequired = $user?->mfa_required
+            || ($user?->isSuperAdmin() && $this->settings->superAdminMfaRequired());
+
+        if (! $mfaRequired
             || $user->hasEnabledTwoFactorAuthentication()
             || $request->routeIs('two-factor.*')
         ) {
@@ -25,13 +27,13 @@ class EnsureSuperAdminHasTwoFactor
         }
 
         if ($request->is('api/*') || $request->expectsJson()) {
-            return ApiResponse::error('Two-factor authentication is required for Super Admin accounts.', [
+            return ApiResponse::error('Two-factor authentication is required for this administration account.', [
                 'redirect' => route('two-factor.show', absolute: false),
             ], 403);
         }
 
         return redirect()
             ->route('two-factor.show')
-            ->with('status', 'Two-factor authentication is required for Super Admin accounts.');
+            ->with('status', 'Two-factor authentication is required for this administration account.');
     }
 }

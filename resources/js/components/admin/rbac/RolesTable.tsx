@@ -13,6 +13,7 @@ type RolesTableProps = {
     onEdit: (role: Role) => void;
     onDuplicate: (role: Role) => void;
     onDelete: (role: Role) => void;
+    canManage: boolean;
 };
 
 export function RolesTable({
@@ -22,6 +23,7 @@ export function RolesTable({
     onEdit,
     onDuplicate,
     onDelete,
+    canManage,
 }: RolesTableProps) {
     if (isLoading) {
         return (
@@ -55,7 +57,7 @@ export function RolesTable({
 
     return (
         <div className="overflow-x-auto">
-            <table className="w-full min-w-[1080px] border-collapse">
+            <table className="w-full min-w-[1200px] border-collapse">
                 <thead>
                     <tr className="h-10 border-b border-[#f3f4f6] bg-[#f9fafb] text-left">
                         <th className="w-[30%] px-6 text-[11px] font-semibold text-[#6a7282]">
@@ -63,6 +65,12 @@ export function RolesTable({
                         </th>
                         <th className="w-[25%] px-4 text-[11px] font-semibold text-[#6a7282]">
                             Description
+                        </th>
+                        <th className="w-[8%] px-4 text-center text-[11px] font-semibold text-[#6a7282]">
+                            Scope
+                        </th>
+                        <th className="w-[8%] px-4 text-center text-[11px] font-semibold text-[#6a7282]">
+                            Status
                         </th>
                         <th className="w-[8%] px-4 text-center text-[11px] font-semibold text-[#6a7282]">
                             Users
@@ -117,6 +125,22 @@ export function RolesTable({
                                     {role.description}
                                 </p>
                             </td>
+                            <td className="px-4 text-center text-xs font-medium text-[#4a5565] capitalize">
+                                {role.accessScope === 'agency'
+                                    ? 'Agency'
+                                    : 'System'}
+                            </td>
+                            <td className="px-4 text-center">
+                                <span
+                                    className={`rounded-full px-2 py-1 text-[10px] font-semibold ${
+                                        role.isActive
+                                            ? 'bg-[#f0fdf4] text-[#15803d]'
+                                            : 'bg-[#f3f4f6] text-[#6b7280]'
+                                    }`}
+                                >
+                                    {role.isActive ? 'Active' : 'Inactive'}
+                                </span>
+                            </td>
                             <td className="px-4 text-center text-sm font-semibold text-[#1e2939]">
                                 {role.userCount}
                             </td>
@@ -134,6 +158,7 @@ export function RolesTable({
                                         onEdit={onEdit}
                                         onDuplicate={onDuplicate}
                                         onDelete={onDelete}
+                                        canManage={canManage}
                                     />
                                 </div>
                             </td>

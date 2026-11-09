@@ -1,7 +1,9 @@
+import { usePage } from '@inertiajs/react';
 import { Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { AdminLayout } from '@/components/admin/layout/AdminLayout';
 import { ChangeUserRoleModal } from '@/components/admin/rbac/ChangeUserRoleModal';
+import { CreateAdminAccountModal } from '@/components/admin/rbac/CreateAdminAccountModal';
 import { CreateRoleModal } from '@/components/admin/rbac/CreateRoleModal';
 import { DeleteRoleConfirmModal } from '@/components/admin/rbac/DeleteRoleConfirmModal';
 import { EditRoleModal } from '@/components/admin/rbac/EditRoleModal';
@@ -17,20 +19,28 @@ import { RolesTable } from '@/components/admin/rbac/RolesTable';
 import { UserRoleAssignmentDetailsModal } from '@/components/admin/rbac/UserRoleAssignmentDetailsModal';
 import { UserRoleAssignmentsTab } from '@/components/admin/rbac/UserRoleAssignmentsTab';
 import { ViewRoleModal } from '@/components/admin/rbac/ViewRoleModal';
+import { getAgencies } from '@/lib/admin/agency-admin-users-service';
 import {
     createRole,
+    createAdminAccount,
     deleteRole,
     getPermissions,
     getRoleChangeHistory,
     getRoleById,
     getRoles,
     getUserRoleAssignments,
+    reactivateAdminAccount,
+    resendAdminInvitation,
+    revokeAdminAccountSessions,
+    suspendAdminAccount,
     updateRole,
     updateUserRole,
 } from '@/lib/admin/rbac-service';
 import { apiMessage } from '@/lib/api-client';
+import type { Agency } from '@/types/admin-users';
 import type {
     CreateRolePayload,
+    CreateAdminAccountPayload,
     Permission,
     Role,
     RoleChangeHistory as RoleChangeHistoryType,
@@ -43,12 +53,24 @@ function matchesQuery(value: string, query: string) {
 }
 
 const historyRowsPerPage = 8;
+const roleRowsPerPage = 10;
 
 export function RBACManagementPage() {
+    const { auth } = usePage().props;
+    const adminPermissions = auth.adminPermissions ?? [];
+    const isSuperAdmin = adminPermissions.includes('*');
+    const canManageRbac =
+        isSuperAdmin || adminPermissions.includes('rbac.manage');
+    const canManageRoles =
+        isSuperAdmin || adminPermissions.includes('roles.manage');
     const [topbarSearch, setTopbarSearch] = useState('');
     const [activeTab, setActiveTab] = useState<RBACTab>('roles');
     const [roles, setRoles] = useState<Role[]>([]);
+    const [rolePage, setRolePage] = useState(1);
+    const [roleScopeFilter, setRoleScopeFilter] = useState('all');
+    const [roleStatusFilter, setRoleStatusFilter] = useState('all');
     const [permissions, setPermissions] = useState<Permission[]>([]);
+    const [agencies, setAgencies] = useState<Agency[]>([]);
     const [assignments, setAssignments] = useState<UserRoleAssignment[]>([]);
     const [assignmentPage, setAssignmentPage] = useState(1);
     const [assignmentTotalPages, setAssignmentTotalPages] = useState(1);
@@ -62,7 +84,7 @@ export function RBACManagementPage() {
     const [feedback, setFeedback] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [showActiveAssignmentsOnly, setShowActiveAssignmentsOnly] =
-        useState(true);
+        useState(false);
     const [viewRole, setViewRole] = useState<Role | null>(null);
     const [viewAssignment, setViewAssignment] =
         useState<UserRoleAssignment | null>(null);
@@ -71,6 +93,7 @@ export function RBACManagementPage() {
     const [editRole, setEditRole] = useState<Role | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<Role | null>(null);
     const [isCreateOpen, setIsCreateOpen] = useState(false);
+    const [isCreateAccountOpen, setIsCreateAccountOpen] = useState(false);
     const [diffChange, setDiffChange] = useState<RoleChangeHistoryType | null>(
         null,
     );
@@ -130,6 +153,12 @@ export function RBACManagementPage() {
         return () => {
             isCurrent = false;
         };
+    }, []);
+
+    useEffect(() => {
+        getAgencies()
+            .then(setAgencies)
+            .catch(() => setAgencies([]));
     }, []);
 
     useEffect(() => {
@@ -196,8 +225,22 @@ export function RBACManagementPage() {
             return roles;
         }
 
-        return roles.filter((role) =>
-            matchesQuery(
+        return roles.filter((role) => {
+            if (
+                roleScopeFilter !== 'all' &&
+                role.accessScope !== roleScopeFilter
+            ) {
+                return false;
+            }
+
+            if (
+                roleStatusFilter !== 'all' &&
+                String(role.isActive) !== roleStatusFilter
+            ) {
+                return false;
+            }
+
+            return matchesQuery(
                 [
                     role.name,
                     role.description,
@@ -208,9 +251,29 @@ export function RBACManagementPage() {
                         .join(' '),
                 ].join(' '),
                 normalizedSearch,
-            ),
-        );
-    }, [normalizedSearch, permissionById, roles]);
+            );
+        });
+    }, [
+        normalizedSearch,
+        permissionById,
+        roleScopeFilter,
+        roleStatusFilter,
+        roles,
+    ]);
+
+    const roleTotalPages = Math.max(
+        1,
+        Math.ceil(filteredRoles.length / roleRowsPerPage),
+    );
+    const effectiveRolePage = Math.min(rolePage, roleTotalPages);
+    const paginatedRoles = filteredRoles.slice(
+        (effectiveRolePage - 1) * roleRowsPerPage,
+        effectiveRolePage * roleRowsPerPage,
+    );
+
+    useEffect(() => {
+        setRolePage(1);
+    }, [normalizedSearch, roleScopeFilter, roleStatusFilter]);
 
     const filteredPermissions = useMemo(() => {
         if (!normalizedSearch) {
@@ -330,7 +393,10 @@ export function RBACManagementPage() {
 
         await handleCreateRole({
             name: duplicateName,
+            slug: `${role.slug}_copy_${Date.now()}`,
             description: role.description,
+            accessScope: role.accessScope,
+            isActive: role.isActive,
             permissionIds: role.permissionIds,
         });
     };
@@ -390,10 +456,125 @@ export function RBACManagementPage() {
         }
     };
 
+    const handleCreateAdminAccount = async (
+        payload: CreateAdminAccountPayload,
+    ) => {
+        setIsSaving(true);
+
+        try {
+            const createdAssignment = await createAdminAccount(payload);
+            setAssignments((currentAssignments) => [
+                createdAssignment,
+                ...currentAssignments,
+            ]);
+            setRoles((currentRoles) =>
+                currentRoles.map((role) =>
+                    role.id === createdAssignment.roleId
+                        ? { ...role, userCount: role.userCount + 1 }
+                        : role,
+                ),
+            );
+            setAssignmentTotal((total) => total + 1);
+            setIsCreateAccountOpen(false);
+            setActiveTab('assignments');
+            setFeedback(
+                `${createdAssignment.userName}'s account was created and the activation invitation was requested.`,
+            );
+            setError(null);
+        } catch (caughtError) {
+            setError(
+                apiMessage(caughtError, 'Unable to create the admin account.'),
+            );
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const replaceAssignment = (updated: UserRoleAssignment) => {
+        setAssignments((current) =>
+            current.map((assignment) =>
+                assignment.id === updated.id ? updated : assignment,
+            ),
+        );
+    };
+
+    const handleResendInvitation = async (assignment: UserRoleAssignment) => {
+        setIsSaving(true);
+
+        try {
+            await resendAdminInvitation(assignment.id);
+            setFeedback(`A new invitation was sent to ${assignment.email}.`);
+            setError(null);
+        } catch (caughtError) {
+            setError(apiMessage(caughtError, 'Unable to resend invitation.'));
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleToggleAccountStatus = async (
+        assignment: UserRoleAssignment,
+    ) => {
+        const suspending = assignment.status === 'active';
+        const confirmed = window.confirm(
+            suspending
+                ? `Suspend ${assignment.userName} and revoke all active sessions?`
+                : `Reactivate ${assignment.userName}?`,
+        );
+
+        if (!confirmed) {
+return;
+}
+
+        setIsSaving(true);
+
+        try {
+            const updated = suspending
+                ? await suspendAdminAccount(assignment.id)
+                : await reactivateAdminAccount(assignment.id);
+            replaceAssignment(updated);
+            setFeedback(
+                `${assignment.userName} was ${suspending ? 'suspended' : 'reactivated'}.`,
+            );
+            setError(null);
+        } catch (caughtError) {
+            setError(
+                apiMessage(caughtError, 'Unable to update account status.'),
+            );
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleRevokeSessions = async (assignment: UserRoleAssignment) => {
+        if (
+            !window.confirm(`Revoke all sessions for ${assignment.userName}?`)
+        ) {
+            return;
+        }
+
+        setIsSaving(true);
+
+        try {
+            await revokeAdminAccountSessions(assignment.id);
+            setFeedback(`${assignment.userName}'s sessions were revoked.`);
+            setError(null);
+        } catch (caughtError) {
+            setError(apiMessage(caughtError, 'Unable to revoke sessions.'));
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     return (
         <AdminLayout search={topbarSearch} onSearchChange={setTopbarSearch}>
             <main className="px-4 py-8 lg:px-8">
-                <RBACHeader onCreateRole={() => setIsCreateOpen(true)} />
+                <RBACHeader
+                    onCreateRole={() => setIsCreateOpen(true)}
+                    onCreateAccount={() => setIsCreateAccountOpen(true)}
+                    canCreateRole={canManageRoles}
+                    canCreateAccount={canManageRbac}
+                />
 
                 {error && (
                     <div className="mt-5 rounded-[10px] border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-sm text-[#b91c1c]">
@@ -452,16 +633,57 @@ export function RBACManagementPage() {
                                 Active users only
                             </label>
                         )}
+                        {activeTab === 'roles' && (
+                            <>
+                                <select
+                                    value={roleScopeFilter}
+                                    onChange={(event) =>
+                                        setRoleScopeFilter(event.target.value)
+                                    }
+                                    className="h-[42px] rounded-[8px] border border-[#e5e7eb] bg-white px-3 text-sm"
+                                    aria-label="Filter roles by scope"
+                                >
+                                    <option value="all">All scopes</option>
+                                    <option value="system">System-wide</option>
+                                    <option value="agency">
+                                        Agency scoped
+                                    </option>
+                                </select>
+                                <select
+                                    value={roleStatusFilter}
+                                    onChange={(event) =>
+                                        setRoleStatusFilter(event.target.value)
+                                    }
+                                    className="h-[42px] rounded-[8px] border border-[#e5e7eb] bg-white px-3 text-sm"
+                                    aria-label="Filter roles by status"
+                                >
+                                    <option value="all">All statuses</option>
+                                    <option value="true">Active</option>
+                                    <option value="false">Inactive</option>
+                                </select>
+                            </>
+                        )}
                     </div>
 
                     {activeTab === 'roles' && (
                         <RolesTable
-                            roles={filteredRoles}
+                            roles={paginatedRoles}
                             isLoading={isLoading}
                             onView={handleViewRole}
                             onEdit={setEditRole}
                             onDuplicate={handleDuplicateRole}
                             onDelete={setDeleteTarget}
+                            canManage={canManageRoles}
+                        />
+                    )}
+
+                    {activeTab === 'roles' && (
+                        <RbacPagination
+                            currentPage={effectiveRolePage}
+                            totalPages={roleTotalPages}
+                            totalResults={filteredRoles.length}
+                            rowsPerPage={roleRowsPerPage}
+                            onPageChange={setRolePage}
                         />
                     )}
 
@@ -475,6 +697,11 @@ export function RBACManagementPage() {
                             roles={roles}
                             onView={setViewAssignment}
                             onChangeRole={setChangeAssignment}
+                            onResendInvite={handleResendInvitation}
+                            onToggleStatus={handleToggleAccountStatus}
+                            onRevokeSessions={handleRevokeSessions}
+                            isSaving={isSaving}
+                            canManage={canManageRbac}
                         />
                     )}
 
@@ -562,6 +789,20 @@ export function RBACManagementPage() {
                 isRoleNameTaken={isRoleNameTaken}
                 onOpenChange={setIsCreateOpen}
                 onSubmit={handleCreateRole}
+            />
+            <CreateAdminAccountModal
+                key={
+                    isCreateAccountOpen
+                        ? 'create-admin-open'
+                        : 'create-admin-closed'
+                }
+                open={isCreateAccountOpen}
+                roles={roles}
+                permissions={permissions}
+                agencies={agencies}
+                isSaving={isSaving}
+                onOpenChange={setIsCreateAccountOpen}
+                onSubmit={handleCreateAdminAccount}
             />
             <DeleteRoleConfirmModal
                 role={deleteTarget}

@@ -93,7 +93,7 @@ export default function AdminLoginPage() {
 
     return (
         <>
-            <Head title="Super Admin Login" />
+            <Head title="Administration Login" />
 
             <AdminAuthLayout>
                 <div className="flex justify-center">

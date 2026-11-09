@@ -14,6 +14,7 @@ class Role extends Model
         'slug',
         'display_name',
         'description',
+        'access_scope',
         'is_system',
         'is_active',
     ];

@@ -17,10 +17,10 @@ class LoginResponse implements LoginResponseContract
             return $this->failedResponse($request, 'Authentication is required.');
         }
 
-        if ($request->is('admin/login') && ! $user->isSuperAdmin()) {
+        if ($request->is('admin/login') && ! $user->canAccessAdminPortal()) {
             $this->logout($request);
 
-            return $this->failedResponse($request, 'These credentials are not authorized for the Super Admin portal.');
+            return $this->failedResponse($request, 'These credentials are not authorized for the administration portal.');
         }
 
         if ($request->is('agency/login') && ! $user->isAgencyAdmin()) {
@@ -59,6 +59,14 @@ class LoginResponse implements LoginResponseContract
             }
 
             return route('admin.dashboard', absolute: false);
+        }
+
+        if ($user->canAccessAdminPortal()) {
+            if ($user->requiresAdminMfa() && ! $user->hasEnabledTwoFactorAuthentication()) {
+                return route('two-factor.show', absolute: false);
+            }
+
+            return $user->adminLandingPath();
         }
 
         if ($user->isAgencyAdmin()) {

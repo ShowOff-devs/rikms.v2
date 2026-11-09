@@ -47,7 +47,19 @@ export function AdminTopbar({
     unreadNotificationsCount,
 }: AdminTopbarProps) {
     const { auth } = usePage().props;
-    const navigationItems = visibleAdminNavItems(auth.adminPermissions);
+    const adminPermissions = auth.adminPermissions ?? [];
+    const navigationItems = visibleAdminNavItems(adminPermissions);
+    const adminHome = navigationItems[0]?.href ?? '/settings/profile';
+    const canViewNotifications = adminPermissions.some(
+        (permission) => permission === '*' || permission === 'audit_logs.view',
+    );
+    const canViewSecurity = adminPermissions.some(
+        (permission) => permission === '*' || permission === 'security.view',
+    );
+    const canViewPlatformSettings = adminPermissions.some(
+        (permission) =>
+            permission === '*' || permission === 'platform_settings.view',
+    );
     const searchInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -119,7 +131,7 @@ export function AdminTopbar({
                 </Sheet>
             </div>
             <Link
-                href="/admin/dashboard"
+                href={adminHome}
                 className={cn(
                     'flex shrink-0 items-center gap-2.5 transition-all duration-300 lg:h-16 lg:px-6',
                     isSidebarCollapsed
@@ -169,25 +181,28 @@ export function AdminTopbar({
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
-                <Link
-                    href="/admin/audit-logs"
-                    className="relative flex size-9 items-center justify-center rounded-[10px] text-white/70 transition hover:bg-white/[0.07] hover:text-white"
-                    aria-label="System notifications"
-                    title="System notifications"
-                >
-                    <Bell className="size-5" aria-hidden="true" />
-                    {unreadNotificationsCount > 0 && (
-                        <>
-                            <span
-                                className="absolute top-1.5 right-1.5 size-2 rounded-full bg-[#fb2c36]"
-                                aria-hidden="true"
-                            />
-                            <span className="sr-only">
-                                {unreadNotificationsCount} unread notifications
-                            </span>
-                        </>
-                    )}
-                </Link>
+                {canViewNotifications && (
+                    <Link
+                        href="/admin/audit-logs"
+                        className="relative flex size-9 items-center justify-center rounded-[10px] text-white/70 transition hover:bg-white/[0.07] hover:text-white"
+                        aria-label="System notifications"
+                        title="System notifications"
+                    >
+                        <Bell className="size-5" aria-hidden="true" />
+                        {unreadNotificationsCount > 0 && (
+                            <>
+                                <span
+                                    className="absolute top-1.5 right-1.5 size-2 rounded-full bg-[#fb2c36]"
+                                    aria-hidden="true"
+                                />
+                                <span className="sr-only">
+                                    {unreadNotificationsCount} unread
+                                    notifications
+                                </span>
+                            </>
+                        )}
+                    </Link>
+                )}
 
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -214,18 +229,22 @@ export function AdminTopbar({
                     <DropdownMenuContent align="end" className="w-56">
                         <DropdownMenuLabel>{auth.user.name}</DropdownMenuLabel>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem asChild>
-                            <Link href="/admin/security">
-                                <ShieldCheck className="size-4" />
-                                Security Center
-                            </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                            <Link href="/admin/settings">
-                                <Settings className="size-4" />
-                                Platform Settings
-                            </Link>
-                        </DropdownMenuItem>
+                        {canViewSecurity && (
+                            <DropdownMenuItem asChild>
+                                <Link href="/admin/security">
+                                    <ShieldCheck className="size-4" />
+                                    Security Center
+                                </Link>
+                            </DropdownMenuItem>
+                        )}
+                        {canViewPlatformSettings && (
+                            <DropdownMenuItem asChild>
+                                <Link href="/admin/settings">
+                                    <Settings className="size-4" />
+                                    Platform Settings
+                                </Link>
+                            </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem asChild>
                             <Link href="/settings/profile">
                                 <UserRound className="size-4" />

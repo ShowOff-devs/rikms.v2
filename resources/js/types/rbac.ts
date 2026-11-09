@@ -30,7 +30,9 @@ export type Permission = {
 export type Role = {
     id: string;
     name: string;
+    slug: string;
     description: string;
+    accessScope: 'system' | 'agency';
     isSystemRole: boolean;
     isActive: boolean;
     userCount: number;
@@ -65,7 +67,12 @@ export type RoleChangeHistory = {
     summary?: string;
 };
 
-export type UserRoleAssignmentStatus = 'active' | 'inactive' | 'pending';
+export type UserRoleAssignmentStatus =
+    | 'active'
+    | 'inactive'
+    | 'pending'
+    | 'pending_activation'
+    | 'suspended';
 
 export type UserRoleAssignment = {
     id: string;
@@ -74,12 +81,29 @@ export type UserRoleAssignment = {
     agency?: string;
     roleId: string;
     status: UserRoleAssignmentStatus;
+    rawStatus?: UserRoleAssignmentStatus;
+    mfaRequired?: boolean;
+    mfaEnabled?: boolean;
+    lastLogin?: string;
+    createdAt?: string;
+    accessScope?: 'system' | 'agency';
 };
 
 export type CreateRolePayload = {
     name: string;
+    slug: string;
     description: string;
+    accessScope: 'system' | 'agency';
+    isActive: boolean;
     permissionIds: string[];
 };
 
-export type UpdateRolePayload = CreateRolePayload;
+export type UpdateRolePayload = Omit<CreateRolePayload, 'slug'>;
+
+export type CreateAdminAccountPayload = {
+    name: string;
+    email: string;
+    roleId: string;
+    agencyId?: string;
+    mfaRequired: boolean;
+};

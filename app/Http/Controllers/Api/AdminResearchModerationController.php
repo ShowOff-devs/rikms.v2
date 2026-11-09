@@ -73,6 +73,7 @@ class AdminResearchModerationController extends Controller
     {
         $records = Research::query()
             ->with(['agency'])
+            ->when($request->user()->adminAccessScope() === 'agency', fn ($query) => $query->where('agency_id', $request->user()->agency_id))
             ->whereIn('status', [
                 Statuses::RESEARCH_SUBMITTED,
                 Statuses::RESEARCH_UNDER_REVIEW,
@@ -107,6 +108,7 @@ class AdminResearchModerationController extends Controller
         $pairKey = DB::transaction(function () use ($request, $validated): string {
             $records = Research::query()
                 ->whereIn('id', collect([$validated['original_research_id'], $validated['matching_research_id']])->sort()->values())
+                ->when($request->user()->adminAccessScope() === 'agency', fn ($query) => $query->where('agency_id', $request->user()->agency_id))
                 ->whereIn('status', [
                     Statuses::RESEARCH_SUBMITTED,
                     Statuses::RESEARCH_UNDER_REVIEW,
@@ -168,6 +170,7 @@ class AdminResearchModerationController extends Controller
         $result = DB::transaction(function () use ($request, $validated): array {
             $records = Research::query()
                 ->whereIn('id', collect([$validated['original_research_id'], $validated['matching_research_id']])->sort()->values())
+                ->when($request->user()->adminAccessScope() === 'agency', fn ($query) => $query->where('agency_id', $request->user()->agency_id))
                 ->whereIn('status', [
                     Statuses::RESEARCH_SUBMITTED,
                     Statuses::RESEARCH_UNDER_REVIEW,
@@ -244,6 +247,7 @@ class AdminResearchModerationController extends Controller
         $logs = AuditLog::query()
             ->with(['user', 'auditable'])
             ->whereIn('event', self::MODERATION_AUDIT_EVENTS)
+            ->when($request->user()->adminAccessScope() === 'agency', fn ($query) => $query->where('agency_id', $request->user()->agency_id))
             ->latest('created_at')
             ->limit(50)
             ->get()
@@ -260,6 +264,8 @@ class AdminResearchModerationController extends Controller
 
     private function transitionResponse(Request $request, Research $research, string $action, string $message): JsonResponse
     {
+        abort_unless($request->user()->canAccessAgency((int) $research->agency_id), 403);
+
         try {
             $updatedResearch = $this->transitions->transition($request, $research, $action);
         } catch (ResearchModerationTransitionException $exception) {

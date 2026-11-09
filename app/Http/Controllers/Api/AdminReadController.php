@@ -75,7 +75,9 @@ class AdminReadController extends Controller
 
     public function agencies(Request $request): JsonResponse
     {
-        $summaryQuery = Agency::query()->whereNull('archived_at');
+        $summaryQuery = Agency::query()
+            ->whereNull('archived_at')
+            ->when($request->user()->adminAccessScope() === 'agency', fn (Builder $query) => $query->whereKey($request->user()->agency_id));
         $summary = [
             'total_agencies' => (clone $summaryQuery)->count(),
             'active_agencies' => (clone $summaryQuery)->where('status', 'active')->count(),
@@ -87,6 +89,7 @@ class AdminReadController extends Controller
 
         $query = Agency::query()
             ->whereNull('archived_at')
+            ->when($request->user()->adminAccessScope() === 'agency', fn (Builder $query) => $query->whereKey($request->user()->agency_id))
             ->with(['users' => function ($query): void {
                 $query->where('role', 'agency_admin')
                     ->orWhereHas('roles', fn (Builder $query) => $query->where('slug', 'agency_admin'))
@@ -155,6 +158,8 @@ class AdminReadController extends Controller
 
     public function agencyShow(Request $request, Agency $agency): JsonResponse
     {
+        abort_unless($request->user()->canAccessAgency((int) $agency->id), 403);
+
         return ApiResponse::success(
             'Admin agency detail retrieved.',
             (new AgencyResource($agency->load(['users.roles'])->loadCount('research')))->resolve($request),
@@ -165,6 +170,7 @@ class AdminReadController extends Controller
     {
         $query = User::query()
             ->with(['agency', 'roles'])
+            ->when($request->user()->adminAccessScope() === 'agency', fn (Builder $query) => $query->where('agency_id', $request->user()->agency_id))
             ->when($request->filled('role'), function (Builder $query) use ($request): void {
                 $role = $request->string('role')->toString();
 
@@ -197,6 +203,8 @@ class AdminReadController extends Controller
 
     public function userShow(Request $request, User $user): JsonResponse
     {
+        abort_unless($request->user()->canAccessAgency($user->agency_id ? (int) $user->agency_id : null), 403);
+
         return ApiResponse::success(
             'Admin user detail retrieved.',
             (new UserResource($user->load(['agency', 'roles'])))->resolve($request),
@@ -252,6 +260,8 @@ class AdminReadController extends Controller
 
     public function researchShow(Request $request, Research $research): JsonResponse
     {
+        abort_unless($request->user()->canAccessAgency((int) $research->agency_id), 403);
+
         return ApiResponse::success(
             'Admin research detail retrieved.',
             (new ResearchResource($research
@@ -268,6 +278,7 @@ class AdminReadController extends Controller
         $documentType = $request->query('document_type');
 
         return $query
+            ->when($request->user()->adminAccessScope() === 'agency', fn (Builder $query) => $query->where('agency_id', $request->user()->agency_id))
             ->when($request->boolean('moderation'), function (Builder $query): void {
                 $query->where(function (Builder $query): void {
                     $query->whereIn('status', ['submitted', 'under_review', 'approved', 'rejected'])
@@ -423,6 +434,7 @@ class AdminReadController extends Controller
     public function accessRequests(Request $request): JsonResponse
     {
         $query = AccessRequest::query()
+            ->when($request->user()->adminAccessScope() === 'agency', fn (Builder $query) => $query->whereHas('research', fn (Builder $query) => $query->where('agency_id', $request->user()->agency_id)))
             ->with(['research.agency', 'requester', 'reviewer'])
             ->when($request->filled('agency_id'), function (Builder $query) use ($request): void {
                 $agencyId = $request->integer('agency_id');

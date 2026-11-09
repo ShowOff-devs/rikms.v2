@@ -1,4 +1,12 @@
-import { Eye, RefreshCcw, UsersRound } from 'lucide-react';
+import {
+    Eye,
+    KeyRound,
+    Mail,
+    RefreshCcw,
+    UserCheck,
+    UserX,
+    UsersRound,
+} from 'lucide-react';
 import type { Role, UserRoleAssignment } from '@/types/rbac';
 
 type UserRoleAssignmentsTabProps = {
@@ -6,12 +14,19 @@ type UserRoleAssignmentsTabProps = {
     roles: Role[];
     onView: (assignment: UserRoleAssignment) => void;
     onChangeRole: (assignment: UserRoleAssignment) => void;
+    onResendInvite: (assignment: UserRoleAssignment) => void;
+    onToggleStatus: (assignment: UserRoleAssignment) => void;
+    onRevokeSessions: (assignment: UserRoleAssignment) => void;
+    isSaving: boolean;
+    canManage: boolean;
 };
 
 const statusClasses = {
     active: 'border-[#b9f8cf] bg-[#f0fdf4] text-[#008236]',
     inactive: 'border-[#e5e7eb] bg-[#f9fafb] text-[#4a5565]',
     pending: 'border-[#fee685] bg-[#fffbeb] text-[#bb4d00]',
+    pending_activation: 'border-[#bedbff] bg-[#eff6ff] text-[#1447e6]',
+    suspended: 'border-[#fecaca] bg-[#fef2f2] text-[#b91c1c]',
 };
 
 export function UserRoleAssignmentsTab({
@@ -19,6 +34,11 @@ export function UserRoleAssignmentsTab({
     roles,
     onView,
     onChangeRole,
+    onResendInvite,
+    onToggleStatus,
+    onRevokeSessions,
+    isSaving,
+    canManage,
 }: UserRoleAssignmentsTabProps) {
     const getRoleName = (roleId: string) =>
         roles.find((role) => role.id === roleId)?.name ?? 'Unassigned';
@@ -65,70 +85,142 @@ export function UserRoleAssignmentsTab({
                     </tr>
                 </thead>
                 <tbody>
-                    {assignments.map((assignment) => (
-                        <tr
-                            key={assignment.id}
-                            className="h-[60px] border-b border-[#f9fafb] transition hover:bg-[#f8fafc]"
-                        >
-                            <td className="px-6">
-                                <div className="flex items-center gap-3">
-                                    <span className="flex size-8 items-center justify-center rounded-[10px] bg-[#dbeafe] text-[#1e3a8a]">
-                                        <UsersRound
-                                            className="size-4"
-                                            aria-hidden="true"
-                                        />
+                    {assignments.map((assignment) => {
+                        const role = roles.find(
+                            (candidate) => candidate.id === assignment.roleId,
+                        );
+                        const canManageAccount =
+                            canManage && !role?.isSystemRole;
+
+                        return (
+                            <tr
+                                key={assignment.id}
+                                className="h-[60px] border-b border-[#f9fafb] transition hover:bg-[#f8fafc]"
+                            >
+                                <td className="px-6">
+                                    <div className="flex items-center gap-3">
+                                        <span className="flex size-8 items-center justify-center rounded-[10px] bg-[#dbeafe] text-[#1e3a8a]">
+                                            <UsersRound
+                                                className="size-4"
+                                                aria-hidden="true"
+                                            />
+                                        </span>
+                                        <span className="text-sm font-semibold text-[#1e2939]">
+                                            {assignment.userName}
+                                        </span>
+                                    </div>
+                                </td>
+                                <td className="px-4 text-sm text-[#4a5565]">
+                                    {assignment.email}
+                                </td>
+                                <td className="px-4 text-sm text-[#4a5565]">
+                                    {assignment.agency ?? 'RIKMS Platform'}
+                                </td>
+                                <td className="px-4">
+                                    <span className="inline-flex rounded-[4px] bg-[#1e3a8a]/5 px-2 py-1 text-xs font-semibold text-[#1e3a8a]">
+                                        {getRoleName(assignment.roleId)}
                                     </span>
-                                    <span className="text-sm font-semibold text-[#1e2939]">
-                                        {assignment.userName}
+                                </td>
+                                <td className="px-4">
+                                    <span
+                                        className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold capitalize ${statusClasses[assignment.status]}`}
+                                    >
+                                        {assignment.status}
                                     </span>
-                                </div>
-                            </td>
-                            <td className="px-4 text-sm text-[#4a5565]">
-                                {assignment.email}
-                            </td>
-                            <td className="px-4 text-sm text-[#4a5565]">
-                                {assignment.agency ?? 'RIKMS Platform'}
-                            </td>
-                            <td className="px-4">
-                                <span className="inline-flex rounded-[4px] bg-[#1e3a8a]/5 px-2 py-1 text-xs font-semibold text-[#1e3a8a]">
-                                    {getRoleName(assignment.roleId)}
-                                </span>
-                            </td>
-                            <td className="px-4">
-                                <span
-                                    className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold capitalize ${statusClasses[assignment.status]}`}
-                                >
-                                    {assignment.status}
-                                </span>
-                            </td>
-                            <td className="px-6">
-                                <div className="flex justify-end gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => onChangeRole(assignment)}
-                                        className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-[#e5e7eb] px-2.5 text-xs font-medium text-[#1e3a8a] transition hover:bg-[#f8fafc]"
-                                    >
-                                        <RefreshCcw
-                                            className="size-3.5"
-                                            aria-hidden="true"
-                                        />
-                                        Change Role
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => onView(assignment)}
-                                        className="flex size-8 items-center justify-center rounded-[8px] border border-[#e5e7eb] text-[#64748b] transition hover:bg-[#f8fafc] hover:text-[#1e3a8a]"
-                                        aria-label={`View ${assignment.userName}`}
-                                    >
-                                        <Eye
-                                            className="size-3.5"
-                                            aria-hidden="true"
-                                        />
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                    ))}
+                                </td>
+                                <td className="px-6">
+                                    <div className="flex justify-end gap-2">
+                                        {canManageAccount &&
+                                            assignment.status ===
+                                                'pending_activation' && (
+                                                <button
+                                                    type="button"
+                                                    disabled={isSaving}
+                                                    onClick={() =>
+                                                        onResendInvite(
+                                                            assignment,
+                                                        )
+                                                    }
+                                                    className="flex size-8 items-center justify-center rounded-[8px] border border-[#e5e7eb] text-[#1e3a8a]"
+                                                    title="Resend invitation"
+                                                >
+                                                    <Mail className="size-3.5" />
+                                                </button>
+                                            )}
+                                        {canManageAccount &&
+                                            assignment.status !==
+                                                'pending_activation' && (
+                                                <button
+                                                    type="button"
+                                                    disabled={isSaving}
+                                                    onClick={() =>
+                                                        onToggleStatus(
+                                                            assignment,
+                                                        )
+                                                    }
+                                                    className="flex size-8 items-center justify-center rounded-[8px] border border-[#e5e7eb] text-[#64748b]"
+                                                    title={
+                                                        assignment.status ===
+                                                        'active'
+                                                            ? 'Suspend account'
+                                                            : 'Reactivate account'
+                                                    }
+                                                >
+                                                    {assignment.status ===
+                                                    'active' ? (
+                                                        <UserX className="size-3.5" />
+                                                    ) : (
+                                                        <UserCheck className="size-3.5" />
+                                                    )}
+                                                </button>
+                                            )}
+                                        {canManageAccount &&
+                                            assignment.status === 'active' && (
+                                                <button
+                                                    type="button"
+                                                    disabled={isSaving}
+                                                    onClick={() =>
+                                                        onRevokeSessions(
+                                                            assignment,
+                                                        )
+                                                    }
+                                                    className="flex size-8 items-center justify-center rounded-[8px] border border-[#e5e7eb] text-[#64748b]"
+                                                    title="Revoke active sessions"
+                                                >
+                                                    <KeyRound className="size-3.5" />
+                                                </button>
+                                            )}
+                                        {canManage && (
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    onChangeRole(assignment)
+                                                }
+                                                className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-[#e5e7eb] px-2.5 text-xs font-medium text-[#1e3a8a] transition hover:bg-[#f8fafc]"
+                                            >
+                                                <RefreshCcw
+                                                    className="size-3.5"
+                                                    aria-hidden="true"
+                                                />
+                                                Change Role
+                                            </button>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => onView(assignment)}
+                                            className="flex size-8 items-center justify-center rounded-[8px] border border-[#e5e7eb] text-[#64748b] transition hover:bg-[#f8fafc] hover:text-[#1e3a8a]"
+                                            aria-label={`View ${assignment.userName}`}
+                                        >
+                                            <Eye
+                                                className="size-3.5"
+                                                aria-hidden="true"
+                                            />
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        );
+                    })}
                 </tbody>
             </table>
         </div>

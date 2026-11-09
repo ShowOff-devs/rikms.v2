@@ -19,8 +19,8 @@ class VerifyEmailResponse implements VerifyEmailResponseContract
             return redirect(route('agency.dashboard', absolute: false).'?verified=1');
         }
 
-        if ($user?->isSuperAdmin()) {
-            return redirect(route('admin.dashboard', absolute: false).'?verified=1');
+        if ($user?->canAccessAdminPortal()) {
+            return redirect($user->adminLandingPath().'?verified=1');
         }
 
         return redirect()->intended(Fortify::redirects('email-verification').'?verified=1');

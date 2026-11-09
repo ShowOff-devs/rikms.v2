@@ -59,8 +59,8 @@ Route::get('/agency/login', function (Request $request) use ($agencyLoginOptions
         return redirect('/agency/dashboard');
     }
 
-    if ($user?->isSuperAdmin()) {
-        return redirect('/admin/dashboard');
+    if ($user?->canAccessAdminPortal()) {
+        return redirect($user->adminLandingPath());
     }
 
     return Inertia::render('agency/login', [
@@ -110,8 +110,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
     Route::get('/login', function (Request $request) {
         $user = $request->user();
 
-        if ($user?->isSuperAdmin()) {
-            return redirect('/admin/dashboard');
+        if ($user?->canAccessAdminPortal()) {
+            return redirect($user->adminLandingPath());
         }
 
         if ($user) {
@@ -122,7 +122,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
     })->name('login');
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])->name('login.store');
 
-    Route::middleware(['auth', 'verified', 'admin.portal', 'super_admin.2fa', 'admin.authorize'])->group(function () {
+    Route::middleware(['auth', 'verified', 'admin.portal', 'admin.scope', 'super_admin.2fa', 'admin.authorize'])->group(function () {
         Route::inertia('/dashboard', 'admin/dashboard')->name('dashboard');
         Route::inertia('/agencies', 'admin/agencies')->name('agencies');
         Route::inertia('/users', 'admin/agency-admin-users')->name('users');

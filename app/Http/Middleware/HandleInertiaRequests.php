@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\User;
 use App\Services\UploadLimitService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -61,6 +62,13 @@ class HandleInertiaRequests extends Middleware
                 ->unique()
                 ->values()
                 ->all();
+
+            if (! $user->isAgencyAdmin() && $user->adminAccessScope() === 'agency') {
+                $adminPermissions = array_values(array_intersect(
+                    $adminPermissions,
+                    User::AGENCY_SCOPED_ADMIN_PERMISSIONS,
+                ));
+            }
         }
 
         return [

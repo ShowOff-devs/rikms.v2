@@ -10,6 +10,8 @@ class Statuses
 
     public const USER_ARCHIVED = 'archived';
 
+    public const USER_PENDING_ACTIVATION = 'pending_activation';
+
     public const RESEARCH_DRAFT = 'draft';
 
     public const RESEARCH_SUBMITTED = 'submitted';
@@ -36,6 +38,7 @@ class Statuses
         self::USER_ACTIVE,
         self::USER_INACTIVE,
         'suspended',
+        self::USER_PENDING_ACTIVATION,
         self::USER_ARCHIVED,
     ];
 

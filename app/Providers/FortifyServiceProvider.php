@@ -66,7 +66,7 @@ class FortifyServiceProvider extends ServiceProvider
                 return null;
             }
 
-            if ($request->is('admin/login') && ! $user->isSuperAdmin()) {
+            if ($request->is('admin/login') && ! $user->canAccessAdminPortal()) {
                 return null;
             }
 

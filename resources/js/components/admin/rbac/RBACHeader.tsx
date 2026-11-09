@@ -1,10 +1,18 @@
-import { Plus } from 'lucide-react';
+import { Plus, UserPlus } from 'lucide-react';
 
 type RBACHeaderProps = {
     onCreateRole: () => void;
+    onCreateAccount: () => void;
+    canCreateRole: boolean;
+    canCreateAccount: boolean;
 };
 
-export function RBACHeader({ onCreateRole }: RBACHeaderProps) {
+export function RBACHeader({
+    onCreateRole,
+    onCreateAccount,
+    canCreateRole,
+    canCreateAccount,
+}: RBACHeaderProps) {
     return (
         <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -17,14 +25,28 @@ export function RBACHeader({ onCreateRole }: RBACHeaderProps) {
                 </p>
             </div>
 
-            <button
-                type="button"
-                onClick={onCreateRole}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-[#1e3a8a] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1d3478]"
-            >
-                <Plus className="size-4" aria-hidden="true" />
-                Create New Role
-            </button>
+            <div className="flex flex-col gap-2 sm:flex-row">
+                {canCreateRole && (
+                    <button
+                        type="button"
+                        onClick={onCreateRole}
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border border-[#1e3a8a] bg-white px-5 text-sm font-semibold text-[#1e3a8a] transition hover:bg-[#eff6ff]"
+                    >
+                        <Plus className="size-4" aria-hidden="true" />
+                        Create New Role
+                    </button>
+                )}
+                {canCreateAccount && (
+                    <button
+                        type="button"
+                        onClick={onCreateAccount}
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-[10px] bg-[#1e3a8a] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1d3478]"
+                    >
+                        <UserPlus className="size-4" aria-hidden="true" />
+                        Create Admin Account
+                    </button>
+                )}
+            </div>
         </header>
     );
 }

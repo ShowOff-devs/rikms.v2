@@ -24,6 +24,8 @@ const statusClasses = {
     active: 'border-[#b9f8cf] bg-[#f0fdf4] text-[#008236]',
     inactive: 'border-[#e5e7eb] bg-[#f9fafb] text-[#4a5565]',
     pending: 'border-[#fee685] bg-[#fffbeb] text-[#bb4d00]',
+    pending_activation: 'border-[#bedbff] bg-[#eff6ff] text-[#1447e6]',
+    suspended: 'border-[#fecaca] bg-[#fef2f2] text-[#b91c1c]',
 };
 
 export function UserRoleAssignmentDetailsModal({
@@ -89,6 +91,28 @@ export function UserRoleAssignmentDetailsModal({
                                 </dt>
                                 <dd className="mt-1 font-semibold text-[#1e2939]">
                                     {assignment.agency ?? 'RIKMS Platform'}
+                                </dd>
+                            </div>
+                            <div className="rounded-[10px] border border-[#e5e7eb] px-3 py-3">
+                                <dt className="text-xs text-[#6a7282]">MFA</dt>
+                                <dd className="mt-1 font-semibold text-[#1e2939]">
+                                    {assignment.mfaEnabled
+                                        ? 'Enabled'
+                                        : assignment.mfaRequired
+                                          ? 'Required - not configured'
+                                          : 'Optional'}
+                                </dd>
+                            </div>
+                            <div className="rounded-[10px] border border-[#e5e7eb] px-3 py-3">
+                                <dt className="text-xs text-[#6a7282]">
+                                    Last Login
+                                </dt>
+                                <dd className="mt-1 font-semibold text-[#1e2939]">
+                                    {assignment.lastLogin
+                                        ? new Date(
+                                              assignment.lastLogin,
+                                          ).toLocaleString()
+                                        : 'Never'}
                                 </dd>
                             </div>
                             <div className="rounded-[10px] border border-[#e5e7eb] px-3 py-3">
