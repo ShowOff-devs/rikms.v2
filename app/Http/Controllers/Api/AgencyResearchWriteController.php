@@ -827,7 +827,7 @@ class AgencyResearchWriteController extends Controller
         }
 
         if (array_key_exists('performance_items', $validated) && is_array($validated['performance_items'])) {
-            $research->performanceItems()->delete();
+            $retainedIds = [];
 
             foreach (array_values($validated['performance_items']) as $index => $item) {
                 if (! is_array($item)) {
@@ -852,11 +852,29 @@ class AgencyResearchWriteController extends Controller
                         'remarks',
                     ])
                     ->all();
+                $payload['sort_order'] = (int) ($item['sort_order'] ?? $index);
+                $itemId = $item['id'] ?? null;
 
-                $research->performanceItems()->create(array_merge($payload, [
-                    'sort_order' => (int) ($item['sort_order'] ?? $index),
-                ]));
+                if ($itemId !== null) {
+                    $record = $research->performanceItems()->whereKey($itemId)->first();
+
+                    if (! $record) {
+                        throw ValidationException::withMessages([
+                            'performance_items' => ['A performance item does not belong to this report.'],
+                        ]);
+                    }
+
+                    $record->update($payload);
+                } else {
+                    $record = $research->performanceItems()->create($payload);
+                }
+
+                $retainedIds[] = (int) $record->id;
             }
+
+            $research->performanceItems()
+                ->when($retainedIds !== [], fn ($query) => $query->whereNotIn('id', $retainedIds))
+                ->delete();
         }
 
         if (array_key_exists('report_highlights', $validated) && is_array($validated['report_highlights'])) {

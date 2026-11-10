@@ -1,7 +1,6 @@
 import { Head, Link } from '@inertiajs/react';
 import {
     BookOpen,
-    CheckCircle2,
     CircleAlert,
     FilePenLine,
     LifeBuoy,
@@ -20,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiError } from '@/lib/api-client';
 import { submitPublicContactInquiry } from '@/lib/public/contact-service';
+import { toast } from '@/lib/toast';
 import type { TurnstileConfiguration } from '@/types/auth';
 
 const concernOptions = [
@@ -75,8 +75,6 @@ export default function HelpSupportPage({
     const captchaSiteKey = turnstile.siteKey;
     const [form, setForm] = useState<ContactForm>(emptyForm);
     const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-    const [submissionError, setSubmissionError] = useState<string | null>(null);
-    const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [captchaToken, setCaptchaToken] = useState('');
     const [captchaError, setCaptchaError] = useState<string | null>(null);
@@ -135,8 +133,6 @@ export default function HelpSupportPage({
 
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        setSuccessMessage(null);
-        setSubmissionError(null);
 
         if (!validate() || isSubmitting || !contactEnabled) {
             return;
@@ -157,7 +153,7 @@ export default function HelpSupportPage({
                 captcha_token: captchaEnabled ? captchaToken : undefined,
             });
 
-            setSuccessMessage(response.message);
+            toast.success('Inquiry submitted', response.message);
             setForm(emptyForm);
             setFieldErrors({});
             setCaptchaResetKey((current) => current + 1);
@@ -166,7 +162,8 @@ export default function HelpSupportPage({
                 setFieldErrors(mapApiErrors(error.errors));
             }
 
-            setSubmissionError(
+            toast.error(
+                'Unable to submit inquiry',
                 "We couldn't submit your inquiry at this time. Please try again later.",
             );
             setCaptchaResetKey((current) => current + 1);
@@ -382,33 +379,6 @@ export default function HelpSupportPage({
                                         been configured. You may still use the
                                         repository and agency links on this
                                         page.
-                                    </AlertDescription>
-                                </Alert>
-                            ) : null}
-
-                            {successMessage ? (
-                                <Alert
-                                    className="mt-5 border-[#86efac] bg-[#f0fdf4] text-[#166534]"
-                                    aria-live="polite"
-                                >
-                                    <CheckCircle2 />
-                                    <AlertTitle>Inquiry submitted</AlertTitle>
-                                    <AlertDescription className="text-[#166534]">
-                                        {successMessage}
-                                    </AlertDescription>
-                                </Alert>
-                            ) : null}
-
-                            {submissionError ? (
-                                <Alert
-                                    variant="destructive"
-                                    className="mt-5 border-[#fecaca] bg-[#fef2f2] text-[#991b1b]"
-                                    aria-live="assertive"
-                                >
-                                    <CircleAlert />
-                                    <AlertTitle>Submission failed</AlertTitle>
-                                    <AlertDescription className="text-[#991b1b]">
-                                        {submissionError}
                                     </AlertDescription>
                                 </Alert>
                             ) : null}

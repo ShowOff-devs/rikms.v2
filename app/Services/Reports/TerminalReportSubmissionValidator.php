@@ -11,11 +11,20 @@ class TerminalReportSubmissionValidator
 
     public function validate(Research $research): void
     {
-        if (! str_contains(mb_strtolower((string) $research->category), 'terminal report')) {
+        $research->loadMissing(['reportDetail', 'performanceItems', 'reportHighlights.files', 'files']);
+        $category = mb_strtolower((string) $research->category);
+        $reportType = str_contains($category, 'terminal report')
+            ? 'terminal-report'
+            : (str_contains($category, 'project accomplishment')
+                ? 'project-accomplishment'
+                : $research->files
+                    ->pluck('file_type')
+                    ->first(fn (?string $type): bool => in_array($type, ['terminal-report', 'project-accomplishment'], true)));
+
+        if ($reportType === null) {
             return;
         }
 
-        $research->loadMissing(['reportDetail', 'performanceItems', 'reportHighlights.files', 'files']);
         $detail = $research->reportDetail;
         $errors = [];
 
@@ -111,12 +120,12 @@ class TerminalReportSubmissionValidator
 
         $this->required($errors, 'sections.sdg-tagging.selectedSDGs', $research->sdgs, 'Select at least one SDG.');
 
-        $hasMainDocument = $research->files->contains(fn ($file): bool => $file->file_type === 'terminal-report'
+        $hasMainDocument = $research->files->contains(fn ($file): bool => $file->file_type === $reportType
             && $file->status === 'active'
             && $file->archived_at === null);
 
         if (! $hasMainDocument) {
-            $errors['sections.details.uploadedFile'][] = 'A scanned and accepted terminal-report PDF is required.';
+            $errors['sections.details.uploadedFile'][] = "A scanned and accepted {$reportType} PDF is required.";
         }
 
         $calculated = $research->performanceItems

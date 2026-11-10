@@ -23,6 +23,7 @@ import {
     updateAgencyAdminUser,
 } from '@/lib/admin/agency-admin-users-service';
 import { apiMessage } from '@/lib/api-client';
+import { toast } from '@/lib/toast';
 import type {
     Agency,
     AgencyAdminUser,
@@ -46,7 +47,8 @@ export function AgencyAdminUsersPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [feedback, setFeedback] = useState<string | null>(null);
+    const setFeedback = (message: string) =>
+        toast.success('Account updated', message);
     const [createError, setCreateError] = useState<string | null>(null);
     const [editError, setEditError] = useState<string | null>(null);
     const [statusError, setStatusError] = useState<string | null>(null);
@@ -168,18 +170,6 @@ export function AgencyAdminUsersPage() {
         selectedRole,
         topbarSearch,
     ]);
-
-    useEffect(() => {
-        if (!feedback) {
-            return;
-        }
-
-        const timerId = window.setTimeout(() => {
-            setFeedback(null);
-        }, 3200);
-
-        return () => window.clearTimeout(timerId);
-    }, [feedback]);
 
     const isEmailTaken = (email: string, currentUserId?: string) =>
         users.some(
@@ -329,12 +319,6 @@ export function AgencyAdminUsersPage() {
                 {error && (
                     <div className="mt-5 rounded-[10px] border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-sm text-[#b91c1c]">
                         {error}
-                    </div>
-                )}
-
-                {feedback && (
-                    <div className="mt-5 rounded-[10px] border border-[#bbf7d0] bg-[#f0fdf4] px-4 py-3 text-sm text-[#166534]">
-                        {feedback}
                     </div>
                 )}
 

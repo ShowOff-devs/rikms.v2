@@ -17,6 +17,7 @@ import {
     returnResearchToDraft,
 } from '@/lib/admin/research-moderation-service';
 import { apiMessage, ApiError } from '@/lib/api-client';
+import { toast } from '@/lib/toast';
 import type {
     DuplicateResearchMatch,
     FlaggedResearchRecord,
@@ -99,7 +100,20 @@ export function ResearchModerationPage() {
     const [activities, setActivities] = useState<ModerationActivity[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [feedback, setFeedback] = useState<ModerationFeedback>(null);
+    const setFeedback = (feedback: ModerationFeedback) => {
+        if (!feedback) {
+return;
+}
+
+        toast.show({
+            type: feedback.type,
+            title:
+                feedback.type === 'success'
+                    ? 'Moderation action completed'
+                    : 'Moderation action failed',
+            description: feedback.message,
+        });
+    };
     const [currentPage, setCurrentPage] = useState(1);
     const [selectedDetailsRecord, setSelectedDetailsRecord] =
         useState<FlaggedResearchRecord | null>(null);
@@ -206,16 +220,6 @@ export function ResearchModerationPage() {
     useEffect(() => {
         setCurrentPage(1);
     }, [filters, topbarSearch]);
-
-    useEffect(() => {
-        if (!feedback) {
-            return undefined;
-        }
-
-        const timeout = window.setTimeout(() => setFeedback(null), 5000);
-
-        return () => window.clearTimeout(timeout);
-    }, [feedback]);
 
     const summary: ModerationSummary = {
         ...summaryCounts,
@@ -775,19 +779,6 @@ export function ResearchModerationPage() {
                     {error ? (
                         <div className="rounded-[10px] border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-sm text-[#b91c1c]">
                             {error}
-                        </div>
-                    ) : null}
-
-                    {feedback ? (
-                        <div
-                            role="status"
-                            className={
-                                feedback.type === 'success'
-                                    ? 'rounded-[10px] border border-[#bbf7d0] bg-[#f0fdf4] px-4 py-3 text-sm font-medium text-[#166534]'
-                                    : 'rounded-[10px] border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-sm font-medium text-[#b91c1c]'
-                            }
-                        >
-                            {feedback.message}
                         </div>
                     ) : null}
 

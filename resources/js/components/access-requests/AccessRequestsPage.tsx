@@ -15,6 +15,7 @@ import {
     getAccessRequests,
 } from '@/lib/access-requests/access-request-service';
 import { useAgencySession } from '@/lib/auth/agency-auth';
+import { toast } from '@/lib/toast';
 import type {
     AccessRequest,
     AccessRequestFilters as AccessRequestFiltersValue,
@@ -46,10 +47,22 @@ export function AccessRequestsPage() {
     );
     const [denialReason, setDenialReason] = useState('');
     const [internalNotes, setInternalNotes] = useState('');
-    const [feedback, setFeedback] = useState<{
-        message: string;
-        type: 'success' | 'error';
-    } | null>(null);
+    const setFeedback = (
+        feedback: { message: string; type: 'success' | 'error' } | null,
+    ) => {
+        if (!feedback) {
+return;
+}
+
+        toast.show({
+            type: feedback.type,
+            title:
+                feedback.type === 'success'
+                    ? 'Access request updated'
+                    : 'Unable to update access request',
+            description: feedback.message,
+        });
+    };
     const [isLoading, setIsLoading] = useState(true);
     const [isSavingDecision, setIsSavingDecision] = useState(false);
 
@@ -240,19 +253,6 @@ export function AccessRequestsPage() {
                                         updateFilters(initialFilters)
                                     }
                                 />
-
-                                {feedback ? (
-                                    <div
-                                        role="status"
-                                        className={`rounded-[10px] border px-4 py-3 text-sm font-medium ${
-                                            feedback.type === 'success'
-                                                ? 'border-[#b9f8cf] bg-[#f0fdf4] text-[#008236]'
-                                                : 'border-[#ffc9c9] bg-[#fef2f2] text-[#e7000b]'
-                                        }`}
-                                    >
-                                        {feedback.message}
-                                    </div>
-                                ) : null}
 
                                 <p className="text-sm leading-5 text-[#6a7282]">
                                     Showing {visibleStartIndex}-{pageEndIndex}{' '}

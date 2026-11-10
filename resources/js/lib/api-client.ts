@@ -1,3 +1,5 @@
+import { toast } from '@/lib/toast';
+
 export type ApiEnvelope<TData, TMeta = Record<string, unknown>> = {
     message: string;
     data: TData;
@@ -91,6 +93,72 @@ function fallbackErrorMessage(status: number) {
     }
 
     return 'Unable to complete API request.';
+}
+
+export function apiErrorToastDetails(status: number, message?: string) {
+    if (status === 401) {
+        return {
+            type: 'error' as const,
+            title: 'Authentication required',
+            description: 'Please sign in again to continue.',
+        };
+    }
+
+    if (status === 403) {
+        return {
+            type: 'error' as const,
+            title: 'Permission denied',
+            description: 'You do not have permission to perform this action.',
+        };
+    }
+
+    if (status === 409) {
+        return {
+            type: 'error' as const,
+            title: 'Changes could not be saved',
+            description:
+                message ??
+                'This record changed elsewhere. Refresh and review the latest version before retrying.',
+        };
+    }
+
+    if (status === 419) {
+        return {
+            type: 'error' as const,
+            title: 'Session expired',
+            description: SESSION_EXPIRED_MESSAGE,
+        };
+    }
+
+    if (status === 422) {
+        return {
+            type: 'warning' as const,
+            title: 'Check the highlighted fields',
+            description:
+                message ?? 'Correct the validation issues and try again.',
+        };
+    }
+
+    if (status === 429) {
+        return {
+            type: 'warning' as const,
+            title: 'Too many requests',
+            description: 'Please wait a moment before trying again.',
+        };
+    }
+
+    return {
+        type: 'error' as const,
+        title: 'Unable to complete the request',
+        description:
+            status >= 500
+                ? 'The service encountered a problem. Please try again.'
+                : (message ?? 'Check your connection and try again.'),
+    };
+}
+
+function showApiErrorToast(status: number, message?: string) {
+    toast.show(apiErrorToastDetails(status, message));
 }
 
 function loginPathForUrl(url: string) {
@@ -194,11 +262,26 @@ export async function fetchApi<TData, TMeta = Record<string, unknown>>(
         headers.set('Content-Type', 'application/json');
     }
 
-    const response = await fetch(url, {
-        credentials: 'same-origin',
-        ...init,
-        headers,
-    });
+    let response: Response;
+
+    try {
+        response = await fetch(url, {
+            credentials: 'same-origin',
+            ...init,
+            headers,
+        });
+    } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+            throw error;
+        }
+
+        toast.error(
+            'Network interruption',
+            'The request could not reach the server. Check your connection and try again.',
+        );
+
+        throw error;
+    }
 
     if (response.ok && typeof window !== 'undefined') {
         window.sessionStorage.removeItem('rikms.auth.redirected./admin/login');
@@ -210,6 +293,13 @@ export async function fetchApi<TData, TMeta = Record<string, unknown>>(
     >;
 
     if (!response.ok) {
+        const errorMessage =
+            firstError(payload.errors) ??
+            payload.message ??
+            fallbackErrorMessage(response.status);
+
+        showApiErrorToast(response.status, errorMessage);
+
         if (response.status === 419) {
             redirectForExpiredSession(url);
 
@@ -225,9 +315,7 @@ export async function fetchApi<TData, TMeta = Record<string, unknown>>(
         }
 
         throw new ApiError(
-            firstError(payload.errors) ??
-                payload.message ??
-                fallbackErrorMessage(response.status),
+            errorMessage,
             response.status,
             payload.errors ?? {},
         );
@@ -238,6 +326,10 @@ export async function fetchApi<TData, TMeta = Record<string, unknown>>(
 
 export function apiMessage(error: unknown, fallback: string) {
     if (error instanceof ApiError) {
+        if (error.status >= 500) {
+            return fallback;
+        }
+
         return firstError(error.errors) ?? error.message;
     }
 

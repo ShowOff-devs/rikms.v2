@@ -129,6 +129,44 @@ test('terminal report wizard fields persist hydrate and use canonical performanc
             ->where('researchId', (string) $researchId));
 });
 
+test('terminal report edits retain performance row identity and remove only omitted rows', function () {
+    $agency = terminalWizardAgency('editor-performance-identity');
+    $user = terminalWizardUser($agency);
+    $researchId = $this->actingAs($user)
+        ->postJson('/api/agency/research', terminalWizardPayload([
+            'performance_items' => [
+                ['project_name' => 'Retained row', 'target_numeric_value' => 10, 'actual_numeric_value' => 5],
+                ['project_name' => 'Removed row', 'target_numeric_value' => 5, 'actual_numeric_value' => 5],
+            ],
+        ]))
+        ->assertCreated()
+        ->json('data.id');
+    $research = Research::with(['performanceItems', 'reportDetail'])->findOrFail($researchId);
+    $retained = $research->performanceItems->firstWhere('project_name', 'Retained row');
+    $removed = $research->performanceItems->firstWhere('project_name', 'Removed row');
+
+    $this->actingAs($user)
+        ->patchJson("/api/agency/research/{$researchId}", [
+            'expected_draft_version' => $research->reportDetail?->draft_version,
+            'performance_items' => [[
+                'id' => $retained->id,
+                'project_name' => 'Retained row updated',
+                'target_numeric_value' => 10,
+                'actual_numeric_value' => 8,
+                'sort_order' => 0,
+            ]],
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.performance_items.0.id', $retained->id)
+        ->assertJsonPath('data.performance_items.0.project_name', 'Retained row updated');
+
+    $this->assertDatabaseHas('research_performance_items', [
+        'id' => $retained->id,
+        'project_name' => 'Retained row updated',
+    ]);
+    $this->assertDatabaseMissing('research_performance_items', ['id' => $removed->id]);
+});
+
 test('draft saving is relaxed but submission is strict and does not change status on failure', function () {
     $agency = terminalWizardAgency('wizard-incomplete');
     $user = terminalWizardUser($agency);
@@ -182,6 +220,61 @@ test('complete terminal report submits with explicit zero financial values and a
             'file_type' => 'terminal-report',
         ])
         ->assertCreated();
+
+    $this->actingAs($user)
+        ->postJson("/api/agency/research/{$researchId}/submit")
+        ->assertOk()
+        ->assertJsonPath('data.status', 'submitted');
+});
+
+test('project accomplishment report uses the shared report persistence with its canonical pdf type', function () {
+    Storage::fake('local');
+    Bus::fake();
+    $agency = terminalWizardAgency('par-editor-persistence');
+    $user = terminalWizardUser($agency);
+    $researchId = $this->actingAs($user)
+        ->postJson('/api/agency/research', terminalWizardPayload([
+            'title' => 'Complete Project Accomplishment Report',
+            'category' => 'Project Accomplishment Report',
+            'public_metadata' => [
+                ['key' => 'title', 'label' => 'Title', 'value' => 'Complete Project Accomplishment Report'],
+                ['key' => 'abstract', 'label' => 'Abstract', 'value' => 'A complete project accomplishment report.'],
+            ],
+            'report_highlights' => [
+                [
+                    'title' => 'Primary PAR highlight',
+                    'description' => 'The primary accomplishment highlight contains sufficient detail for review.',
+                    'is_featured' => true,
+                    'sort_order' => 0,
+                ],
+                [
+                    'title' => 'Additional PAR highlight',
+                    'description' => 'The additional accomplishment highlight remains independently editable.',
+                    'is_featured' => false,
+                    'sort_order' => 1,
+                ],
+            ],
+        ]))
+        ->assertCreated()
+        ->assertJsonPath('data.category', 'Project Accomplishment Report')
+        ->assertJsonPath('data.report_detail.obligated_amount', '900.00')
+        ->assertJsonPath('data.performance_items.0.accomplishment_percentage', '120.00')
+        ->json('data.id');
+
+    $this->actingAs($user)
+        ->postJson("/api/agency/research/{$researchId}/files", [
+            'file' => testPdfUpload('project-accomplishment.pdf'),
+            'file_type' => 'project-accomplishment',
+        ])
+        ->assertCreated()
+        ->assertJsonPath('data.file_type', 'project-accomplishment');
+
+    $this->actingAs($user)
+        ->getJson("/api/agency/research/{$researchId}")
+        ->assertOk()
+        ->assertJsonPath('data.files.0.original_name', 'project-accomplishment.pdf')
+        ->assertJsonPath('data.report_highlights.0.title', 'Primary PAR highlight')
+        ->assertJsonPath('data.report_highlights.1.title', 'Additional PAR highlight');
 
     $this->actingAs($user)
         ->postJson("/api/agency/research/{$researchId}/submit")

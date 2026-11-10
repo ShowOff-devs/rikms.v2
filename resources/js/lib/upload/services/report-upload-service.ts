@@ -340,6 +340,9 @@ function mapPerformanceItems(
     return data.performance.performanceProjects
         .filter(hasMeaningfulPerformanceProject)
         .map((project, index) => ({
+            id: /^\d+$/u.test(project.id)
+                ? Number.parseInt(project.id, 10)
+                : undefined,
             project_name: nullableString(project.projectName),
             target_value: project.targetValue,
             actual_value: project.actualValue,
@@ -434,16 +437,32 @@ export function mapReportWorkflowToResearchPayload(
     };
 }
 
-export async function saveReportDraft(data: ReportWorkflowData) {
-    const payload = mapReportWorkflowToResearchPayload(data);
+export type ReportPersistenceOverrides = Partial<
+    Pick<
+        AgencyResearchPayload,
+        'access_level' | 'embargo_until' | 'external_url' | 'report_highlights'
+    >
+>;
+
+export async function saveReportDraft(
+    data: ReportWorkflowData,
+    overrides: ReportPersistenceOverrides = {},
+) {
+    const payload = {
+        ...mapReportWorkflowToResearchPayload(data),
+        ...overrides,
+    };
 
     return data.details.researchId
         ? updateAgencyResearchDraft(data.details.researchId, payload)
         : createAgencyResearchDraft(payload);
 }
 
-export async function submitReport(data: ReportWorkflowData) {
-    const draft = await saveReportDraft(data);
+export async function submitReport(
+    data: ReportWorkflowData,
+    overrides: ReportPersistenceOverrides = {},
+) {
+    const draft = await saveReportDraft(data, overrides);
 
     return submitAgencyResearch(draft.id);
 }
@@ -570,14 +589,44 @@ export function reportPerformanceFromRecord(
 export function hydrateReportWorkflowFromRecord(
     record: AgencyResearchRecord,
     agencyName?: string,
+    documentType?: ReportDocumentType,
 ): ReportWorkflowData {
-    const defaults = createInitialReportWorkflowData('terminal-report');
-    const mainFile = record.files?.find(
+    const canonicalFileType = (record.files ?? []).find(
         (file) =>
-            file.file_type === 'terminal-report' &&
+            (file.file_type === 'terminal-report' ||
+                file.file_type === 'project-accomplishment') &&
             file.status === 'active' &&
-            !file.archived_at,
-    );
+            !file.archived_at &&
+            !file.report_highlight_id,
+    )?.file_type;
+    const resolvedDocumentType: ReportDocumentType =
+        documentType ??
+        (canonicalFileType === 'project-accomplishment'
+            ? 'project-accomplishment'
+            : canonicalFileType === 'terminal-report'
+              ? 'terminal-report'
+              : undefined) ??
+        (record.category?.toLocaleLowerCase().includes('project accomplishment')
+            ? 'project-accomplishment'
+            : 'terminal-report');
+    const defaults = createInitialReportWorkflowData(resolvedDocumentType);
+    const mainFile = [...(record.files ?? [])]
+        .filter(
+            (file) =>
+                file.file_type === resolvedDocumentType &&
+                file.status === 'active' &&
+                !file.archived_at &&
+                !file.report_highlight_id,
+        )
+        .sort((first, second) => {
+            const dateDifference =
+                new Date(
+                    second.uploaded_at ?? second.created_at ?? 0,
+                ).getTime() -
+                new Date(first.uploaded_at ?? first.created_at ?? 0).getTime();
+
+            return dateDifference || second.id - first.id;
+        })[0];
     const publicEntries = new Map(
         (record.public_metadata ?? []).map((entry) => [entry.key, entry.value]),
     );

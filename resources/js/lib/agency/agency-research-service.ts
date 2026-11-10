@@ -88,6 +88,8 @@ export type AgencyResearchFile = {
     file_type: string;
     status: string;
     archived_at?: string | null;
+    uploaded_at?: string | null;
+    created_at?: string | null;
 };
 
 export type AgencyResearchHighlight = {

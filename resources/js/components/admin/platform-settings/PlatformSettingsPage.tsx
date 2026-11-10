@@ -16,6 +16,7 @@ import {
     uploadPlatformLogo,
 } from '@/lib/admin/platform-settings-service';
 import { apiMessage, ApiError } from '@/lib/api-client';
+import { toast } from '@/lib/toast';
 import type {
     PlatformSettings,
     PlatformSettingsErrors,
@@ -160,7 +161,13 @@ export function PlatformSettingsPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [feedback, setFeedback] = useState<string | null>(null);
+    const setFeedback = (message: string) => {
+        if (message.startsWith('Unsaved')) {
+            toast.info('Changes discarded', message);
+        } else {
+            toast.success('Platform settings saved', message);
+        }
+    };
     const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
     const [maintenanceEnableConfirmed, setMaintenanceEnableConfirmed] =
         useState(false);
@@ -193,18 +200,6 @@ export function PlatformSettingsPage() {
             isCurrent = false;
         };
     }, []);
-
-    useEffect(() => {
-        if (!feedback) {
-            return;
-        }
-
-        const timerId = window.setTimeout(() => {
-            setFeedback(null);
-        }, 3200);
-
-        return () => window.clearTimeout(timerId);
-    }, [feedback]);
 
     useEffect(() => {
         return () => {
@@ -417,12 +412,6 @@ export function PlatformSettingsPage() {
                 {error ? (
                     <div className="mt-5 rounded-[10px] border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-sm text-[#b91c1c]">
                         {error}
-                    </div>
-                ) : null}
-
-                {feedback ? (
-                    <div className="mt-5 rounded-[10px] border border-[#bbf7d0] bg-[#f0fdf4] px-4 py-3 text-sm text-[#166534]">
-                        {feedback}
                     </div>
                 ) : null}
 
