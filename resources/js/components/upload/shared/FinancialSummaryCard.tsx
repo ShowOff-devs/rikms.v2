@@ -17,11 +17,18 @@ export default function FinancialSummaryCard({
     tone,
 }: FinancialSummaryCardProps) {
     return (
-        <div className={`rounded-[14px] p-5 ${toneClasses[tone]}`}>
+        <div
+            className={`min-w-0 overflow-hidden rounded-[14px] p-5 ${toneClasses[tone]}`}
+        >
             <p className="text-[11px] font-bold tracking-wide uppercase opacity-70">
                 {label}
             </p>
-            <p className="mt-2 text-2xl font-bold">{value}</p>
+            <p
+                className="mt-2 text-2xl leading-tight font-bold break-words tabular-nums"
+                title={value}
+            >
+                {value}
+            </p>
         </div>
     );
 }

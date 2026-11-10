@@ -11,6 +11,18 @@ declare module '@inertiajs/core' {
                 phpPostMaxSizeMb: number;
                 effectiveMb: number;
             };
+            flash?: Partial<
+                Record<
+                    'success' | 'info' | 'warning' | 'error',
+                    | string
+                    | {
+                          title?: string;
+                          description?: string;
+                          message?: string;
+                      }
+                    | null
+                >
+            >;
             sidebarOpen: boolean;
             [key: string]: unknown;
         };

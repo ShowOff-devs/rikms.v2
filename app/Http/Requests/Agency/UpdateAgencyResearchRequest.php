@@ -74,6 +74,7 @@ class UpdateAgencyResearchRequest extends FormRequest
             'report_details.performance_remarks' => ['nullable', 'string', 'max:5000'],
             'report_details.last_wizard_step' => ['nullable', 'string', Rule::in(['details', 'ai-metadata', 'performance', 'pap-classification', 'financials', 'highlights', 'sdg-tagging', 'review'])],
             'performance_items' => ['sometimes', 'array', 'max:'.self::PERFORMANCE_ITEMS_MAX],
+            'performance_items.*.id' => ['nullable', 'integer', 'min:1'],
             'performance_items.*.project_name' => ['nullable', 'string', 'max:255'],
             'performance_items.*.target_value' => ['nullable', 'string', 'max:120'],
             'performance_items.*.actual_value' => ['nullable', 'string', 'max:120'],

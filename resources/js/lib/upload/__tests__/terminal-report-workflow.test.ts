@@ -88,6 +88,7 @@ describe('terminal report workflow', () => {
         data.performance.performanceProjects = [
             calculatePerformanceProject({
                 ...createPerformanceProject('Output'),
+                id: '42',
                 targetValue: '1,000',
                 actualValue: '1,200',
                 targetNumericValue: 1000,
@@ -113,6 +114,7 @@ describe('terminal report workflow', () => {
             'Performance context',
         );
         expect(payload.performance_items?.[0].target_numeric_value).toBe(1000);
+        expect(payload.performance_items?.[0].id).toBe(42);
         expect(payload.performance_items?.[0].accomplishment_percentage).toBe(
             120,
         );
@@ -185,6 +187,16 @@ describe('terminal report workflow', () => {
                 ],
                 files: [
                     {
+                        id: 1,
+                        research_id: 7,
+                        original_name: 'older-terminal.pdf',
+                        mime_type: 'application/pdf',
+                        size_bytes: 1024,
+                        file_type: 'terminal-report',
+                        status: 'active',
+                        uploaded_at: '2026-08-01T10:00:00.000000Z',
+                    },
+                    {
                         id: 2,
                         research_id: 7,
                         original_name: 'terminal.pdf',
@@ -192,6 +204,7 @@ describe('terminal report workflow', () => {
                         size_bytes: 2048,
                         file_type: 'terminal-report',
                         status: 'active',
+                        uploaded_at: '2026-08-05T10:00:00.000000Z',
                     },
                 ],
             },
@@ -200,6 +213,7 @@ describe('terminal report workflow', () => {
 
         expect(data.details.researchId).toBe('7');
         expect(data.details.uploadStatus).toBe('uploaded');
+        expect(data.details.uploadedFileName).toBe('terminal.pdf');
         expect(data.details.agency).toBe('Authenticated Agency');
         expect(data.details.lastWizardStep).toBe('highlights');
         expect(data.papClassification.beneficiarySectors).toEqual([
@@ -210,6 +224,41 @@ describe('terminal report workflow', () => {
             accomplishmentPercentage: 120,
         });
         expect(data.highlights.supportingFiles[0].name).toBe('evidence.pdf');
+    });
+
+    it('hydrates project accomplishment records with their canonical file type', () => {
+        const data = hydrateReportWorkflowFromRecord({
+            id: 9,
+            title: 'Project accomplishment report',
+            abstract: 'Annual accomplishments',
+            authors: [],
+            publication_year: 2026,
+            category: 'Project Accomplishment Report',
+            sdgs: [],
+            keywords: [],
+            public_metadata_fields: [],
+            public_metadata: [],
+            status: 'draft',
+            files: [
+                {
+                    id: 10,
+                    research_id: 9,
+                    original_name: 'project-accomplishment.pdf',
+                    mime_type: 'application/pdf',
+                    size_bytes: 4096,
+                    file_type: 'project-accomplishment',
+                    status: 'active',
+                    uploaded_at: '2026-11-10T08:00:00.000000Z',
+                },
+            ],
+        });
+
+        expect(data.documentType).toBe('project-accomplishment');
+        expect(data.selectedWorkflow).toBe('project-accomplishment');
+        expect(data.details.uploadStatus).toBe('uploaded');
+        expect(data.details.uploadedFileName).toBe(
+            'project-accomplishment.pdf',
+        );
     });
 
     it('serializes scoped non-file recovery state', () => {

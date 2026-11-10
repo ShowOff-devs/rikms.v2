@@ -1,6 +1,6 @@
 import { Plus, X } from 'lucide-react';
 import { AuthorEmailField } from '@/components/repository/edit/AuthorEmailField';
-import type { EditDocumentErrors } from '@/components/repository/edit/EditDocumentPage';
+import type { EditDocumentErrors } from '@/components/repository/edit/document-edit-page';
 import {
     FieldLabel,
     SectionCard,

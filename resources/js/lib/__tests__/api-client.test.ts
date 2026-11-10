@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+    apiErrorToastDetails,
+    ApiError,
+    apiMessage,
     fetchApi,
     SESSION_EXPIRED_MESSAGE,
     sessionExpiredMessageFromLocation,
@@ -76,5 +79,31 @@ describe('API session expiry handling', () => {
         expect(sessionExpiredMessageFromLocation()).toBe(
             SESSION_EXPIRED_MESSAGE,
         );
+    });
+
+    it('does not expose server exception messages through UI helpers', () => {
+        expect(
+            apiMessage(
+                new ApiError('Sensitive exception details.', 500),
+                'Unable to save changes.',
+            ),
+        ).toBe('Unable to save changes.');
+    });
+});
+
+describe('API error toast details', () => {
+    it('keeps conflicts actionable and hides server exception details', () => {
+        expect(apiErrorToastDetails(409, 'Version conflict.')).toMatchObject({
+            type: 'error',
+            title: 'Changes could not be saved',
+        });
+        expect(apiErrorToastDetails(422)).toMatchObject({
+            type: 'warning',
+            title: 'Check the highlighted fields',
+        });
+        expect(apiErrorToastDetails(500, 'Sensitive exception')).toMatchObject({
+            description:
+                'The service encountered a problem. Please try again.',
+        });
     });
 });

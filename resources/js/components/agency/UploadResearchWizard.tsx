@@ -63,6 +63,7 @@ import {
     sdgOptions,
 } from '@/lib/agency/upload-research-service';
 import { apiMessage } from '@/lib/api-client';
+import { toast } from '@/lib/toast';
 import {
     uploadLimitBytes,
     uploadLimitLabel,
@@ -545,6 +546,10 @@ function UploadStep({
             ...current,
             uploadStatus: 'uploading',
         }));
+        const uploadToastId = toast.loading(
+            'Uploading document',
+            'Please keep this page open until the upload completes.',
+        );
 
         try {
             const draft = await saveAgencyResearchDraft({
@@ -567,13 +572,22 @@ function UploadStep({
                 researchId: String(draft.id),
                 uploadStatus: 'uploaded',
             }));
+            toast.update(uploadToastId, {
+                type: 'success',
+                title: 'Document uploaded',
+                description: 'The PDF passed validation and is attached to the draft.',
+            });
         } catch (error) {
-            setUploadError(
-                apiMessage(
-                    error,
-                    'The upload failed. Try selecting the file again.',
-                ),
+            const message = apiMessage(
+                error,
+                'The upload failed. Try selecting the file again.',
             );
+            setUploadError(message);
+            toast.update(uploadToastId, {
+                type: 'error',
+                title: 'Document upload failed',
+                description: message,
+            });
             setState((current) => ({
                 ...current,
                 file: null,
@@ -2013,6 +2027,10 @@ export default function UploadResearchWizard({
             ...current,
             submissionStatus: 'draft',
         }));
+        const saveToastId = toast.loading(
+            'Saving draft',
+            'Your research remains editable after it is saved.',
+        );
 
         try {
             const result = await saveAgencyResearchDraft(
@@ -2031,9 +2049,20 @@ export default function UploadResearchWizard({
                 }).format(new Date()),
             );
             setSubmitError(null);
+            toast.update(saveToastId, {
+                type: 'success',
+                title: 'Draft saved',
+                description: 'Your changes have been saved successfully.',
+            });
             router.visit('/agency/research');
         } catch (error) {
-            setSubmitError(apiMessage(error, 'Unable to save draft.'));
+            const message = apiMessage(error, 'Unable to save draft.');
+            setSubmitError(message);
+            toast.update(saveToastId, {
+                type: 'error',
+                title: 'Unable to save draft',
+                description: message,
+            });
             setState((current) => ({
                 ...current,
                 submissionStatus: 'error',
@@ -2050,6 +2079,10 @@ export default function UploadResearchWizard({
             ...current,
             submissionStatus: 'submitting',
         }));
+        const submitToastId = toast.loading(
+            'Submitting research',
+            'Please keep this page open while the server validates the submission.',
+        );
 
         try {
             const validation = validateResearchSubmission(state);
@@ -2073,8 +2106,19 @@ export default function UploadResearchWizard({
             }));
             setConfirmOpen(false);
             setSuccess(true);
+            toast.update(submitToastId, {
+                type: 'success',
+                title: 'Research submitted successfully',
+                description: 'Your research is now pending moderation.',
+            });
         } catch (error) {
-            setSubmitError(apiMessage(error, 'Unable to submit research.'));
+            const message = apiMessage(error, 'Unable to submit research.');
+            setSubmitError(message);
+            toast.update(submitToastId, {
+                type: 'error',
+                title: 'Unable to submit research',
+                description: message,
+            });
             setState((current) => ({
                 ...current,
                 submissionStatus: 'error',

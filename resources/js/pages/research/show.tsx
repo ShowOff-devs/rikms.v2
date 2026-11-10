@@ -20,6 +20,7 @@ import {
     getResearchRecord,
     submitPublicAccessRequest,
 } from '@/lib/research/research-service';
+import { toast } from '@/lib/toast';
 import type { TurnstileConfiguration } from '@/types/auth';
 import type {
     PublicResearchMetadataField,
@@ -144,6 +145,10 @@ export default function ResearchDetailPage({
                 captcha_token: captchaEnabled ? captchaToken : undefined,
             });
             setRequestSubmitted(true);
+            toast.success(
+                'Access request submitted',
+                'The responsible agency will review your request.',
+            );
         } catch (error) {
             if (error instanceof ApiError) {
                 setSubmitError(submissionErrorMessage(error));
@@ -151,9 +156,10 @@ export default function ResearchDetailPage({
 
                 setCaptchaResetKey((current) => current + 1);
             } else {
-                setSubmitError(
-                    'Unable to submit your request. Please try again.',
-                );
+                const message =
+                    'Unable to submit your request. Please try again.';
+                setSubmitError(message);
+                toast.error('Unable to submit access request', message);
             }
         } finally {
             setIsSubmitting(false);
@@ -180,6 +186,10 @@ export default function ResearchDetailPage({
                           downloads: current.downloads + 1,
                       }
                     : current,
+            );
+            toast.success(
+                'Download started',
+                'Your research document is being downloaded.',
             );
         } catch (error) {
             setDownloadError(

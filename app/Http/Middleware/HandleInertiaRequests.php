@@ -76,6 +76,12 @@ class HandleInertiaRequests extends Middleware
                 'phpPostMaxSizeMb' => $uploadLimits['php_post_max_size_mb'],
                 'effectiveMb' => $uploadLimits['effective_mb'],
             ],
+            'flash' => [
+                'success' => fn () => $request->session()->get('success'),
+                'info' => fn () => $request->session()->get('info'),
+                'warning' => fn () => $request->session()->get('warning'),
+                'error' => fn () => $request->session()->get('error'),
+            ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
     }

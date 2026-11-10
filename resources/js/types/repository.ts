@@ -32,6 +32,7 @@ export type RepositoryFileInfo = {
     type: string;
     pages: number;
     canDownload?: boolean;
+    status?: string;
 };
 
 export type RepositoryVersion = {
@@ -74,6 +75,7 @@ export type RepositoryItem = {
     externalLink?: string;
     embargoUntil?: string;
     file: RepositoryFileInfo;
+    files: RepositoryFileInfo[];
     versions: RepositoryVersion[];
     createdAt: string;
     updatedAt: string;
@@ -92,6 +94,7 @@ export type RepositoryUpdatePayload = Omit<
     | 'moderationConcernType'
     | 'moderationRequestedAt'
     | 'moderationReviewerName'
+    | 'files'
 >;
 
 export type RepositoryFileReplacement = {

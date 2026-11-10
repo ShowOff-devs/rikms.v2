@@ -1,200 +1,47 @@
 import { router } from '@inertiajs/react';
-import {
-    AlertCircle,
-    ArrowLeft,
-    CheckCircle2,
-    LoaderCircle,
-} from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { AlertCircle, ArrowLeft, LoaderCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import AgencyAdminLayout from '@/components/agency/AgencyAdminLayout';
-import { BasicInformationSection } from '@/components/repository/edit/BasicInformationSection';
-import { EditDocumentActions } from '@/components/repository/edit/EditDocumentActions';
-import { EditDocumentPreview } from '@/components/repository/edit/EditDocumentPreview';
-import { FileInformationSection } from '@/components/repository/edit/FileInformationSection';
-import { PublicationInformationSection } from '@/components/repository/edit/PublicationInformationSection';
-import { ResearchClassificationSection } from '@/components/repository/edit/ResearchClassificationSection';
-import { ResearchStatusPanel } from '@/components/repository/edit/ResearchStatusPanel';
-import { SectionCard } from '@/components/repository/edit/SectionCard';
-import { VersionHistorySection } from '@/components/repository/edit/VersionHistorySection';
-import { RevisionRequestPanel } from '@/components/repository/RevisionRequestPanel';
-import { getAgencyAiResults } from '@/lib/agency/agency-ai-results-service';
-import type { AgencyAiResults } from '@/lib/agency/agency-ai-results-service';
+import { ProjectAccomplishmentEditPage } from '@/components/repository/edit/ProjectAccomplishmentEditPage';
+import { ResearchStudyEditPage } from '@/components/repository/edit/ResearchStudyEditPage';
+import { TerminalReportEditPage } from '@/components/repository/edit/TerminalReportEditPage';
 import { useAgencySession } from '@/lib/auth/agency-auth';
-import {
-    archiveRepositoryItem,
-    createRepositoryRevision,
-    downloadRepositoryFile,
-    getRepositoryItemById,
-    publishRepositoryItem,
-    replaceRepositoryFile,
-    saveRepositoryItemAsDraft,
-    updateRepositoryItem,
-} from '@/lib/repository/repository-service';
+import { getRepositoryItemById } from '@/lib/repository/repository-service';
 import type {
-    RepositoryAccessType,
+    RepositoryDocumentType,
     RepositoryItem,
-    RepositoryUpdatePayload,
 } from '@/types/repository';
-
-export type EditDocumentErrors = Partial<
-    Record<
-        | 'title'
-        | 'authors'
-        | 'category'
-        | 'sdgs'
-        | 'year'
-        | 'accessType'
-        | 'externalLink'
-        | 'embargoUntil',
-        string
-    >
-> & {
-    authorEmails?: Record<number, string>;
-};
 
 type EditDocumentPageProps = {
     repositoryId: string;
 };
 
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
+type RepositoryLoadState =
+    | { repositoryId: string; status: 'loading' }
+    | { repositoryId: string; status: 'loaded'; item: RepositoryItem }
+    | { repositoryId: string; status: 'error'; message: string };
 
-const emptyPayload = (item: RepositoryItem): RepositoryUpdatePayload => ({
-    title: item.title,
-    abstract: item.abstract,
-    authors: item.authors,
-    agency: item.agency,
-    documentType: item.documentType,
-    year: item.year,
-    status: item.status,
-    accessType: item.accessType,
-    sdgs: item.sdgs,
-    category: item.category,
-    keywords: item.keywords,
-    metadataCompletion: item.metadataCompletion,
-    digitalLibraryScore: item.digitalLibraryScore,
-    isAiTagged: item.isAiTagged,
-    publisher: item.publisher,
-    doi: item.doi ?? '',
-    isbn: item.isbn ?? '',
-    externalLink: item.externalLink ?? '',
-    embargoUntil: item.embargoUntil ?? '',
-    file: item.file,
-    versions: item.versions,
-});
-
-const validatePayload = (payload: RepositoryUpdatePayload) => {
-    const errors: EditDocumentErrors = {};
-    const authorEmailErrors: Record<number, string> = {};
-
-    if (!payload.title.trim()) {
-        errors.title = 'Research title is required.';
+export function editPageKeyForDocumentType(
+    documentType: RepositoryDocumentType,
+): RepositoryDocumentType {
+    if (documentType === 'terminal-report') {
+        return 'terminal-report';
     }
 
-    const namedAuthors = payload.authors.filter((author) => author.name.trim());
-
-    if (namedAuthors.length === 0) {
-        errors.authors = 'Add at least one author name.';
+    if (documentType === 'project-accomplishment') {
+        return 'project-accomplishment';
     }
 
-    payload.authors.forEach((author, index) => {
-        if (author.email.trim() && !emailPattern.test(author.email.trim())) {
-            authorEmailErrors[index] = 'Use a valid email address.';
-        }
-    });
-
-    if (Object.keys(authorEmailErrors).length > 0) {
-        errors.authorEmails = authorEmailErrors;
-    }
-
-    if (!payload.category.trim()) {
-        errors.category = 'Research category is required.';
-    }
-
-    if (payload.sdgs.length === 0) {
-        errors.sdgs = 'Select at least one SDG tag.';
-    }
-
-    if (!Number.isInteger(payload.year) || payload.year < 1900) {
-        errors.year = 'Enter a valid publication year.';
-    }
-
-    if (!payload.accessType) {
-        errors.accessType = 'Choose an access control option.';
-    }
-
-    if (payload.accessType === 'external-link') {
-        try {
-            new URL(payload.externalLink ?? '');
-        } catch {
-            errors.externalLink = 'Enter a valid external URL.';
-        }
-    }
-
-    if (payload.accessType === 'embargo' && !payload.embargoUntil) {
-        errors.embargoUntil = 'Embargo date is required.';
-    }
-
-    return errors;
-};
-
-const hasErrors = (errors: EditDocumentErrors) =>
-    Object.entries(errors).some(([, value]) =>
-        typeof value === 'string'
-            ? Boolean(value)
-            : Object.keys(value).length > 0,
-    );
-
-function canEditRepositoryItem(item: RepositoryItem | null) {
-    return Boolean(
-        item?.capabilities.canUpdate &&
-        (item.status === 'draft' || item.status === 'revision-required'),
-    );
-}
-
-function editLockMessage(item: RepositoryItem | null) {
-    if (!item) {
-        return null;
-    }
-
-    if (item.status === 'pending') {
-        return 'Submitted research is pending moderation and cannot be edited unless an administrator returns it to draft.';
-    }
-
-    if (item.status === 'revision-required' && !item.capabilities.canUpdate) {
-        return 'A revision was requested, but your account is not authorized to edit this agency record.';
-    }
-
-    if (item.status === 'published') {
-        return 'Published research is locked. Create a draft revision to edit changes without changing the public record yet.';
-    }
-
-    if (item.status === 'archived') {
-        return 'Archived research must be restored before it can be edited.';
-    }
-
-    if (item.status === 'superseded') {
-        return 'This version has been superseded by a newer published revision and is kept read-only for audit history.';
-    }
-
-    return null;
+    return 'research-study';
 }
 
 export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
     const session = useAgencySession();
-    const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [search, setSearch] = useState('');
-    const [item, setItem] = useState<RepositoryItem | null>(null);
-    const [form, setForm] = useState<RepositoryUpdatePayload | null>(null);
-    const [errors, setErrors] = useState<EditDocumentErrors>({});
-    const [isLoading, setIsLoading] = useState(true);
-    const [isSaving, setIsSaving] = useState(false);
-    const [message, setMessage] = useState<string | null>(null);
-    const [aiResults, setAiResults] = useState<AgencyAiResults | null>(null);
-    const [aiResultsMessage, setAiResultsMessage] = useState(
-        'Loading AI suggestions...',
-    );
-    const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
-    const [isDirty, setIsDirty] = useState(false);
+    const [loadState, setLoadState] = useState<RepositoryLoadState>({
+        repositoryId,
+        status: 'loading',
+    });
 
     useEffect(() => {
         if (!session) {
@@ -205,39 +52,42 @@ export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
     useEffect(() => {
         let isCurrent = true;
 
-        getRepositoryItemById(repositoryId).then((record) => {
-            if (!isCurrent) {
-                return;
-            }
-
-            setItem(record);
-            setForm(record ? emptyPayload(record) : null);
-            setIsLoading(false);
-        });
-
-        return () => {
-            isCurrent = false;
-        };
-    }, [repositoryId]);
-
-    useEffect(() => {
-        let isCurrent = true;
-
-        getAgencyAiResults(repositoryId)
-            .then((results) => {
+        getRepositoryItemById(repositoryId)
+            .then((record) => {
                 if (!isCurrent) {
                     return;
                 }
 
-                setAiResults(results);
-                setAiResultsMessage('');
-            })
-            .catch(() => {
-                if (isCurrent) {
-                    setAiResultsMessage(
-                        'AI/PDF/SDG suggestions are not available yet.',
-                    );
+                if (record) {
+                    setLoadState({
+                        repositoryId,
+                        status: 'loaded',
+                        item: record,
+                    });
+
+                    return;
                 }
+
+                setLoadState({
+                    repositoryId,
+                    status: 'error',
+                    message:
+                        'The selected repository record does not exist in your agency repository.',
+                });
+            })
+            .catch((error: unknown) => {
+                if (!isCurrent) {
+                    return;
+                }
+
+                setLoadState({
+                    repositoryId,
+                    status: 'error',
+                    message:
+                        error instanceof Error
+                            ? error.message
+                            : 'Unable to load the selected research record.',
+                });
             });
 
         return () => {
@@ -253,171 +103,45 @@ export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
         );
     }
 
-    const updateForm = (patch: Partial<RepositoryUpdatePayload>) => {
-        setForm((current) => (current ? { ...current, ...patch } : current));
-        setIsDirty(true);
-        setMessage(null);
-    };
+    const isCurrentRecord = loadState.repositoryId === repositoryId;
+    const isLoading = !isCurrentRecord || loadState.status === 'loading';
+    const item =
+        isCurrentRecord && loadState.status === 'loaded'
+            ? loadState.item
+            : null;
+    const loadError =
+        isCurrentRecord && loadState.status === 'error'
+            ? loadState.message
+            : null;
 
-    const commit = async (
-        action: 'save' | 'draft' | 'publish',
-        payloadOverride?: Partial<RepositoryUpdatePayload>,
-    ) => {
-        if (!form) {
-            return;
-        }
+    if (!isLoading && item) {
+        const pageKey = editPageKeyForDocumentType(item.documentType);
 
-        if (!canEditRepositoryItem(item)) {
-            setMessage(editLockMessage(item));
-
-            return;
-        }
-
-        const nextPayload = { ...form, ...payloadOverride };
-        const nextErrors = validatePayload(nextPayload);
-        setErrors(nextErrors);
-
-        if (hasErrors(nextErrors)) {
-            setMessage('Resolve validation issues before saving changes.');
-
-            return;
-        }
-
-        setIsSaving(true);
-
-        try {
-            const saved =
-                action === 'draft'
-                    ? await saveRepositoryItemAsDraft(repositoryId, nextPayload)
-                    : action === 'publish'
-                      ? await publishRepositoryItem(repositoryId, nextPayload)
-                      : await updateRepositoryItem(repositoryId, nextPayload);
-
-            if (saved) {
-                setItem(saved);
-                setForm(emptyPayload(saved));
-                setIsDirty(false);
-                setMessage(
-                    action === 'publish'
-                        ? 'Research submitted for moderation.'
-                        : action === 'draft'
-                          ? 'Draft saved successfully.'
-                          : 'Changes saved successfully.',
-                );
-            }
-        } catch (error) {
-            setMessage(
-                error instanceof Error
-                    ? error.message
-                    : 'Unable to save research changes.',
+        if (pageKey === 'terminal-report') {
+            return (
+                <TerminalReportEditPage
+                    repositoryId={repositoryId}
+                    initialItem={item}
+                />
             );
         }
 
-        setIsSaving(false);
-    };
-
-    const handleArchive = async () => {
-        if (!canEditRepositoryItem(item)) {
-            setMessage(editLockMessage(item));
-            setShowArchiveConfirm(false);
-
-            return;
-        }
-
-        setIsSaving(true);
-        const archived = await archiveRepositoryItem(repositoryId);
-
-        if (archived) {
-            setItem(archived);
-            setForm(emptyPayload(archived));
-            setIsDirty(false);
-            setMessage('Research record archived.');
-        }
-
-        setShowArchiveConfirm(false);
-        setIsSaving(false);
-    };
-
-    const handleCreateRevision = async () => {
-        if (item?.status !== 'published') {
-            setMessage('Only published research can be revised.');
-
-            return;
-        }
-
-        setIsSaving(true);
-
-        try {
-            const revision = await createRepositoryRevision(repositoryId);
-
-            if (revision) {
-                setMessage('Draft revision created.');
-                router.visit(`/agency/research/${revision.id}`);
-            }
-        } catch (error) {
-            setMessage(
-                error instanceof Error
-                    ? error.message
-                    : 'Unable to create draft revision.',
-            );
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
-    const handleReplaceFile = async (file: File) => {
-        if (!form) {
-            return;
-        }
-
-        if (!canEditRepositoryItem(item)) {
-            setMessage(editLockMessage(item));
-
-            return;
-        }
-
-        const replaced = await replaceRepositoryFile(repositoryId, {
-            name: file.name,
-            size: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
-            type: file.type || 'PDF Document',
-            file,
-            documentType: form.documentType,
-        });
-
-        if (replaced) {
-            setItem(replaced);
-            setForm(emptyPayload(replaced));
-            setMessage('Document file uploaded to the repository.');
-        }
-    };
-
-    const handleDownloadFile = async () => {
-        if (!form?.file.id || !form.file.canDownload) {
-            setMessage('No downloadable repository file is available yet.');
-
-            return;
-        }
-
-        try {
-            await downloadRepositoryFile(
-                repositoryId,
-                form.file.id,
-                form.file.name,
-            );
-            setMessage('Research file download started.');
-        } catch (error) {
-            setMessage(
-                error instanceof Error
-                    ? error.message
-                    : 'Unable to download research file.',
+        if (pageKey === 'project-accomplishment') {
+            return (
+                <ProjectAccomplishmentEditPage
+                    repositoryId={repositoryId}
+                    initialItem={item}
+                />
             );
         }
-    };
 
-    const canEdit = canEditRepositoryItem(item);
-    const canSubmit = canEdit && item?.capabilities.canSubmit === true;
-    const lockedMessage = editLockMessage(item);
-    const canCreateRevision = item?.status === 'published';
+        return (
+            <ResearchStudyEditPage
+                repositoryId={repositoryId}
+                initialItem={item}
+            />
+        );
+    }
 
     return (
         <AgencyAdminLayout
@@ -441,247 +165,20 @@ export function EditDocumentPage({ repositoryId }: EditDocumentPageProps) {
                             <LoaderCircle className="mr-2 size-5 animate-spin" />
                             Loading document metadata...
                         </div>
-                    ) : null}
-
-                    {!isLoading && !item ? (
+                    ) : (
                         <div className="flex min-h-[520px] flex-col items-center justify-center rounded-[16px] border border-[#e5e7eb] bg-white text-center">
                             <AlertCircle className="size-10 text-[#e7000b]" />
                             <h1 className="mt-4 text-xl font-bold text-[#101828]">
                                 Document not found
                             </h1>
-                            <p className="mt-1 text-sm text-[#6a7282]">
-                                The selected repository record does not exist in
-                                your agency repository.
+                            <p className="mt-1 max-w-lg text-sm text-[#6a7282]">
+                                {loadError ??
+                                    'The selected repository record does not exist in your agency repository.'}
                             </p>
                         </div>
-                    ) : null}
-
-                    {!isLoading && form && item ? (
-                        <>
-                            <header className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
-                                <div>
-                                    <nav className="flex h-4 items-center gap-1.5 text-xs leading-4 text-[#99a1af]">
-                                        <span>Dashboard</span>
-                                        <span>/</span>
-                                        <span>Research Repository</span>
-                                        <span>/</span>
-                                        <span className="font-semibold text-[#1e3a8a]">
-                                            Edit Document
-                                        </span>
-                                    </nav>
-                                    <h1 className="mt-2 text-2xl leading-9 font-bold text-[#1e3a8a]">
-                                        Edit Document
-                                    </h1>
-                                    <p className="text-sm leading-5 text-[#6a7282]">
-                                        Update research metadata, access rules,
-                                        file details, and publication status.
-                                    </p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    {isDirty ? (
-                                        <span className="h-[30px] rounded-full border border-[#fee685] bg-[#fffbeb] px-3 py-1.5 text-xs font-semibold text-[#bb4d00]">
-                                            Unsaved changes
-                                        </span>
-                                    ) : (
-                                        <span className="inline-flex h-[30px] items-center gap-1.5 rounded-full border border-[#b9f8cf] bg-[#f0fdf4] px-3 text-xs font-semibold text-[#008236]">
-                                            <CheckCircle2 className="size-3.5" />
-                                            Synced
-                                        </span>
-                                    )}
-                                </div>
-                            </header>
-
-                            {message ? (
-                                <div className="mt-5 rounded-[12px] border border-[#bfdbfe] bg-[#eff6ff] px-4 py-3 text-sm font-medium text-[#1e3a8a]">
-                                    {message}
-                                </div>
-                            ) : null}
-                            <div className="mt-5">
-                                <RevisionRequestPanel item={item} />
-                            </div>
-                            {!message && lockedMessage ? (
-                                <div className="mt-5 rounded-[12px] border border-[#fde68a] bg-[#fffbeb] px-4 py-3 text-sm font-medium text-[#92400e]">
-                                    {lockedMessage}
-                                </div>
-                            ) : null}
-
-                            <section className="mt-5 grid items-start gap-5 xl:grid-cols-[minmax(0,820px)_360px]">
-                                <div className="space-y-5">
-                                    <BasicInformationSection
-                                        form={form}
-                                        errors={errors}
-                                        onChange={updateForm}
-                                    />
-                                    <ResearchClassificationSection
-                                        form={form}
-                                        errors={errors}
-                                        onChange={updateForm}
-                                    />
-                                    <PublicationInformationSection
-                                        form={form}
-                                        errors={errors}
-                                        onChange={updateForm}
-                                    />
-                                    <FileInformationSection
-                                        file={form.file}
-                                        fileInputRef={fileInputRef}
-                                        onReplaceFile={handleReplaceFile}
-                                        onDownload={handleDownloadFile}
-                                    />
-                                </div>
-
-                                <aside className="space-y-5 xl:sticky xl:top-[88px]">
-                                    <EditDocumentPreview form={form} />
-                                    <ResearchStatusPanel
-                                        status={form.status}
-                                        accessType={form.accessType}
-                                        embargoUntil={form.embargoUntil ?? ''}
-                                        externalLink={form.externalLink ?? ''}
-                                        errors={errors}
-                                        disabled={!canEdit}
-                                        onAccessChange={(
-                                            accessType: RepositoryAccessType,
-                                        ) => updateForm({ accessType })}
-                                        onChange={updateForm}
-                                    />
-                                    <VersionHistorySection
-                                        versions={form.versions}
-                                    />
-                                    <AiSuggestionsPanel
-                                        results={aiResults}
-                                        message={aiResultsMessage}
-                                    />
-                                </aside>
-                            </section>
-
-                            <EditDocumentActions
-                                isSaving={isSaving}
-                                canEdit={canEdit}
-                                canSubmit={canSubmit}
-                                isRevisionRequired={
-                                    item.status === 'revision-required'
-                                }
-                                lockedMessage={lockedMessage ?? undefined}
-                                onSave={() => commit('save')}
-                                onSaveDraft={() => commit('draft')}
-                                onPublish={() => commit('publish')}
-                                onArchive={() => setShowArchiveConfirm(true)}
-                                canCreateRevision={canCreateRevision}
-                                onCreateRevision={handleCreateRevision}
-                            />
-                        </>
-                    ) : null}
+                    )}
                 </div>
             </main>
-
-            {showArchiveConfirm ? (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
-                    <div className="w-full max-w-[420px] rounded-[16px] bg-white p-5 shadow-[0px_20px_40px_rgba(15,23,42,0.22)]">
-                        <h2 className="text-lg font-bold text-[#101828]">
-                            Archive research record?
-                        </h2>
-                        <p className="mt-2 text-sm leading-5 text-[#6a7282]">
-                            This marks the document as archived for agency
-                            repository management.
-                        </p>
-                        <div className="mt-5 flex justify-end gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setShowArchiveConfirm(false)}
-                                className="h-9 rounded-[10px] border border-[#e5e7eb] px-4 text-sm font-semibold text-[#4a5565]"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleArchive}
-                                className="h-9 rounded-[10px] bg-[#e7000b] px-4 text-sm font-semibold text-white"
-                            >
-                                Archive
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            ) : null}
         </AgencyAdminLayout>
-    );
-}
-
-function AiSuggestionsPanel({
-    results,
-    message,
-}: {
-    results: AgencyAiResults | null;
-    message: string;
-}) {
-    const metadata = results?.ai_metadata;
-    const sdg = results?.sdg_classification;
-    const pdf = results?.pdf_parsing_result;
-    const suggestedSdgs =
-        sdg?.suggested_sdg_tags?.map((tag) =>
-            typeof tag === 'string'
-                ? tag
-                : [tag.sdg, tag.label].filter(Boolean).join(' - '),
-        ) ?? [];
-
-    return (
-        <SectionCard
-            eyebrow="Suggested"
-            title="AI/PDF/SDG Results"
-            description="Read-only suggestions from secondary metadata storage."
-        >
-            {message ? (
-                <p className="text-sm leading-5 text-[#6a7282]">{message}</p>
-            ) : (
-                <div className="space-y-4 text-sm">
-                    <AiSuggestionRow
-                        label="PDF parsing"
-                        value={
-                            pdf?.status === 'not_available'
-                                ? 'Pending Review'
-                                : `${pdf?.status ?? 'Pending Review'}${
-                                      pdf?.page_count
-                                          ? ` - ${pdf.page_count} pages`
-                                          : ''
-                                  }`
-                        }
-                    />
-                    <AiSuggestionRow
-                        label="Extracted title"
-                        value={
-                            metadata?.extracted_title ??
-                            metadata?.message ??
-                            'Pending Review'
-                        }
-                    />
-                    <AiSuggestionRow
-                        label="Keywords"
-                        value={
-                            metadata?.extracted_keywords?.join(', ') ??
-                            'Pending Review'
-                        }
-                    />
-                    <AiSuggestionRow
-                        label="SDG suggestions"
-                        value={
-                            suggestedSdgs.length > 0
-                                ? suggestedSdgs.join(', ')
-                                : 'Pending Review'
-                        }
-                    />
-                </div>
-            )}
-        </SectionCard>
-    );
-}
-
-function AiSuggestionRow({ label, value }: { label: string; value: string }) {
-    return (
-        <div>
-            <p className="text-[11px] font-bold text-[#6a7282] uppercase">
-                {label}
-            </p>
-            <p className="mt-1 leading-5 text-[#101828]">{value}</p>
-        </div>
     );
 }

@@ -29,6 +29,7 @@ import {
     updateUserRole,
 } from '@/lib/admin/rbac-service';
 import { apiMessage } from '@/lib/api-client';
+import { toast } from '@/lib/toast';
 import type {
     CreateRolePayload,
     Permission,
@@ -59,7 +60,8 @@ export function RBACManagementPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [feedback, setFeedback] = useState<string | null>(null);
+    const setFeedback = (message: string) =>
+        toast.success('Roles and permissions updated', message);
     const [searchQuery, setSearchQuery] = useState('');
     const [showActiveAssignmentsOnly, setShowActiveAssignmentsOnly] =
         useState(true);
@@ -172,18 +174,6 @@ export function RBACManagementPage() {
     useEffect(() => {
         setAssignmentPage(1);
     }, [normalizedSearch, showActiveAssignmentsOnly]);
-
-    useEffect(() => {
-        if (!feedback) {
-            return;
-        }
-
-        const timerId = window.setTimeout(() => {
-            setFeedback(null);
-        }, 3200);
-
-        return () => window.clearTimeout(timerId);
-    }, [feedback]);
 
     const permissionById = useMemo(() => {
         return new Map(
@@ -398,12 +388,6 @@ export function RBACManagementPage() {
                 {error && (
                     <div className="mt-5 rounded-[10px] border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-sm text-[#b91c1c]">
                         {error}
-                    </div>
-                )}
-
-                {feedback && (
-                    <div className="mt-5 rounded-[10px] border border-[#bbf7d0] bg-[#f0fdf4] px-4 py-3 text-sm text-[#166534]">
-                        {feedback}
                     </div>
                 )}
 

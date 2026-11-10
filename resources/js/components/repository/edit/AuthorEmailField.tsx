@@ -1,5 +1,5 @@
 import { Mail, Plus, Trash2, UserRound } from 'lucide-react';
-import type { EditDocumentErrors } from '@/components/repository/edit/EditDocumentPage';
+import type { EditDocumentErrors } from '@/components/repository/edit/document-edit-page';
 import {
     FieldLabel,
     inputClass,

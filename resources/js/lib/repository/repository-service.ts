@@ -38,6 +38,7 @@ type AgencyResearchApiRecord = {
     authors: string[] | string;
     agency?: { short_name?: string | null; name?: string | null };
     publication_year?: number | null;
+    document_type?: string | null;
     status: string;
     revision_required?: boolean;
     moderation_issue_type?: string | null;
@@ -62,6 +63,7 @@ type AgencyResearchApiRecord = {
 
 type AgencyResearchFileApiRecord = {
     id: number;
+    report_highlight_id?: number | null;
     original_name: string;
     mime_type?: string | null;
     extension?: string | null;
@@ -140,23 +142,39 @@ function firstNumber(...values: unknown[]) {
     return 0;
 }
 
-function latestActiveFile(files?: AgencyResearchFileApiRecord[]) {
+function activeMainFiles(files?: AgencyResearchFileApiRecord[]) {
     return [...(files ?? [])]
-        .filter((file) => file.status !== 'deleted')
-        .sort(
-            (first, second) =>
+        .filter(
+            (file) =>
+                file.status !== 'deleted' &&
+                file.status !== 'archived' &&
+                !file.report_highlight_id,
+        )
+        .sort((first, second) => {
+            const uploadedAtDifference =
                 new Date(
                     second.uploaded_at ?? second.created_at ?? 0,
                 ).getTime() -
-                new Date(first.uploaded_at ?? first.created_at ?? 0).getTime(),
-        )[0];
+                new Date(first.uploaded_at ?? first.created_at ?? 0).getTime();
+
+            return uploadedAtDifference || second.id - first.id;
+        });
 }
 
-function mapRepositoryDocumentType(
-    record: AgencyResearchApiRecord,
-    file?: AgencyResearchFileApiRecord,
-): RepositoryDocumentType {
-    const type = normalize(file?.file_type ?? record.category ?? '');
+function latestActiveFile(files?: AgencyResearchFileApiRecord[]) {
+    return activeMainFiles(files)[0];
+}
+
+export function resolveRepositoryDocumentType({
+    documentType,
+    fileType,
+    category,
+}: {
+    documentType?: string | null;
+    fileType?: string | null;
+    category?: string | null;
+}): RepositoryDocumentType {
+    const type = normalize(documentType ?? fileType ?? category ?? '');
 
     if (type.includes('terminal')) {
         return 'terminal-report';
@@ -167,6 +185,17 @@ function mapRepositoryDocumentType(
     }
 
     return 'research-study';
+}
+
+function mapRepositoryDocumentType(
+    record: AgencyResearchApiRecord,
+    file?: AgencyResearchFileApiRecord,
+): RepositoryDocumentType {
+    return resolveRepositoryDocumentType({
+        documentType: record.document_type,
+        fileType: file?.file_type,
+        category: record.category,
+    });
 }
 
 function mapRepositoryDocumentTypeToFileType(
@@ -212,6 +241,7 @@ function mapRepositoryFileInfo(
             (file.extension ? file.extension.toUpperCase() : 'PDF'),
         pages: firstNumber(file.metadata?.page_count, file.metadata?.pages),
         canDownload: file.status !== 'deleted',
+        status: file.status ?? 'active',
     };
 }
 
@@ -559,6 +589,15 @@ export async function replaceRepositoryFile(
     id: string,
     file: RepositoryFileReplacement,
 ): Promise<RepositoryItem | null> {
+    await uploadRepositoryFile(id, file);
+
+    return getRepositoryItemById(id);
+}
+
+async function uploadRepositoryFile(
+    id: string,
+    file: RepositoryFileReplacement,
+) {
     if (!file.file) {
         throw new Error(
             'A selected file is required for repository file upload.',
@@ -578,6 +617,26 @@ export async function replaceRepositoryFile(
         method: 'POST',
         body: formData,
     });
+}
+
+export async function addRepositoryFiles(
+    id: string,
+    files: File[],
+    documentType?: RepositoryDocumentType,
+): Promise<RepositoryItem | null> {
+    if (files.length === 0) {
+        throw new Error('Select at least one PDF document to upload.');
+    }
+
+    for (const file of files) {
+        await uploadRepositoryFile(id, {
+            name: file.name,
+            size: formatBytes(file.size),
+            type: file.type || 'application/pdf',
+            file,
+            documentType,
+        });
+    }
 
     return getRepositoryItemById(id);
 }
@@ -614,6 +673,36 @@ export async function downloadRepositoryFile(
     window.URL.revokeObjectURL(url);
 }
 
+export async function previewRepositoryFile(
+    researchId: string,
+    fileId: string,
+) {
+    const response = await fetch(
+        `/api/agency/research/${encodeURIComponent(researchId)}/files/${encodeURIComponent(fileId)}/download`,
+        {
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'application/pdf',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        },
+    );
+
+    if (!response.ok) {
+        throw new Error('Unable to preview the selected research file.');
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.click();
+    window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+}
+
 async function getApiRepositoryItems() {
     const { data } = await fetchApi<AgencyResearchApiRecord[]>(
         '/api/agency/research?per_page=100',
@@ -633,6 +722,9 @@ function mapRepositoryItemFromApi(
               .filter(Boolean);
     const file = latestActiveFile(record.files);
     const fileInfo = mapRepositoryFileInfo(record, file);
+    const files = activeMainFiles(record.files).map((item) =>
+        mapRepositoryFileInfo(record, item),
+    );
 
     return {
         id: String(record.id),
@@ -679,6 +771,7 @@ function mapRepositoryItemFromApi(
         externalLink: record.external_url ?? undefined,
         embargoUntil: record.embargo_until ?? undefined,
         file: fileInfo,
+        files,
         versions: [
             {
                 id: `${record.id}-current`,

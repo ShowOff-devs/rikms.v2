@@ -18,6 +18,7 @@ import {
     restoreArchivedResearch,
 } from '@/lib/archive/archive-service';
 import { useAgencySession } from '@/lib/auth/agency-auth';
+import { toast } from '@/lib/toast';
 import type {
     ArchiveActivity,
     ArchiveFilters as ArchiveFiltersValue,
@@ -58,7 +59,17 @@ export function ArchivePage() {
     const [isLoading, setIsLoading] = useState(true);
     const [isRestoring, setIsRestoring] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
-    const [feedback, setFeedback] = useState('');
+    const setFeedback = (message: string) => {
+        if (!message) {
+return;
+}
+
+        if (message.startsWith('Unable')) {
+            toast.error('Archive action failed', message);
+        } else {
+            toast.success('Archive updated', message);
+        }
+    };
 
     useEffect(() => {
         if (!session) {
@@ -90,16 +101,6 @@ export function ArchivePage() {
             isCurrent = false;
         };
     }, []);
-
-    useEffect(() => {
-        if (!feedback) {
-            return;
-        }
-
-        const timeout = window.setTimeout(() => setFeedback(''), 3500);
-
-        return () => window.clearTimeout(timeout);
-    }, [feedback]);
 
     const filteredRecords = useMemo(
         () => filterArchivedResearch(records, filters),
@@ -283,15 +284,6 @@ export function ArchivePage() {
                                         ).length
                                     }
                                 />
-
-                                {feedback ? (
-                                    <div
-                                        role="status"
-                                        className="rounded-[10px] border border-[#b9f8cf] bg-[#f0fdf4] px-4 py-3 text-sm font-medium text-[#008236]"
-                                    >
-                                        {feedback}
-                                    </div>
-                                ) : null}
 
                                 <section className="overflow-hidden rounded-[10px] border border-[#e5e7eb] bg-white shadow-[0px_1px_3px_0px_rgba(0,0,0,0.1),0px_1px_2px_-1px_rgba(0,0,0,0.1)]">
                                     <ArchiveFilters
