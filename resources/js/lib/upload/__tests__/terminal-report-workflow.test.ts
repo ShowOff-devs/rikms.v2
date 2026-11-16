@@ -13,11 +13,28 @@ import {
 import {
     hydrateReportWorkflowFromRecord,
     mapReportWorkflowToResearchPayload,
+    reportAdditionalHighlightsFromRecord,
     reportHighlightFileError,
 } from '@/lib/upload/services/report-upload-service';
 import { reportStepSchemas } from '@/lib/upload/validation';
 
 describe('terminal report workflow', () => {
+    it('keeps every persisted highlight after the primary one available to the editor', () => {
+        const primary = { id: 11, title: 'Primary' };
+        const second = { id: 12, title: 'Second' };
+        const third = { id: 13, title: 'Third' };
+
+        expect(
+            reportAdditionalHighlightsFromRecord({
+                id: 7,
+                title: 'PAR',
+                authors: [],
+                status: 'draft',
+                report_highlights: [primary, second, third],
+            }),
+        ).toEqual([second, third]);
+    });
+
     it('uses dynamic neutral defaults without false AI provenance', () => {
         const data = createInitialReportWorkflowData('terminal-report');
 

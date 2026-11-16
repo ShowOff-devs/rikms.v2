@@ -14,10 +14,14 @@ abstract class TestCase extends BaseTestCase
     {
         $connection = config('database.default');
         $database = config("database.connections.{$connection}.database");
+        $usesSqliteMemory = $connection === 'sqlite' && $database === ':memory:';
+        $allowsIsolatedMysql = $connection === 'mysql'
+            && filter_var(env('RIKMS_ALLOW_MYSQL_TESTS', false), FILTER_VALIDATE_BOOL)
+            && preg_match('/(?:^|_)test(?:_|$)/i', (string) $database) === 1;
 
-        if (! $this->app->environment('testing') || $connection !== 'sqlite' || $database !== ':memory:') {
+        if (! $this->app->environment('testing') || (! $usesSqliteMemory && ! $allowsIsolatedMysql)) {
             throw new \RuntimeException(sprintf(
-                'Unsafe test database configuration: environment=%s, connection=%s, database=%s. Tests require sqlite :memory:.',
+                'Unsafe test database configuration: environment=%s, connection=%s, database=%s. Tests require sqlite :memory: or an explicitly enabled isolated MySQL database whose name contains test.',
                 $this->app->environment(),
                 (string) $connection,
                 (string) $database,

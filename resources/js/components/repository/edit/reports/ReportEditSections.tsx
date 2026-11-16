@@ -8,6 +8,7 @@ import {
     Trash2,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { useState } from 'react';
 import FinancialSummaryCard from '@/components/upload/shared/FinancialSummaryCard';
 import SDGGrid from '@/components/upload/shared/SDGGrid';
 import TagSelector from '@/components/upload/shared/TagSelector';
@@ -243,6 +244,129 @@ function metadataText(fields: ReportAIMetadataFields, key: ReportMetadataKey) {
     return Array.isArray(value) ? value.join(', ') : value;
 }
 
+function KeywordEditor({
+    keywords,
+    disabled,
+    onChange,
+}: {
+    keywords: string[];
+    disabled: boolean;
+    onChange: (keywords: string[]) => void;
+}) {
+    const [draft, setDraft] = useState('');
+    const addKeywords = (rawValue: string) => {
+        const additions = rawValue
+            .split(/[,;\n]+/u)
+            .map((keyword) => keyword.trim())
+            .filter(Boolean);
+
+        if (!additions.length) {
+            return;
+        }
+
+        const seen = new Set(keywords.map((keyword) => keyword.toLowerCase()));
+        const uniqueAdditions = additions.filter((keyword) => {
+            const normalized = keyword.toLowerCase();
+
+            if (seen.has(normalized)) {
+                return false;
+            }
+
+            seen.add(normalized);
+
+            return true;
+        });
+
+        if (uniqueAdditions.length) {
+            onChange([...keywords, ...uniqueAdditions]);
+        }
+    };
+    const commitDraft = () => {
+        addKeywords(draft);
+        setDraft('');
+    };
+
+    return (
+        <div className="mt-2">
+            <div
+                className={cn(
+                    'flex min-h-11 w-full flex-wrap items-center gap-2 rounded-[10px] border border-[#d1d5dc] bg-white px-3 py-2 text-sm focus-within:border-[#1e3a8a] focus-within:ring-2 focus-within:ring-[#1e3a8a]/10',
+                    disabled && 'cursor-not-allowed bg-[#f3f4f6]',
+                )}
+            >
+                {keywords.map((keyword) => (
+                    <span
+                        key={keyword.toLowerCase()}
+                        className="inline-flex max-w-full items-center gap-1 rounded-full bg-[#eff6ff] px-2.5 py-1 text-xs font-semibold text-[#1e3a8a]"
+                    >
+                        <span className="truncate">{keyword}</span>
+                        <button
+                            type="button"
+                            disabled={disabled}
+                            onClick={() =>
+                                onChange(
+                                    keywords.filter(
+                                        (existing) => existing !== keyword,
+                                    ),
+                                )
+                            }
+                            className="shrink-0 text-sm leading-none disabled:opacity-40"
+                            aria-label={`Remove ${keyword}`}
+                        >
+                            ×
+                        </button>
+                    </span>
+                ))}
+                <input
+                    value={draft}
+                    disabled={disabled}
+                    placeholder={
+                        keywords.length
+                            ? 'Add another keyword'
+                            : 'Type a keyword'
+                    }
+                    onChange={(event) => {
+                        const value = event.target.value;
+
+                        if (/[,;\n]/u.test(value)) {
+                            const parts = value.split(/[,;\n]/u);
+                            addKeywords(parts.slice(0, -1).join(','));
+                            setDraft(parts.at(-1) ?? '');
+
+                            return;
+                        }
+
+                        setDraft(value);
+                    }}
+                    onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === 'Tab') {
+                            if (draft.trim()) {
+                                event.preventDefault();
+                                commitDraft();
+                            }
+
+                            return;
+                        }
+
+                        if (
+                            event.key === 'Backspace' &&
+                            !draft &&
+                            keywords.length
+                        ) {
+                            onChange(keywords.slice(0, -1));
+                        }
+                    }}
+                    onBlur={commitDraft}
+                    className="h-7 min-w-[180px] flex-1 bg-transparent outline-none disabled:cursor-not-allowed"
+                />
+            </div>
+            <p className="mt-1.5 text-xs text-[#6a7282]">
+                Press Enter, Tab, comma, or semicolon after each keyword.
+            </p>
+        </div>
+    );
+}
+
 export function MetadataSection({
     data,
     suggestions,
@@ -345,7 +469,17 @@ export function MetadataSection({
                                 Public metadata
                             </label>
                         </div>
-                        {isLong ? (
+                        {key === 'keywords' ? (
+                            <KeywordEditor
+                                keywords={
+                                    data.aiMetadata.extractedMetadata.keywords
+                                }
+                                disabled={disabled}
+                                onChange={(keywords) =>
+                                    updateField(key, keywords.join(', '))
+                                }
+                            />
+                        ) : isLong ? (
                             <textarea
                                 value={current}
                                 rows={4}

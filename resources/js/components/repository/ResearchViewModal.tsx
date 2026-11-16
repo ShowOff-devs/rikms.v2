@@ -1,5 +1,4 @@
-import { FileText, Mail, Tag } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { FileText } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import {
     Dialog,
@@ -14,12 +13,16 @@ import {
     repositoryAccessTypeLabels,
     repositoryDocumentTypeColors,
     repositoryDocumentTypeLabels,
-    repositorySdgColors,
     repositoryStatusLabels,
 } from '@/data/repository-display';
+import { getAgencyResearch } from '@/lib/agency/agency-research-service';
+import type { AgencyResearchRecord } from '@/lib/agency/agency-research-service';
 import { getRepositoryItemById } from '@/lib/repository/repository-service';
 import type { RepositoryItem } from '@/types/repository';
 import { RevisionRequestPanel } from './RevisionRequestPanel';
+import { ProjectAccomplishmentView } from './view/ProjectAccomplishmentView';
+import { ResearchStudyView } from './view/ResearchStudyView';
+import { TerminalReportView } from './view/TerminalReportView';
 
 export function ResearchViewModal({
     item,
@@ -31,6 +34,8 @@ export function ResearchViewModal({
     onOpenChange: (open: boolean) => void;
 }) {
     const [detailItem, setDetailItem] = useState<RepositoryItem | null>(null);
+    const [detailRecord, setDetailRecord] =
+        useState<AgencyResearchRecord | null>(null);
     const [detailError, setDetailError] = useState<{
         id: string;
         message: string;
@@ -43,23 +48,36 @@ export function ResearchViewModal({
 
         let isCurrent = true;
 
-        getRepositoryItemById(item.id)
-            .then((record) => {
-                if (!isCurrent) {
-                    return;
-                }
+        Promise.allSettled([
+            getRepositoryItemById(item.id),
+            getAgencyResearch(item.id),
+        ]).then(([repositoryResult, researchResult]) => {
+            if (!isCurrent) {
+                return;
+            }
 
-                setDetailItem(record ?? item);
-                setDetailError(null);
-            })
-            .catch(() => {
-                if (isCurrent) {
-                    setDetailError({
-                        id: item.id,
-                        message: 'Unable to refresh research details.',
-                    });
-                }
-            });
+            if (repositoryResult.status === 'fulfilled') {
+                setDetailItem(repositoryResult.value ?? item);
+            }
+
+            if (researchResult.status === 'fulfilled') {
+                setDetailRecord(researchResult.value);
+            }
+
+            if (
+                repositoryResult.status === 'rejected' &&
+                researchResult.status === 'rejected'
+            ) {
+                setDetailError({
+                    id: item.id,
+                    message: 'Unable to refresh research details.',
+                });
+
+                return;
+            }
+
+            setDetailError(null);
+        });
 
         return () => {
             isCurrent = false;
@@ -78,17 +96,23 @@ export function ResearchViewModal({
     }
 
     const typeColor = repositoryDocumentTypeColors[displayItem.documentType];
+    const documentLabel =
+        repositoryDocumentTypeLabels[displayItem.documentType];
+    const activeDetailRecord =
+        detailRecord && String(detailRecord.id) === displayItem.id
+            ? detailRecord
+            : null;
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[90vh] overflow-y-auto rounded-[16px] border-[#e5e7eb] bg-white p-0 sm:max-w-[760px]">
+            <DialogContent className="max-h-[90vh] overflow-y-auto rounded-[16px] border-[#e5e7eb] bg-white p-0 sm:max-w-[920px]">
                 <DialogHeader className="border-b border-[#e5e7eb] px-6 pt-6 pb-4">
                     <DialogTitle className="text-xl font-bold text-[#101828]">
-                        Research Details
+                        {documentLabel} Details
                     </DialogTitle>
                     <DialogDescription className="text-sm text-[#6a7282]">
-                        View-only metadata summary for the selected agency
-                        repository record.
+                        View the stored {documentLabel.toLowerCase()} metadata,
+                        files, and workflow information.
                     </DialogDescription>
                     {activeDetailError ? (
                         <p className="mt-2 text-xs font-medium text-[#e7000b]">
@@ -131,76 +155,24 @@ export function ResearchViewModal({
                     <h2 className="mt-4 text-xl leading-7 font-bold text-[#101828]">
                         {displayItem.title}
                     </h2>
-                    <p className="mt-2 text-sm leading-6 text-[#6a7282]">
-                        {displayItem.abstract}
-                    </p>
-
-                    <div className="mt-5 grid gap-3 md:grid-cols-2">
-                        <DetailBlock label="Authors">
-                            <div className="space-y-2">
-                                {displayItem.authors.map((author, index) => (
-                                    <div key={`${author.name}-${index}`}>
-                                        <p className="text-sm font-semibold text-[#364153]">
-                                            {author.name}
-                                        </p>
-                                        {author.email ? (
-                                            <p className="mt-0.5 inline-flex items-center gap-1 text-xs text-[#6a7282]">
-                                                <Mail className="size-3" />
-                                                {author.email}
-                                            </p>
-                                        ) : null}
-                                    </div>
-                                ))}
-                            </div>
-                        </DetailBlock>
-                        <DetailBlock label="Agency">
-                            {displayItem.agency}
-                        </DetailBlock>
-                        <DetailBlock label="Category">
-                            {displayItem.category}
-                        </DetailBlock>
-                        <DetailBlock label="File Name">
-                            {displayItem.file?.name ?? 'No file metadata'}
-                        </DetailBlock>
-                        <DetailBlock label="Metadata Completion">
-                            {displayItem.metadataCompletion}%
-                        </DetailBlock>
-                        <DetailBlock label="Digital Library Readiness">
-                            {displayItem.digitalLibraryScore}%
-                        </DetailBlock>
-                    </div>
-
-                    <div className="mt-5 grid gap-4 md:grid-cols-2">
-                        <div>
-                            <p className="text-[10px] font-bold text-[#99a1af] uppercase">
-                                SDG Tags
-                            </p>
-                            <div className="mt-2 flex flex-wrap gap-1.5">
-                                {displayItem.sdgs.map((sdg) => (
-                                    <span
-                                        key={sdg}
-                                        className="rounded-[4px] px-1.5 py-0.5 text-[9px] font-bold text-white"
-                                        style={{
-                                            backgroundColor:
-                                                repositorySdgColors[sdg] ??
-                                                '#1e3a8a',
-                                        }}
-                                    >
-                                        {sdg}
-                                    </span>
-                                ))}
-                            </div>
-                        </div>
-                        <div>
-                            <p className="inline-flex items-center gap-1 text-[10px] font-bold text-[#99a1af] uppercase">
-                                <Tag className="size-3" />
-                                Keywords
-                            </p>
-                            <p className="mt-2 text-sm leading-5 text-[#6a7282]">
-                                {displayItem.keywords.join(', ') ||
-                                    'No keywords'}
-                            </p>
-                        </div>
+                    <div className="mt-5">
+                        {displayItem.documentType === 'terminal-report' ? (
+                            <TerminalReportView
+                                item={displayItem}
+                                record={activeDetailRecord}
+                            />
+                        ) : displayItem.documentType ===
+                          'project-accomplishment' ? (
+                            <ProjectAccomplishmentView
+                                item={displayItem}
+                                record={activeDetailRecord}
+                            />
+                        ) : (
+                            <ResearchStudyView
+                                item={displayItem}
+                                record={activeDetailRecord}
+                            />
+                        )}
                     </div>
                 </div>
 
@@ -224,24 +196,5 @@ function DetailBadge({ label }: { label: string }) {
         <span className="inline-flex h-[24px] items-center rounded-full border border-[#e5e7eb] bg-[#f9fafb] px-2.5 text-[11px] font-semibold text-[#4a5565]">
             {label}
         </span>
-    );
-}
-
-function DetailBlock({
-    label,
-    children,
-}: {
-    label: string;
-    children: ReactNode;
-}) {
-    return (
-        <div className="rounded-[12px] bg-[#f9fafb] p-3">
-            <p className="text-[10px] font-bold text-[#99a1af] uppercase">
-                {label}
-            </p>
-            <div className="mt-1 text-sm font-medium text-[#364153]">
-                {children}
-            </div>
-        </div>
     );
 }

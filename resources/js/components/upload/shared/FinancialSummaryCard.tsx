@@ -18,13 +18,13 @@ export default function FinancialSummaryCard({
 }: FinancialSummaryCardProps) {
     return (
         <div
-            className={`min-w-0 overflow-hidden rounded-[14px] p-5 ${toneClasses[tone]}`}
+            className={`[container-type:inline-size] min-w-0 overflow-hidden rounded-[14px] p-4 ${toneClasses[tone]}`}
         >
             <p className="text-[11px] font-bold tracking-wide uppercase opacity-70">
                 {label}
             </p>
             <p
-                className="mt-2 text-2xl leading-tight font-bold break-words tabular-nums"
+                className="mt-2 max-w-full overflow-hidden text-[clamp(1rem,12cqi,1.5rem)] leading-tight font-bold text-ellipsis whitespace-nowrap tabular-nums"
                 title={value}
             >
                 {value}
