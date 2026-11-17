@@ -51,6 +51,7 @@ import {
     hydrateReportWorkflowFromRecord,
     mapReportWorkflowToResearchPayload,
     removeReportFile,
+    reportAdditionalHighlightsFromRecord,
     reportHighlightFileError,
     saveReportDraft,
     submitReport,
@@ -310,7 +311,9 @@ export function ReportEditPage({
         );
         next.sdgTagging.aiSuggestedSDGs = suggestedSdgs(results);
         setRecord(nextRecord);
-        setAdditionalHighlights((nextRecord.report_highlights ?? []).slice(1));
+        setAdditionalHighlights(
+            reportAdditionalHighlightsFromRecord(nextRecord),
+        );
         setForm(next);
     };
 
@@ -369,6 +372,9 @@ export function ReportEditPage({
             );
             next.sdgTagging.aiSuggestedSDGs = suggestedSdgs(results);
             setRecord(recordResult.value);
+            setAdditionalHighlights(
+                reportAdditionalHighlightsFromRecord(recordResult.value),
+            );
             setAiResults(results);
             setForm(next);
             setLoading(false);
@@ -429,8 +435,8 @@ export function ReportEditPage({
             const currentVersionSaved = sync.completeSave(saveToken);
 
             if (currentVersionSaved) {
-hydrate(saved);
-}
+                hydrate(saved);
+            }
 
             const nextItem = await getRepositoryItemById(repositoryId);
 
@@ -439,8 +445,8 @@ hydrate(saved);
             }
 
             if (currentVersionSaved) {
-setDirty(false);
-}
+                setDirty(false);
+            }
 
             toast.success(
                 submit
@@ -711,7 +717,9 @@ setDirty(false);
                                                 ]
                                             }
                                         </span>
-                                        <DocumentSyncStatus state={sync.state} />
+                                        <DocumentSyncStatus
+                                            state={sync.state}
+                                        />
                                     </div>
                                 </div>
                             </header>

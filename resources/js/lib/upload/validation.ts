@@ -127,9 +127,14 @@ const reportProjectStatusSchema = z.enum([
     'completed',
 ]) satisfies z.ZodType<ReportProjectStatus>;
 
-const reportUploadedFileSchema = z.custom<File | null>(
-    (value) => value === null || typeof value === 'object',
-);
+const reportUploadedFileSchema = z
+    .custom<File | null>(
+        (value) => value === null || typeof value === 'object',
+        {
+            message: 'Select or re-select the report PDF before continuing.',
+        },
+    )
+    .optional();
 
 const reportingPeriodOptions = ['Q1', 'Q2', 'Q3', 'Q4', 'Annual', 'Final'];
 
@@ -153,6 +158,7 @@ const reportDetailsSchema = z
         uploadedFileType: z.string().optional(),
         uploadedFileSize: z.number().optional(),
         uploadError: z.string().nullable().optional(),
+        browserRecoveryRestored: z.boolean().optional(),
         reportTitle: z.string(),
         reportDescription: z.string(),
         projectStartDate: reportDateSchema.refine(
@@ -183,7 +189,13 @@ const reportDetailsSchema = z
                     message: `Year must be between 1900 and ${new Date().getFullYear() + 1}.`,
                 },
             ),
-        agency: z.string().trim().min(1),
+        agency: z
+            .string()
+            .trim()
+            .min(
+                1,
+                'Agency context is unavailable. Contact an administrator before continuing.',
+            ),
         uploadStatus: z.enum(['idle', 'uploading', 'uploaded', 'error']),
     })
     .superRefine((value, context) => {
@@ -294,8 +306,13 @@ export const reportStepSchemas = {
             performanceProjects: z
                 .array(
                     z.object({
-                        id: z.string().min(1),
-                        projectName: z.string().trim().min(1),
+                        id: z
+                            .string()
+                            .min(1, 'The performance row is invalid.'),
+                        projectName: z
+                            .string()
+                            .trim()
+                            .min(1, 'Enter an activity, output, or indicator.'),
                         targetValue: z.string().max(120).nullable(),
                         actualValue: z.string().max(120).nullable(),
                         targetNumericValue: z
@@ -313,8 +330,8 @@ export const reportStepSchemas = {
                 .min(1, 'Add at least one project performance row.'),
             physicalAccomplishmentPercent: z
                 .number({ message: 'Official accomplishment is required.' })
-                .min(0)
-                .max(100),
+                .min(0, 'Official accomplishment cannot be negative.')
+                .max(100, 'Official accomplishment cannot exceed 100%.'),
             performanceRemarks: z.string().optional(),
         })
         .superRefine((value, context) => {
@@ -422,10 +439,14 @@ export const reportStepSchemas = {
         supportingFiles: z
             .array(
                 z.object({
-                    id: z.string().min(1),
-                    name: z.string().min(1),
+                    id: z.string().min(1, 'The supporting file is invalid.'),
+                    name: z
+                        .string()
+                        .min(1, 'The supporting file name is missing.'),
                     size: z.number().nonnegative(),
-                    type: z.string().min(1),
+                    type: z
+                        .string()
+                        .min(1, 'The supporting file type is missing.'),
                 }),
             )
             .max(5),

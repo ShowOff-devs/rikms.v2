@@ -4,6 +4,7 @@ import AgencyAdminLayout from '@/components/agency/AgencyAdminLayout';
 import UploadWizard from '@/components/upload/wizard/UploadWizard';
 import { terminalReportUploadConfig } from '@/config/upload/terminalReportUploadConfig';
 import { useAgencySession } from '@/lib/auth/agency-auth';
+import { browserRecoveryUserId } from '@/lib/upload/draft-recovery';
 
 type TerminalReportUploadPageProps = {
     researchId?: string;
@@ -14,6 +15,9 @@ export default function TerminalReportUploadPage({
 }: TerminalReportUploadPageProps) {
     const session = useAgencySession();
     const [search, setSearch] = useState('');
+    const recoveryUserId = session
+        ? String(session.userId ?? browserRecoveryUserId(session.email))
+        : '';
 
     useEffect(() => {
         if (!session) {
@@ -41,7 +45,12 @@ export default function TerminalReportUploadPage({
                     config={terminalReportUploadConfig}
                     initialResearchId={researchId}
                     agencyName={session.agencyName}
-                    recoveryScope={`${session.agencyId}:${session.email}`}
+                    recoveryScope={{
+                        agencyId: session.agencyId,
+                        userId: recoveryUserId,
+                        documentType: 'terminal-report',
+                    }}
+                    legacyRecoveryKey={`rikms.terminal-report.recovery.${session.agencyId}:${session.email}`}
                 />
             </AgencyAdminLayout>
         </>

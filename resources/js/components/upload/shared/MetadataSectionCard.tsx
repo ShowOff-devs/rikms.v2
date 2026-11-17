@@ -1,4 +1,5 @@
 import { Check, Eye, Pencil } from 'lucide-react';
+import { RequiredIndicator } from '@/components/upload/shared/ReportFieldFeedback';
 import { metadataFieldLabels } from '@/lib/upload/report-workflow';
 import { cn } from '@/lib/utils';
 import type {
@@ -28,6 +29,7 @@ export default function MetadataSectionCard({
     const isPublic = metadata.selectedPublicMetadata.includes(fieldKey);
     const wasEdited = metadata.userEditedFields.includes(fieldKey);
     const isArrayField = fieldKey === 'keywords' || fieldKey === 'authors';
+    const isRequired = fieldKey === 'title' || fieldKey === 'abstract';
 
     return (
         <section className="rounded-[14px] border border-[#e5e7eb] bg-white p-4">
@@ -35,6 +37,7 @@ export default function MetadataSectionCard({
                 <div className="flex items-center gap-2">
                     <h3 className="text-sm font-bold text-[#101828]">
                         {metadataFieldLabels[fieldKey]}
+                        {isRequired ? <RequiredIndicator /> : null}
                     </h3>
                     <span
                         className={cn(
@@ -68,6 +71,9 @@ export default function MetadataSectionCard({
             </div>
             {isArrayField ? (
                 <input
+                    data-validation-field={
+                        isRequired ? 'extractedMetadata' : undefined
+                    }
                     value={getValue(metadata, fieldKey)}
                     onChange={(event) =>
                         onValueChange(fieldKey, event.target.value)
@@ -76,6 +82,9 @@ export default function MetadataSectionCard({
                 />
             ) : (
                 <textarea
+                    data-validation-field={
+                        isRequired ? 'extractedMetadata' : undefined
+                    }
                     value={getValue(metadata, fieldKey)}
                     onChange={(event) =>
                         onValueChange(fieldKey, event.target.value)

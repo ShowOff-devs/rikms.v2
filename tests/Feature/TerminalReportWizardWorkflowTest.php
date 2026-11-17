@@ -326,6 +326,37 @@ test('highlight supporting files are scanned associated restored removable and a
     );
 });
 
+test('supporting files cannot be removed after the report leaves an editable workflow state', function () {
+    Storage::fake('local');
+    $agency = terminalWizardAgency('wizard-locked-files');
+    $user = terminalWizardUser($agency);
+    $created = $this->actingAs($user)
+        ->postJson('/api/agency/research', terminalWizardPayload())
+        ->assertCreated();
+    $researchId = $created->json('data.id');
+    $highlightId = $created->json('data.report_highlights.0.id');
+    $fileId = $this->actingAs($user)
+        ->postJson("/api/agency/research/{$researchId}/highlights/{$highlightId}/files", [
+            'file' => UploadedFile::fake()->image('locked-evidence.png', 500, 500),
+        ])
+        ->assertCreated()
+        ->json('data.id');
+
+    foreach (['submitted', 'published'] as $status) {
+        Research::query()->whereKey($researchId)->update(['status' => $status]);
+
+        $this->actingAs($user)
+            ->deleteJson("/api/agency/research/{$researchId}/files/{$fileId}")
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('research_files', [
+            'id' => $fileId,
+            'status' => 'active',
+            'archived_at' => null,
+        ]);
+    }
+});
+
 test('report revisions receive independent physical supporting files', function () {
     Storage::fake('local');
     $agency = terminalWizardAgency('wizard-revision-files');

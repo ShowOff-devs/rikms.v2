@@ -31,6 +31,10 @@ export const terminalReportUploadConfig: UploadWizardConfig = {
     initialCompletedStepIds: ['doc-type'],
     lockedStepIds: ['doc-type'],
     startStepBackHref: '/agency/upload',
+    draftRoute: {
+        documentType: 'terminal-report',
+        basePath: '/agency/upload/terminal-report',
+    },
     steps: [
         {
             id: 'doc-type',

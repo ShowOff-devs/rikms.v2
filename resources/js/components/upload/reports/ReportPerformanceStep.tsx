@@ -2,6 +2,10 @@ import { BarChart3 } from 'lucide-react';
 import ReportPerformanceTable from '@/components/upload/reports/ReportPerformanceTable';
 import ReportStepLayout from '@/components/upload/reports/ReportStepLayout';
 import {
+    InlineFieldError,
+    RequiredIndicator,
+} from '@/components/upload/shared/ReportFieldFeedback';
+import {
     OFFICIAL_CALCULATED_TOLERANCE,
     REPORT_STEP_IDS,
     reportAccomplishmentSummary,
@@ -13,7 +17,7 @@ import type {
 import type { UploadWizardStepProps } from '@/types/uploadWizard';
 
 export default function ReportPerformanceStep(props: UploadWizardStepProps) {
-    const { state, stepData, setStepData } = props;
+    const { state, stepData, setStepData, errors } = props;
     const data = stepData as ReportPerformanceData;
     const details = state.stepData[
         REPORT_STEP_IDS.details
@@ -52,11 +56,16 @@ export default function ReportPerformanceStep(props: UploadWizardStepProps) {
             <label className="mb-5 block">
                 <span className="text-sm font-semibold text-[#344054]">
                     Overall Physical Accomplishment (%)
+                    <RequiredIndicator />
                 </span>
                 <input
                     type="number"
                     min={0}
                     max={100}
+                    data-validation-field="physicalAccomplishmentPercent"
+                    aria-invalid={Boolean(
+                        errors.physicalAccomplishmentPercent?.message,
+                    )}
                     value={data.physicalAccomplishmentPercent ?? ''}
                     onChange={(event) =>
                         updatePerformance({
@@ -69,13 +78,22 @@ export default function ReportPerformanceStep(props: UploadWizardStepProps) {
                     className="mt-2 h-11 w-full rounded-[10px] border border-[#d1d5dc] px-3 text-sm outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10"
                     placeholder="0"
                 />
+                <InlineFieldError
+                    id="physical-accomplishment-error"
+                    message={errors.physicalAccomplishmentPercent?.message?.toString()}
+                />
                 <span className="mt-2 block text-xs leading-5 text-[#6a7282]">
                     Enter the official overall physical accomplishment reported
                     for the project.
                 </span>
             </label>
 
-            <ReportPerformanceTable data={data} onChange={updatePerformance} />
+            <div data-validation-field="performanceProjects" tabIndex={-1}>
+                <ReportPerformanceTable
+                    data={data}
+                    onChange={updatePerformance}
+                />
+            </div>
 
             <div className="mt-5 grid gap-3 rounded-[14px] border border-[#e5e7eb] bg-[#f9fafb] p-4 sm:grid-cols-2">
                 <div>
@@ -131,6 +149,10 @@ export default function ReportPerformanceStep(props: UploadWizardStepProps) {
                         explanation before submission.
                     </span>
                 ) : null}
+                <InlineFieldError
+                    id="performance-remarks-error"
+                    message={errors.performanceRemarks?.message?.toString()}
+                />
             </label>
         </ReportStepLayout>
     );

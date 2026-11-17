@@ -51,6 +51,7 @@ export type TurnstileConfiguration = {
 };
 
 export type AgencyAuthSession = {
+    userId?: number;
     agencyId: string;
     agencyName: string;
     logoUrl?: string | null;

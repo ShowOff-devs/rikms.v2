@@ -1,12 +1,16 @@
 import { Globe2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ReportStepLayout from '@/components/upload/reports/ReportStepLayout';
+import {
+    InlineFieldError,
+    RequiredIndicator,
+} from '@/components/upload/shared/ReportFieldFeedback';
 import SDGGrid from '@/components/upload/shared/SDGGrid';
 import type { ReportSDGTaggingData } from '@/types/upload/reportWorkflow';
 import type { UploadWizardStepProps } from '@/types/uploadWizard';
 
 export default function ReportSDGStep(props: UploadWizardStepProps) {
-    const { stepData, setStepData } = props;
+    const { stepData, setStepData, errors } = props;
     const data = stepData as ReportSDGTaggingData;
 
     const updateSDGTagging = (updates: Partial<ReportSDGTaggingData>) => {
@@ -61,13 +65,23 @@ export default function ReportSDGStep(props: UploadWizardStepProps) {
                     </div>
                 )}
 
-                <SDGGrid
-                    selectedSDGs={data.selectedSDGs}
-                    suggestedSDGs={data.aiSuggestedSDGs}
-                    onChange={(selectedSDGs) =>
-                        updateSDGTagging({ selectedSDGs })
-                    }
-                />
+                <section data-validation-field="selectedSDGs" tabIndex={-1}>
+                    <h3 className="mb-3 text-sm font-bold text-[#101828]">
+                        Select at least one SDG
+                        <RequiredIndicator />
+                    </h3>
+                    <SDGGrid
+                        selectedSDGs={data.selectedSDGs}
+                        suggestedSDGs={data.aiSuggestedSDGs}
+                        onChange={(selectedSDGs) =>
+                            updateSDGTagging({ selectedSDGs })
+                        }
+                    />
+                    <InlineFieldError
+                        id="selected-sdgs-error"
+                        message={errors.selectedSDGs?.message?.toString()}
+                    />
+                </section>
 
                 <div className="rounded-[14px] border border-[#bfdbfe] bg-[#eff6ff] p-4 text-sm text-[#1e3a8a]">
                     Selected SDGs will feed repository filters, regional

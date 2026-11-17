@@ -1,6 +1,10 @@
 import { Layers3, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ReportStepLayout from '@/components/upload/reports/ReportStepLayout';
+import {
+    InlineFieldError,
+    RequiredIndicator,
+} from '@/components/upload/shared/ReportFieldFeedback';
 import TagSelector from '@/components/upload/shared/TagSelector';
 import {
     beneficiarySectorOptions,
@@ -15,7 +19,7 @@ import type { UploadWizardStepProps } from '@/types/uploadWizard';
 export default function ReportPAPClassificationStep(
     props: UploadWizardStepProps,
 ) {
-    const { stepData, setStepData } = props;
+    const { stepData, setStepData, errors } = props;
     const data = stepData as ReportPAPClassificationData;
 
     const updatePAPClassification = (
@@ -72,9 +76,10 @@ export default function ReportPAPClassificationStep(
                     </div>
                 )}
 
-                <section>
+                <section data-validation-field="papCategories" tabIndex={-1}>
                     <h3 className="mb-3 text-sm font-bold text-[#101828]">
                         PAP Categories
+                        <RequiredIndicator />
                     </h3>
                     <TagSelector
                         options={papCategoryOptions.map((category) => ({
@@ -87,14 +92,20 @@ export default function ReportPAPClassificationStep(
                         }
                         tone="violet"
                     />
+                    <InlineFieldError
+                        id="pap-categories-error"
+                        message={errors.papCategories?.message?.toString()}
+                    />
                 </section>
 
                 <label className="block">
                     <span className="text-sm font-semibold text-[#344054]">
                         PAP Description
+                        <RequiredIndicator />
                     </span>
                     <textarea
                         value={data.papDescription}
+                        data-validation-field="papDescription"
                         onChange={(event) =>
                             updatePAPClassification({
                                 papDescription: event.target.value,
@@ -103,11 +114,19 @@ export default function ReportPAPClassificationStep(
                         rows={5}
                         className="mt-2 w-full rounded-[10px] border border-[#d1d5dc] px-3 py-2 text-sm outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10"
                     />
+                    <InlineFieldError
+                        id="pap-description-error"
+                        message={errors.papDescription?.message?.toString()}
+                    />
                 </label>
 
-                <section>
+                <section
+                    data-validation-field="beneficiarySectors"
+                    tabIndex={-1}
+                >
                     <h3 className="mb-3 text-sm font-bold text-[#101828]">
                         Beneficiary Sectors (Pentahelix)
+                        <RequiredIndicator />
                     </h3>
                     <TagSelector<BeneficiarySector>
                         options={beneficiarySectorOptions}
@@ -116,6 +135,10 @@ export default function ReportPAPClassificationStep(
                             updatePAPClassification({ beneficiarySectors })
                         }
                         tone="blue"
+                    />
+                    <InlineFieldError
+                        id="beneficiary-sectors-error"
+                        message={errors.beneficiarySectors?.message?.toString()}
                     />
                 </section>
             </div>

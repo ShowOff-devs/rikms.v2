@@ -29,7 +29,7 @@ class LoginResponse implements LoginResponseContract
             return $this->failedResponse($request, 'These credentials are not authorized for the Agency Admin portal.');
         }
 
-        if ($request->is('agency/login') && ! $user->hasVerifiedEmail()) {
+        if (($request->is('agency/login') || $request->is('admin/login')) && ! $user->hasVerifiedEmail()) {
             try {
                 $user->sendEmailVerificationNotification();
             } catch (Throwable $exception) {

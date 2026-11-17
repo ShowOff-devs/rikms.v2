@@ -3,7 +3,12 @@ import { useState } from 'react';
 import ReportStepLayout from '@/components/upload/reports/ReportStepLayout';
 import CharacterCounter from '@/components/upload/shared/CharacterCounter';
 import FileUploader from '@/components/upload/shared/FileUploader';
+import {
+    InlineFieldError,
+    RequiredIndicator,
+} from '@/components/upload/shared/ReportFieldFeedback';
 import { apiMessage } from '@/lib/api-client';
+import { buildUploadDraftPath } from '@/lib/upload/draft-route';
 import {
     REPORT_STEP_IDS,
     buildReportWorkflowData,
@@ -24,7 +29,14 @@ import type {
 import type { UploadWizardStepProps } from '@/types/uploadWizard';
 
 export default function ReportHighlightsStep(props: UploadWizardStepProps) {
-    const { config, state, stepData, setStepData, setWorkflowStepData } = props;
+    const {
+        config,
+        state,
+        stepData,
+        setStepData,
+        setWorkflowStepData,
+        errors,
+    } = props;
     const data = stepData as ReportHighlightsData;
     const [uploading, setUploading] = useState(false);
     const supportingFileMaxMb = Math.min(useEffectiveUploadLimitMb(20), 20);
@@ -101,11 +113,15 @@ export default function ReportHighlightsStep(props: UploadWizardStepProps) {
                 supportingFiles: [...data.supportingFiles, attachment],
                 uploadError: null,
             } satisfies ReportHighlightsData);
-            window.history.replaceState(
-                window.history.state,
-                '',
-                `/agency/upload/terminal-report/${draft.id}`,
-            );
+            const draftPath = buildUploadDraftPath(config, draft.id);
+
+            if (draftPath) {
+                window.history.replaceState(
+                    window.history.state,
+                    '',
+                    draftPath,
+                );
+            }
         } catch (error) {
             updateHighlights({
                 uploadError: apiMessage(
@@ -161,9 +177,11 @@ export default function ReportHighlightsStep(props: UploadWizardStepProps) {
                 <label className="block">
                     <span className="text-sm font-semibold text-[#344054]">
                         Highlight Title
+                        <RequiredIndicator />
                     </span>
                     <input
                         value={data.highlightTitle}
+                        data-validation-field="highlightTitle"
                         onChange={(event) =>
                             updateHighlights({
                                 highlightTitle: event.target.value,
@@ -171,14 +189,20 @@ export default function ReportHighlightsStep(props: UploadWizardStepProps) {
                         }
                         className="mt-2 h-11 w-full rounded-[10px] border border-[#d1d5dc] px-3 text-sm outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10"
                     />
+                    <InlineFieldError
+                        id="highlight-title-error"
+                        message={errors.highlightTitle?.message?.toString()}
+                    />
                 </label>
 
                 <label className="block">
                     <span className="text-sm font-semibold text-[#344054]">
                         Description
+                        <RequiredIndicator />
                     </span>
                     <textarea
                         value={data.highlightDescription}
+                        data-validation-field="highlightDescription"
                         onChange={(event) =>
                             updateHighlights({
                                 highlightDescription: event.target.value,
@@ -186,6 +210,10 @@ export default function ReportHighlightsStep(props: UploadWizardStepProps) {
                         }
                         rows={6}
                         className="mt-2 w-full rounded-[10px] border border-[#d1d5dc] px-3 py-2 text-sm outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10"
+                    />
+                    <InlineFieldError
+                        id="highlight-description-error"
+                        message={errors.highlightDescription?.message?.toString()}
                     />
                     <div className="mt-1">
                         <CharacterCounter

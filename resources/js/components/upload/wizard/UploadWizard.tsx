@@ -1,19 +1,30 @@
 import { router } from '@inertiajs/react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FieldErrors } from 'react-hook-form';
 import type { z } from 'zod';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import PlaceholderStep from '@/components/upload/steps/PlaceholderStep';
+import ReportRecoveryPrompt from '@/components/upload/wizard/ReportRecoveryPrompt';
 import UploadNavigation from '@/components/upload/wizard/UploadNavigation';
 import UploadWizardLayout from '@/components/upload/wizard/UploadWizardLayout';
 import { getAgencyResearch } from '@/lib/agency/agency-research-service';
 import { apiMessage } from '@/lib/api-client';
 import {
-    parseTerminalReportRecovery,
-    serializeTerminalReportRecovery,
-    terminalReportRecoveryKey,
+    mergeReportRecoveryStepData,
+    migrateLegacyTerminalReportRecovery,
+    parseReportRecovery,
+    reportDocumentLabel,
+    reportRecoveryConflictsWithServer,
+    reportRecoveryKey,
+    serializeReportRecovery,
+    shouldPersistReportRecovery,
 } from '@/lib/upload/draft-recovery';
+import type {
+    ReportRecoveryScope,
+    ReportRecoverySnapshot,
+} from '@/lib/upload/draft-recovery';
+import { buildUploadDraftPath } from '@/lib/upload/draft-route';
 import {
     REPORT_STEP_IDS,
     buildReportWorkflowData,
@@ -39,7 +50,14 @@ type UploadWizardProps = {
     config: UploadWizardConfig;
     initialResearchId?: string;
     agencyName?: string;
-    recoveryScope?: string;
+    recoveryScope?: Omit<ReportRecoveryScope, 'draftId'>;
+    legacyRecoveryKey?: string;
+};
+
+type PendingReportRecovery = {
+    key: string;
+    snapshot: ReportRecoverySnapshot;
+    conflict: boolean;
 };
 
 function workflowStepData(
@@ -75,17 +93,44 @@ function buildFieldErrors(error: z.ZodError) {
     }, {});
 }
 
+function persistReportRecovery(
+    scope: ReportRecoveryScope,
+    wizardState: Pick<UploadWizardState, 'stepData' | 'activeStepId'>,
+) {
+    const details = wizardState.stepData[
+        REPORT_STEP_IDS.details
+    ] as ReportDetailsData;
+
+    try {
+        window.localStorage.setItem(
+            reportRecoveryKey(scope),
+            serializeReportRecovery(scope, wizardState, {
+                draftVersion: details?.serverDraftVersion ?? null,
+                updatedAt: details?.serverUpdatedAt ?? null,
+            }),
+        );
+
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 export default function UploadWizard({
     config,
     initialResearchId,
     agencyName = '',
     recoveryScope,
+    legacyRecoveryKey,
 }: UploadWizardProps) {
     const [store] = useState<UploadWizardStoreApi>(() =>
         createUploadWizardStore(config),
     );
     const editRevision = useRef(0);
     const saveRequest = useRef(0);
+    const checkedRecoveryKeys = useRef(new Set<string>());
+    const [pendingRecovery, setPendingRecovery] =
+        useState<PendingReportRecovery | null>(null);
     const state = useStore(
         store,
         useShallow((wizardState) => ({
@@ -130,6 +175,37 @@ export default function UploadWizard({
         store,
         (wizardState) => wizardState.clearValidationErrors,
     );
+    const recoveryDetails = state.stepData[
+        REPORT_STEP_IDS.details
+    ] as ReportDetailsData;
+    const recoveryDraftId =
+        recoveryDetails?.researchId ?? initialResearchId ?? null;
+    const recoveryAgencyId = recoveryScope?.agencyId ?? null;
+    const recoveryUserId = recoveryScope?.userId ?? null;
+    const recoveryDocumentType = recoveryScope?.documentType ?? null;
+    const effectiveRecoveryScope = useMemo<ReportRecoveryScope | null>(
+        () =>
+            recoveryAgencyId && recoveryUserId && recoveryDocumentType
+                ? {
+                      agencyId: recoveryAgencyId,
+                      userId: recoveryUserId,
+                      documentType: recoveryDocumentType,
+                      draftId: recoveryDraftId,
+                  }
+                : null,
+        [
+            recoveryAgencyId,
+            recoveryDraftId,
+            recoveryDocumentType,
+            recoveryUserId,
+        ],
+    );
+    const effectiveRecoveryKey = effectiveRecoveryScope
+        ? reportRecoveryKey(effectiveRecoveryScope)
+        : null;
+    const documentLabel = reportDocumentLabel(
+        config.type as ReportDocumentType,
+    );
 
     const activeStepIndex = Math.max(
         config.steps.findIndex((step) => step.id === state.activeStepId),
@@ -139,9 +215,28 @@ export default function UploadWizard({
     const StepComponent = activeStep.component ?? PlaceholderStep;
     const activeStepData = state.stepData[activeStep.id] ?? {};
 
+    const refreshVisibleValidation = (data: UploadWizardStepData) => {
+        if (
+            !activeStep.schema ||
+            Object.keys(state.validationErrors[activeStep.id] ?? {}).length ===
+                0
+        ) {
+            return;
+        }
+
+        const result = activeStep.schema.safeParse(data);
+
+        if (result.success) {
+            clearValidationErrors(activeStep.id);
+        } else {
+            setValidationErrors(activeStep.id, buildFieldErrors(result.error));
+        }
+    };
+
     const setActiveStepData = (data: UploadWizardStepData) => {
         editRevision.current += 1;
         setStepDataInStore(activeStep.id, data);
+        refreshVisibleValidation(data);
         setDraftError(null);
         setDraftStatus('unsaved');
     };
@@ -171,11 +266,21 @@ export default function UploadWizard({
             return true;
         }
 
-        setValidationErrors(activeStep.id, buildFieldErrors(result.error));
+        const fieldErrors = buildFieldErrors(result.error);
+        const firstInvalidField = Object.keys(fieldErrors)[0];
+
+        setValidationErrors(activeStep.id, fieldErrors);
         window.setTimeout(() => {
-            document
-                .querySelector<HTMLElement>('[data-validation-summary]')
-                ?.focus();
+            const field = firstInvalidField
+                ? document.querySelector<HTMLElement>(
+                      `[data-validation-field="${firstInvalidField}"]`,
+                  )
+                : null;
+
+            (
+                field ??
+                document.querySelector<HTMLElement>('[data-validation-summary]')
+            )?.focus();
         });
 
         return false;
@@ -220,63 +325,63 @@ export default function UploadWizard({
                 agency: agencyName,
             });
         }
+    }, [agencyName, initialResearchId, setStepDataInStore, store]);
 
-        if (!initialResearchId && recoveryScope) {
-            const key = terminalReportRecoveryKey(recoveryScope);
-            const recovered = window.localStorage.getItem(key);
+    useEffect(() => {
+        if (
+            initialResearchId ||
+            !effectiveRecoveryScope ||
+            !effectiveRecoveryKey ||
+            checkedRecoveryKeys.current.has(effectiveRecoveryKey)
+        ) {
+            return;
+        }
 
-            if (recovered) {
-                // Consume before prompting so React Strict Mode cannot prompt twice.
-                // Accepted recovery is written back by the unsaved-draft effect.
-                window.localStorage.removeItem(key);
+        checkedRecoveryKeys.current.add(effectiveRecoveryKey);
+        let recovered = window.localStorage.getItem(effectiveRecoveryKey);
 
-                if (
-                    window.confirm(
-                        'Restore the unsaved terminal-report draft from this browser?',
-                    )
-                ) {
-                    try {
-                        const recoveredState =
-                            parseTerminalReportRecovery(recovered);
-                        const stepData = {
-                            ...store.getState().stepData,
-                            ...(recoveredState.stepData ?? {}),
-                        };
-                        const details = stepData[
-                            REPORT_STEP_IDS.details
-                        ] as ReportDetailsData;
-                        stepData[REPORT_STEP_IDS.details] = {
-                            ...details,
-                            uploadedFile: null,
-                            agency: agencyName || details.agency,
-                        };
-                        const active = config.steps.some(
-                            (step) => step.id === recoveredState.activeStepId,
-                        )
-                            ? (recoveredState.activeStepId as UploadStepId)
-                            : (config.defaultStartStepId ?? config.steps[0].id);
-                        store
-                            .getState()
-                            .hydrate(stepData, active, [
-                                REPORT_STEP_IDS.docType,
-                            ]);
-                        setDraftError(null);
-                        setDraftStatus('unsaved');
-                    } catch {
-                        window.localStorage.removeItem(key);
-                    }
+        if (!recovered && legacyRecoveryKey) {
+            const legacyRecovery =
+                window.localStorage.getItem(legacyRecoveryKey);
+
+            if (legacyRecovery) {
+                try {
+                    recovered = migrateLegacyTerminalReportRecovery(
+                        legacyRecovery,
+                        effectiveRecoveryScope,
+                    );
+                    window.localStorage.setItem(
+                        effectiveRecoveryKey,
+                        recovered,
+                    );
+                    window.localStorage.removeItem(legacyRecoveryKey);
+                } catch {
+                    window.localStorage.removeItem(legacyRecoveryKey);
                 }
             }
         }
+
+        if (!recovered) {
+            return;
+        }
+
+        try {
+            setPendingRecovery({
+                key: effectiveRecoveryKey,
+                snapshot: parseReportRecovery(
+                    recovered,
+                    effectiveRecoveryScope,
+                ),
+                conflict: false,
+            });
+        } catch {
+            window.localStorage.removeItem(effectiveRecoveryKey);
+        }
     }, [
-        agencyName,
-        config,
+        effectiveRecoveryKey,
+        effectiveRecoveryScope,
         initialResearchId,
-        recoveryScope,
-        setDraftError,
-        setDraftStatus,
-        setStepDataInStore,
-        store,
+        legacyRecoveryKey,
     ]);
 
     useEffect(() => {
@@ -316,6 +421,45 @@ export default function UploadWizard({
                     .map((step) => step.id);
 
                 store.getState().hydrate(stepData, activeStep, completed);
+
+                if (recoveryScope) {
+                    const savedScope: ReportRecoveryScope = {
+                        ...recoveryScope,
+                        draftId: String(record.id),
+                    };
+                    const key = reportRecoveryKey(savedScope);
+
+                    if (!checkedRecoveryKeys.current.has(key)) {
+                        checkedRecoveryKeys.current.add(key);
+                        const recovered = window.localStorage.getItem(key);
+
+                        if (recovered) {
+                            try {
+                                const snapshot = parseReportRecovery(
+                                    recovered,
+                                    savedScope,
+                                );
+                                setPendingRecovery({
+                                    key,
+                                    snapshot,
+                                    conflict: reportRecoveryConflictsWithServer(
+                                        snapshot,
+                                        {
+                                            draftVersion:
+                                                workflow.details
+                                                    .serverDraftVersion ?? null,
+                                            updatedAt:
+                                                workflow.details
+                                                    .serverUpdatedAt ?? null,
+                                        },
+                                    ),
+                                });
+                            } catch {
+                                window.localStorage.removeItem(key);
+                            }
+                        }
+                    }
+                }
             })
             .catch((error: unknown) => {
                 if (!cancelled) {
@@ -333,37 +477,35 @@ export default function UploadWizard({
         agencyName,
         config,
         initialResearchId,
+        recoveryScope,
         setDraftError,
         setDraftStatus,
         store,
     ]);
 
     useEffect(() => {
-        if (!recoveryScope || state.draftStatus !== 'unsaved') {
+        if (
+            !effectiveRecoveryScope ||
+            editRevision.current === 0 ||
+            !shouldPersistReportRecovery(state.draftStatus)
+        ) {
             return;
         }
 
-        const details = state.stepData[
-            REPORT_STEP_IDS.details
-        ] as ReportDetailsData;
-        const key = terminalReportRecoveryKey(recoveryScope);
-
-        if (details?.researchId) {
-            window.localStorage.removeItem(key);
-
-            return;
-        }
-
-        const serialized = serializeTerminalReportRecovery({
+        persistReportRecovery(effectiveRecoveryScope, {
             stepData: state.stepData,
             activeStepId: state.activeStepId,
         });
-        window.localStorage.setItem(key, serialized);
-    }, [recoveryScope, state.activeStepId, state.draftStatus, state.stepData]);
+    }, [
+        effectiveRecoveryScope,
+        state.activeStepId,
+        state.draftStatus,
+        state.stepData,
+    ]);
 
     useEffect(() => {
         const beforeUnload = (event: BeforeUnloadEvent) => {
-            if (store.getState().draftStatus !== 'unsaved') {
+            if (!shouldPersistReportRecovery(store.getState().draftStatus)) {
                 return;
             }
 
@@ -380,26 +522,67 @@ export default function UploadWizard({
         () =>
             router.on('before', (event) => {
                 if (
-                    store.getState().draftStatus === 'unsaved' &&
+                    shouldPersistReportRecovery(store.getState().draftStatus) &&
                     !window.confirm(
-                        'You have unsaved terminal-report changes. Leave this page?',
+                        `You have unsaved ${documentLabel} changes. Leave this page?`,
                     )
                 ) {
                     event.preventDefault();
                 }
             }),
-        [store],
+        [documentLabel, store],
     );
 
     const markSubmissionComplete = () => {
         setDraftError(null);
         setDraftStatus('saved');
 
-        if (recoveryScope) {
-            window.localStorage.removeItem(
-                terminalReportRecoveryKey(recoveryScope),
-            );
+        if (effectiveRecoveryKey) {
+            window.localStorage.removeItem(effectiveRecoveryKey);
         }
+    };
+
+    const restorePendingRecovery = () => {
+        if (!pendingRecovery) {
+            return;
+        }
+
+        const currentState = store.getState();
+        const stepData = mergeReportRecoveryStepData(
+            currentState.stepData,
+            pendingRecovery.snapshot.stepData,
+        );
+        const recoveredDetails = stepData[
+            REPORT_STEP_IDS.details
+        ] as ReportDetailsData;
+        stepData[REPORT_STEP_IDS.details] = {
+            ...recoveredDetails,
+            browserRecoveryRestored: !recoveredDetails.uploadedFileName,
+        } satisfies ReportDetailsData;
+        const activeStep = config.steps.some(
+            (step) => step.id === pendingRecovery.snapshot.activeStepId,
+        )
+            ? pendingRecovery.snapshot.activeStepId
+            : (config.defaultStartStepId ?? config.steps[0].id);
+
+        currentState.hydrate(
+            stepData,
+            activeStep,
+            currentState.completedStepIds,
+        );
+        editRevision.current += 1;
+        setDraftError(null);
+        setDraftStatus('unsaved');
+        setPendingRecovery(null);
+    };
+
+    const discardPendingRecovery = () => {
+        if (!pendingRecovery) {
+            return;
+        }
+
+        window.localStorage.removeItem(pendingRecovery.key);
+        setPendingRecovery(null);
     };
 
     const goNext = () => {
@@ -448,6 +631,8 @@ export default function UploadWizard({
     const saveDraft = async () => {
         const requestId = ++saveRequest.current;
         const revisionAtSave = editRevision.current;
+        const recoveryKeyAtSave = effectiveRecoveryKey;
+        const recoveryScopeAtSave = effectiveRecoveryScope;
         setDraftError(null);
         setDraftStatus('saving');
 
@@ -496,19 +681,30 @@ export default function UploadWizard({
                     } satisfies ReportDetailsData);
                 }
 
-                window.history.replaceState(
-                    window.history.state,
-                    '',
-                    `/agency/upload/terminal-report/${result.id}`,
-                );
+                const draftPath = buildUploadDraftPath(config, result.id);
 
-                if (recoveryScope) {
-                    window.localStorage.removeItem(
-                        terminalReportRecoveryKey(recoveryScope),
+                if (draftPath) {
+                    window.history.replaceState(
+                        window.history.state,
+                        '',
+                        draftPath,
                     );
                 }
 
                 if (revisionAtSave === editRevision.current) {
+                    if (recoveryKeyAtSave) {
+                        window.localStorage.removeItem(recoveryKeyAtSave);
+                    }
+
+                    if (recoveryScope) {
+                        window.localStorage.removeItem(
+                            reportRecoveryKey({
+                                ...recoveryScope,
+                                draftId: String(result.id),
+                            }),
+                        );
+                    }
+
                     setDraftSavedAt(
                         new Intl.DateTimeFormat(undefined, {
                             hour: 'numeric',
@@ -518,6 +714,25 @@ export default function UploadWizard({
                     setDraftStatus('saved');
                 } else {
                     setDraftStatus('unsaved');
+
+                    if (recoveryScope) {
+                        const savedScope: ReportRecoveryScope = {
+                            ...recoveryScope,
+                            draftId: String(result.id),
+                        };
+                        const persisted = persistReportRecovery(
+                            savedScope,
+                            store.getState(),
+                        );
+
+                        if (
+                            persisted &&
+                            recoveryKeyAtSave &&
+                            recoveryKeyAtSave !== reportRecoveryKey(savedScope)
+                        ) {
+                            window.localStorage.removeItem(recoveryKeyAtSave);
+                        }
+                    }
                 }
 
                 return true;
@@ -532,6 +747,13 @@ export default function UploadWizard({
                     apiMessage(error, 'Unable to save the report draft.'),
                 );
                 setDraftStatus('error');
+
+                if (recoveryScopeAtSave && editRevision.current > 0) {
+                    persistReportRecovery(
+                        recoveryScopeAtSave,
+                        store.getState(),
+                    );
+                }
             }
 
             throw error;
@@ -541,8 +763,19 @@ export default function UploadWizard({
     if (state.draftStatus === 'loading') {
         return (
             <div className="rounded-[14px] border border-[#e5e7eb] bg-white p-10 text-center text-sm text-[#6a7282] shadow-sm">
-                Loading the saved terminal-report draft…
+                Loading the saved {documentLabel} draft&hellip;
             </div>
+        );
+    }
+
+    if (pendingRecovery) {
+        return (
+            <ReportRecoveryPrompt
+                documentLabel={documentLabel}
+                conflict={pendingRecovery.conflict}
+                onRestore={restorePendingRecovery}
+                onDiscard={discardPendingRecovery}
+            />
         );
     }
 

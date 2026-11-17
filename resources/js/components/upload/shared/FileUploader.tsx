@@ -8,6 +8,8 @@ type FileUploaderProps = {
     helperText: string;
     accept: string;
     error?: string;
+    validationField?: string;
+    errorId?: string;
     onFileSelect: (file: File) => void;
 };
 
@@ -16,6 +18,8 @@ export default function FileUploader({
     helperText,
     accept,
     error,
+    validationField,
+    errorId,
     onFileSelect,
 }: FileUploaderProps) {
     const inputRef = useRef<HTMLInputElement>(null);
@@ -30,6 +34,10 @@ export default function FileUploader({
 
     return (
         <div
+            data-validation-field={validationField}
+            tabIndex={validationField ? -1 : undefined}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? errorId : undefined}
             className={cn(
                 'flex min-h-[250px] flex-col items-center justify-center rounded-[14px] border border-dashed bg-white px-6 py-8 text-center',
                 error ? 'border-[#fb2c36] bg-[#fff7f7]' : 'border-[#d1d5dc]',
@@ -64,7 +72,11 @@ export default function FileUploader({
             </Button>
             <p className="mt-5 text-xs text-[#99a1af]">{helperText}</p>
             {error ? (
-                <p className="mt-3 text-xs font-medium text-[#fb2c36]">
+                <p
+                    id={errorId}
+                    role="alert"
+                    className="mt-3 text-xs font-medium text-[#b91c1c]"
+                >
                     {error}
                 </p>
             ) : null}

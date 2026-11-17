@@ -586,6 +586,12 @@ export function reportPerformanceFromRecord(
     };
 }
 
+export function reportAdditionalHighlightsFromRecord(
+    record: AgencyResearchRecord,
+): AgencyResearchHighlight[] {
+    return (record.report_highlights ?? []).slice(1);
+}
+
 export function hydrateReportWorkflowFromRecord(
     record: AgencyResearchRecord,
     agencyName?: string,
