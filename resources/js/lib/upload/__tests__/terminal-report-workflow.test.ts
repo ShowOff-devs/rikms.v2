@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-    parseTerminalReportRecovery,
-    serializeTerminalReportRecovery,
-    terminalReportRecoveryKey,
+    parseReportRecovery,
+    reportRecoveryKey,
+    serializeReportRecovery,
 } from '@/lib/upload/draft-recovery';
 import {
     calculatePerformanceProject,
@@ -281,18 +281,30 @@ describe('terminal report workflow', () => {
     it('serializes scoped non-file recovery state', () => {
         const data = createInitialReportWorkflowData('terminal-report');
         data.details.reportTitle = 'Recovered title';
-        const serialized = serializeTerminalReportRecovery({
-            activeStepId: 'performance',
-            stepData: {
-                details: data.details,
-                performance: data.performance,
+        const scope = {
+            agencyId: 'agency-1',
+            userId: '7',
+            documentType: 'terminal-report' as const,
+        };
+        const serialized = serializeReportRecovery(
+            scope,
+            {
+                activeStepId: 'performance',
+                stepData: {
+                    details: data.details,
+                    performance: data.performance,
+                },
             },
-        });
-        const recovered = parseTerminalReportRecovery(serialized);
+            { draftVersion: null, updatedAt: null },
+        );
+        const recovered = parseReportRecovery(serialized, scope);
 
-        expect(
-            terminalReportRecoveryKey('agency-1:user@example.test'),
-        ).not.toBe(terminalReportRecoveryKey('agency-2:user@example.test'));
+        expect(reportRecoveryKey(scope)).not.toBe(
+            reportRecoveryKey({
+                ...scope,
+                agencyId: 'agency-2',
+            }),
+        );
         expect(recovered.activeStepId).toBe('performance');
         expect(
             (recovered.stepData.details as typeof data.details).reportTitle,

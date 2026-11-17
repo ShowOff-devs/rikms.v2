@@ -1,5 +1,6 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { RequiredIndicator } from '@/components/upload/shared/ReportFieldFeedback';
 import {
     calculatePerformanceProject,
     createPerformanceProject,
@@ -120,20 +121,24 @@ export default function ReportPerformanceTable({
                     )}
                 >
                     {[
-                        'Activity / Output / Indicator',
-                        'Target',
-                        'Actual',
-                        'Unit',
-                        'Accomplishment %',
-                        'Status',
-                        '',
+                        {
+                            label: 'Activity / Output / Indicator',
+                            required: true,
+                        },
+                        { label: 'Target', required: true },
+                        { label: 'Actual', required: true },
+                        { label: 'Unit', required: false },
+                        { label: 'Accomplishment %', required: false },
+                        { label: 'Status', required: false },
+                        { label: '', required: false },
                     ].map((heading) => (
                         <div
-                            key={heading || 'actions'}
+                            key={heading.label || 'actions'}
                             role="columnheader"
                             className="px-3 py-3"
                         >
-                            {heading}
+                            {heading.label}
+                            {heading.required ? <RequiredIndicator /> : null}
                         </div>
                     ))}
                 </div>

@@ -68,6 +68,7 @@ function makeSessionFromUser(user: SharedAuthUser): AgencyAuthSession | null {
     }
 
     return {
+        userId: user.id,
         agencyId: user.agency?.slug ?? String(user.agency_id),
         agencyName:
             user.agency?.short_name ?? user.agency?.name ?? 'Agency Admin',

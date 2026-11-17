@@ -31,6 +31,10 @@ export const projectAccomplishmentUploadConfig: UploadWizardConfig = {
     initialCompletedStepIds: ['doc-type'],
     lockedStepIds: ['doc-type'],
     startStepBackHref: '/agency/upload',
+    draftRoute: {
+        documentType: 'project-accomplishment',
+        basePath: '/agency/upload/project-accomplishment',
+    },
     steps: [
         {
             id: 'doc-type',

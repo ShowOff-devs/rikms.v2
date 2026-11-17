@@ -40,6 +40,16 @@ export type UploadDraftStatus =
     | 'saved'
     | 'error';
 
+export type UploadDraftRouteConfig =
+    | {
+          documentType: 'terminal-report';
+          basePath: '/agency/upload/terminal-report';
+      }
+    | {
+          documentType: 'project-accomplishment';
+          basePath: '/agency/upload/project-accomplishment';
+      };
+
 export type UploadWizardStepProps = {
     config: UploadWizardConfig;
     step: UploadWizardStep;
@@ -82,4 +92,5 @@ export type UploadWizardConfig = {
     initialCompletedStepIds?: UploadStepId[];
     lockedStepIds?: UploadStepId[];
     startStepBackHref?: string;
+    draftRoute?: UploadDraftRouteConfig;
 };

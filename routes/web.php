@@ -115,6 +115,14 @@ Route::middleware(['auth', 'verified', 'role:agency_admin', 'agency.scope'])->gr
         ]);
     })->name('agency.upload.terminal-report.edit');
     Route::inertia('/agency/upload/project-accomplishment', 'agency/upload/project-accomplishment')->name('agency.upload.project-accomplishment');
+    Route::get('/agency/upload/project-accomplishment/{research}', function (Request $request, Research $research) {
+        abort_unless($request->user()?->can('updateAgencyDraft', $research), 403);
+        abort_unless(str_contains(mb_strtolower((string) $research->category), 'project accomplishment report'), 404);
+
+        return Inertia::render('agency/upload/project-accomplishment', [
+            'researchId' => (string) $research->id,
+        ]);
+    })->name('agency.upload.project-accomplishment.edit');
 });
 
 Route::prefix('admin')->name('admin.')->group(function () use ($turnstilePageConfiguration) {

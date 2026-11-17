@@ -135,6 +135,7 @@ export function createReportDetailsData(): ReportDetailsData {
         uploadedFileType: undefined,
         uploadedFileSize: undefined,
         uploadError: null,
+        browserRecoveryRestored: false,
         reportTitle: '',
         reportDescription: '',
         projectStartDate: '',

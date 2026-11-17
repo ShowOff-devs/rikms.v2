@@ -4,6 +4,10 @@ import { Button } from '@/components/ui/button';
 import ReportStepLayout from '@/components/upload/reports/ReportStepLayout';
 import MetadataLivePreview from '@/components/upload/shared/MetadataLivePreview';
 import MetadataSectionCard from '@/components/upload/shared/MetadataSectionCard';
+import {
+    InlineFieldError,
+    RequiredIndicator,
+} from '@/components/upload/shared/ReportFieldFeedback';
 import { apiMessage } from '@/lib/api-client';
 import {
     REPORT_STEP_IDS,
@@ -20,7 +24,7 @@ import type { UploadWizardStepProps } from '@/types/uploadWizard';
 const metadataKeys = Object.keys(metadataFieldLabels) as ReportMetadataKey[];
 
 export default function ReportMetadataStep(props: UploadWizardStepProps) {
-    const { state, stepData, setStepData } = props;
+    const { state, stepData, setStepData, errors } = props;
     const data = stepData as ReportAIMetadataData;
     const details = state.stepData[
         REPORT_STEP_IDS.details
@@ -142,6 +146,7 @@ export default function ReportMetadataStep(props: UploadWizardStepProps) {
                             !details?.uploadedFileName ||
                             !details.researchId
                         }
+                        data-validation-field="extractionStatus"
                         onClick={runAnalysis}
                     >
                         <Sparkles className="size-4" />
@@ -152,10 +157,26 @@ export default function ReportMetadataStep(props: UploadWizardStepProps) {
                             {analysisError}
                         </p>
                     ) : null}
+                    <InlineFieldError
+                        id="metadata-extraction-error"
+                        message={errors.extractionStatus?.message?.toString()}
+                    />
                 </div>
             ) : (
                 <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
                     <div className="space-y-4">
+                        <div
+                            data-validation-field="selectedPublicMetadata"
+                            tabIndex={-1}
+                            className="rounded-[10px] border border-[#e5e7eb] bg-[#f9fafb] p-3 text-xs text-[#4a5565]"
+                        >
+                            Select at least one public metadata field
+                            <RequiredIndicator />
+                            <InlineFieldError
+                                id="public-metadata-error"
+                                message={errors.selectedPublicMetadata?.message?.toString()}
+                            />
+                        </div>
                         <div className="rounded-[14px] border border-[#bbf7d0] bg-[#f0fdf4] p-4 text-sm text-[#008236]">
                             <div className="flex items-center gap-2 font-semibold">
                                 <CheckCircle2 className="size-5" />

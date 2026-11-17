@@ -49,6 +49,7 @@ export type ReportDetailsData = {
     uploadedFileType?: string;
     uploadedFileSize?: number;
     uploadError?: string | null;
+    browserRecoveryRestored?: boolean;
     reportTitle: string;
     reportDescription: string;
     projectStartDate: string;

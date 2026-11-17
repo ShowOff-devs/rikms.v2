@@ -2,11 +2,16 @@ import { AlertTriangle, WalletCards } from 'lucide-react';
 import ReportStepLayout from '@/components/upload/reports/ReportStepLayout';
 import FinancialSummaryCard from '@/components/upload/shared/FinancialSummaryCard';
 import {
+    InlineFieldError,
+    RequiredIndicator,
+} from '@/components/upload/shared/ReportFieldFeedback';
+import {
     REPORT_STEP_IDS,
     calculateFinancials,
     formatPeso,
     reportFinancialWarnings,
 } from '@/lib/upload/report-workflow';
+import { cn } from '@/lib/utils';
 import type {
     ReportDetailsData,
     ReportFinancialsData,
@@ -23,6 +28,12 @@ export default function ReportFinancialsStep(props: UploadWizardStepProps) {
         projectEndDate: '',
     };
     const warnings = reportFinancialWarnings(data, details);
+    const fieldError = (field: string) => errors[field]?.message?.toString();
+    const inputClass = (field: string) =>
+        cn(
+            'mt-2 h-11 w-full rounded-[10px] border px-3 text-sm outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10',
+            fieldError(field) ? 'border-[#fb2c36]' : 'border-[#d1d5dc]',
+        );
 
     const updateFinancials = (updates: Partial<ReportFinancialsData>) => {
         const nextData = {
@@ -58,10 +69,12 @@ export default function ReportFinancialsStep(props: UploadWizardStepProps) {
                     <label className="block">
                         <span className="text-sm font-semibold text-[#344054]">
                             Allotted Budget
+                            <RequiredIndicator />
                         </span>
                         <input
                             type="number"
                             min={0}
+                            data-validation-field="allocatedBudget"
                             value={data.allocatedBudget ?? ''}
                             onChange={(event) =>
                                 updateFinancials({
@@ -71,8 +84,15 @@ export default function ReportFinancialsStep(props: UploadWizardStepProps) {
                                     usedBudget: data.usedBudget,
                                 })
                             }
-                            className="mt-2 h-11 w-full rounded-[10px] border border-[#d1d5dc] px-3 text-sm outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10"
+                            aria-invalid={Boolean(
+                                fieldError('allocatedBudget'),
+                            )}
+                            className={inputClass('allocatedBudget')}
                             placeholder="0.00"
+                        />
+                        <InlineFieldError
+                            id="allocated-budget-error"
+                            message={fieldError('allocatedBudget')}
                         />
                         <span className="mt-1 block text-xs text-[#99a1af]">
                             Approved or allotted budget for the project
@@ -81,10 +101,12 @@ export default function ReportFinancialsStep(props: UploadWizardStepProps) {
                     <label className="block">
                         <span className="text-sm font-semibold text-[#344054]">
                             Released Amount
+                            <RequiredIndicator />
                         </span>
                         <input
                             type="number"
                             min={0}
+                            data-validation-field="releasedAmount"
                             value={data.releasedAmount ?? ''}
                             onChange={(event) =>
                                 updateFinancials({
@@ -93,8 +115,13 @@ export default function ReportFinancialsStep(props: UploadWizardStepProps) {
                                     ),
                                 })
                             }
-                            className="mt-2 h-11 w-full rounded-[10px] border border-[#d1d5dc] px-3 text-sm outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10"
+                            aria-invalid={Boolean(fieldError('releasedAmount'))}
+                            className={inputClass('releasedAmount')}
                             placeholder="0.00"
+                        />
+                        <InlineFieldError
+                            id="released-amount-error"
+                            message={fieldError('releasedAmount')}
                         />
                         <span className="mt-1 block text-xs text-[#99a1af]">
                             Amount released to the implementing agency
@@ -103,10 +130,12 @@ export default function ReportFinancialsStep(props: UploadWizardStepProps) {
                     <label className="block">
                         <span className="text-sm font-semibold text-[#344054]">
                             Obligated Amount
+                            <RequiredIndicator />
                         </span>
                         <input
                             type="number"
                             min={0}
+                            data-validation-field="obligatedAmount"
                             value={data.obligatedAmount ?? ''}
                             onChange={(event) =>
                                 updateFinancials({
@@ -115,8 +144,15 @@ export default function ReportFinancialsStep(props: UploadWizardStepProps) {
                                     ),
                                 })
                             }
-                            className="mt-2 h-11 w-full rounded-[10px] border border-[#d1d5dc] px-3 text-sm outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10"
+                            aria-invalid={Boolean(
+                                fieldError('obligatedAmount'),
+                            )}
+                            className={inputClass('obligatedAmount')}
                             placeholder="0.00"
+                        />
+                        <InlineFieldError
+                            id="obligated-amount-error"
+                            message={fieldError('obligatedAmount')}
                         />
                         <span className="mt-1 block text-xs text-[#99a1af]">
                             Committed amount for contracts or payable items
@@ -125,10 +161,12 @@ export default function ReportFinancialsStep(props: UploadWizardStepProps) {
                     <label className="block">
                         <span className="text-sm font-semibold text-[#344054]">
                             Utilized / Disbursed Amount
+                            <RequiredIndicator />
                         </span>
                         <input
                             type="number"
                             min={0}
+                            data-validation-field="usedBudget"
                             value={data.usedBudget ?? ''}
                             onChange={(event) =>
                                 updateFinancials({
@@ -138,13 +176,15 @@ export default function ReportFinancialsStep(props: UploadWizardStepProps) {
                                     ),
                                 })
                             }
-                            className="mt-2 h-11 w-full rounded-[10px] border border-[#d1d5dc] px-3 text-sm outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10"
+                            aria-invalid={Boolean(fieldError('usedBudget'))}
+                            className={inputClass('usedBudget')}
                             placeholder="0.00"
                         />
-                        {errors.usedBudget?.message ? (
-                            <span className="mt-1 block text-xs text-[#fb2c36]">
-                                {errors.usedBudget.message.toString()}
-                            </span>
+                        {fieldError('usedBudget') ? (
+                            <InlineFieldError
+                                id="used-budget-error"
+                                message={fieldError('usedBudget')}
+                            />
                         ) : (
                             <span className="mt-1 block text-xs text-[#99a1af]">
                                 Actual utilized or disbursed amount
@@ -156,21 +196,25 @@ export default function ReportFinancialsStep(props: UploadWizardStepProps) {
                 <label className="block">
                     <span className="text-sm font-semibold text-[#344054]">
                         Financial As-of Date
+                        <RequiredIndicator />
                     </span>
                     <input
                         type="date"
+                        data-validation-field="financialAsOfDate"
                         value={data.financialAsOfDate}
                         onChange={(event) =>
                             updateFinancials({
                                 financialAsOfDate: event.target.value,
                             })
                         }
-                        className="mt-2 h-11 w-full rounded-[10px] border border-[#d1d5dc] px-3 text-sm outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10"
+                        aria-invalid={Boolean(fieldError('financialAsOfDate'))}
+                        className={inputClass('financialAsOfDate')}
                     />
-                    {errors.financialAsOfDate?.message ? (
-                        <span className="mt-1 block text-xs text-[#fb2c36]">
-                            {errors.financialAsOfDate.message.toString()}
-                        </span>
+                    {fieldError('financialAsOfDate') ? (
+                        <InlineFieldError
+                            id="financial-as-of-date-error"
+                            message={fieldError('financialAsOfDate')}
+                        />
                     ) : (
                         <span className="mt-1 block text-xs text-[#99a1af]">
                             Date covered by the financial figures

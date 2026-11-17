@@ -1,6 +1,10 @@
 import { FileText, Zap } from 'lucide-react';
 import ReportStepLayout from '@/components/upload/reports/ReportStepLayout';
 import FileUploader from '@/components/upload/shared/FileUploader';
+import {
+    InlineFieldError,
+    RequiredIndicator,
+} from '@/components/upload/shared/ReportFieldFeedback';
 import { apiMessage } from '@/lib/api-client';
 import {
     REPORT_STEP_IDS,
@@ -15,6 +19,7 @@ import {
     uploadLimitLabel,
     useEffectiveUploadLimitMb,
 } from '@/lib/upload/upload-limits';
+import { cn } from '@/lib/utils';
 import type {
     ReportDetailsData,
     ReportDocumentType,
@@ -47,6 +52,12 @@ export default function ReportDetailsStep(props: UploadWizardStepProps) {
             ? (data.uploadError ??
               `Upload a PDF file up to ${uploadLimitText}.`)
             : errors.uploadedFile?.message?.toString();
+    const projectStartDateError = errors.projectStartDate?.message?.toString();
+    const projectEndDateError = errors.projectEndDate?.message?.toString();
+    const reportingPeriodError = errors.reportingPeriod?.message?.toString();
+    const reportingYearError = errors.reportingYear?.message?.toString();
+    const agencyError = errors.agency?.message?.toString();
+    const agencyValid = data.agency.trim().length > 0 && !agencyError;
 
     const updateDetails = (updates: Partial<ReportDetailsData>) => {
         setStepData({
@@ -79,6 +90,7 @@ export default function ReportDetailsStep(props: UploadWizardStepProps) {
             uploadedFileSize: file.size,
             uploadStatus: 'uploading',
             uploadError: null,
+            browserRecoveryRestored: false,
         };
 
         updateDetails(nextDetails);
@@ -107,6 +119,7 @@ export default function ReportDetailsStep(props: UploadWizardStepProps) {
                 uploadedFileSize: uploadedFile.size,
                 uploadStatus: 'uploaded',
                 uploadError: null,
+                browserRecoveryRestored: false,
             } satisfies ReportDetailsData);
         } catch (error) {
             setStepData({
@@ -129,17 +142,35 @@ export default function ReportDetailsStep(props: UploadWizardStepProps) {
             description="Upload your document file and provide basic information. AI will extract detailed metadata in the next step."
         >
             <div className="space-y-5">
-                <FileUploader
-                    accept=".pdf,application/pdf"
-                    fileName={data.uploadedFileName}
-                    helperText={
-                        data.uploadStatus === 'uploading'
-                            ? 'Uploading to RIKMS...'
-                            : `PDF - Max ${uploadLimitText}`
-                    }
-                    error={fileError}
-                    onFileSelect={handleFile}
-                />
+                <div>
+                    <p className="mb-2 text-sm font-semibold text-[#344054]">
+                        Report PDF <RequiredIndicator />
+                    </p>
+                    {data.browserRecoveryRestored && !data.uploadedFileName ? (
+                        <div
+                            role="note"
+                            className="mb-3 rounded-[10px] border border-[#fde68a] bg-[#fffbeb] p-3 text-xs leading-5 text-[#92400e]"
+                        >
+                            Browser recovery restores form fields only. For
+                            security, PDF files are never stored in browser
+                            recovery. Select the report PDF again before
+                            continuing.
+                        </div>
+                    ) : null}
+                    <FileUploader
+                        accept=".pdf,application/pdf"
+                        fileName={data.uploadedFileName}
+                        helperText={
+                            data.uploadStatus === 'uploading'
+                                ? 'Uploading to RIKMS...'
+                                : `PDF - Max ${uploadLimitText}`
+                        }
+                        error={fileError}
+                        validationField="uploadedFile"
+                        errorId="uploaded-file-error"
+                        onFileSelect={handleFile}
+                    />
+                </div>
 
                 <label className="block">
                     <span className="text-sm font-semibold text-[#344054]">
@@ -179,8 +210,11 @@ export default function ReportDetailsStep(props: UploadWizardStepProps) {
                     <label className="block">
                         <span className="text-sm font-semibold text-[#344054]">
                             Project Start Date
+                            <RequiredIndicator />
                         </span>
                         <input
+                            id="project-start-date"
+                            data-validation-field="projectStartDate"
                             type="date"
                             value={data.projectStartDate}
                             onChange={(event) =>
@@ -188,29 +222,57 @@ export default function ReportDetailsStep(props: UploadWizardStepProps) {
                                     projectStartDate: event.target.value,
                                 })
                             }
-                            className="mt-2 h-11 w-full rounded-[10px] border border-[#d1d5dc] px-3 text-sm outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10"
+                            aria-invalid={Boolean(projectStartDateError)}
+                            aria-describedby={
+                                projectStartDateError
+                                    ? 'project-start-date-error'
+                                    : undefined
+                            }
+                            className={cn(
+                                'mt-2 h-11 w-full rounded-[10px] border px-3 text-sm outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10',
+                                projectStartDateError
+                                    ? 'border-[#fb2c36]'
+                                    : 'border-[#d1d5dc]',
+                            )}
+                        />
+                        <InlineFieldError
+                            id="project-start-date-error"
+                            message={projectStartDateError}
                         />
                     </label>
 
                     <label className="block">
                         <span className="text-sm font-semibold text-[#344054]">
                             Project End Date
+                            <RequiredIndicator />
                         </span>
                         <input
                             type="date"
+                            id="project-end-date"
+                            data-validation-field="projectEndDate"
                             value={data.projectEndDate}
                             onChange={(event) =>
                                 updateDetails({
                                     projectEndDate: event.target.value,
                                 })
                             }
-                            className="mt-2 h-11 w-full rounded-[10px] border border-[#d1d5dc] px-3 text-sm outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10"
+                            aria-invalid={Boolean(projectEndDateError)}
+                            aria-describedby={
+                                projectEndDateError
+                                    ? 'project-end-date-error'
+                                    : undefined
+                            }
+                            className={cn(
+                                'mt-2 h-11 w-full rounded-[10px] border px-3 text-sm outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10',
+                                projectEndDateError
+                                    ? 'border-[#fb2c36]'
+                                    : 'border-[#d1d5dc]',
+                            )}
                         />
-                        {errors.projectEndDate?.message ? (
-                            <span className="mt-1 block text-xs text-[#fb2c36]">
-                                {errors.projectEndDate.message.toString()}
-                            </span>
-                        ) : null}
+                        <InlineFieldError
+                            id="project-end-date-error"
+                            message={projectEndDateError}
+                        />
                     </label>
                 </div>
 
@@ -218,16 +280,28 @@ export default function ReportDetailsStep(props: UploadWizardStepProps) {
                     <label className="block">
                         <span className="text-sm font-semibold text-[#344054]">
                             Reporting Period
-                            <span className="text-[#fb2c36]">*</span>
+                            <RequiredIndicator />
                         </span>
                         <select
                             value={data.reportingPeriod}
+                            data-validation-field="reportingPeriod"
                             onChange={(event) =>
                                 updateDetails({
                                     reportingPeriod: event.target.value,
                                 })
                             }
-                            className="mt-2 h-11 w-full rounded-[10px] border border-[#d1d5dc] px-3 text-sm outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10"
+                            aria-invalid={Boolean(reportingPeriodError)}
+                            aria-describedby={
+                                reportingPeriodError
+                                    ? 'reporting-period-error'
+                                    : undefined
+                            }
+                            className={cn(
+                                'mt-2 h-11 w-full rounded-[10px] border px-3 text-sm outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10',
+                                reportingPeriodError
+                                    ? 'border-[#fb2c36]'
+                                    : 'border-[#d1d5dc]',
+                            )}
                         >
                             <option value="">Select period</option>
                             {reportingPeriods.map((period) => (
@@ -236,30 +310,45 @@ export default function ReportDetailsStep(props: UploadWizardStepProps) {
                                 </option>
                             ))}
                         </select>
-                        {errors.reportingPeriod?.message ? (
-                            <span className="mt-1 block text-xs text-[#fb2c36]">
-                                {errors.reportingPeriod.message.toString()}
-                            </span>
-                        ) : null}
+                        <InlineFieldError
+                            id="reporting-period-error"
+                            message={reportingPeriodError}
+                        />
                     </label>
 
                     <label className="block">
                         <span className="text-sm font-semibold text-[#344054]">
                             Reporting Year
-                            <span className="text-[#fb2c36]">*</span>
+                            <RequiredIndicator />
                         </span>
                         <input
                             type="number"
                             min={1900}
                             max={new Date().getFullYear() + 1}
+                            data-validation-field="reportingYear"
                             value={data.reportingYear}
                             onChange={(event) =>
                                 updateDetails({
                                     reportingYear: event.target.value,
                                 })
                             }
-                            className="mt-2 h-11 w-full rounded-[10px] border border-[#d1d5dc] px-3 text-sm outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10"
+                            aria-invalid={Boolean(reportingYearError)}
+                            aria-describedby={
+                                reportingYearError
+                                    ? 'reporting-year-error'
+                                    : undefined
+                            }
+                            className={cn(
+                                'mt-2 h-11 w-full rounded-[10px] border px-3 text-sm outline-none focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/10',
+                                reportingYearError
+                                    ? 'border-[#fb2c36]'
+                                    : 'border-[#d1d5dc]',
+                            )}
                             inputMode="numeric"
+                        />
+                        <InlineFieldError
+                            id="reporting-year-error"
+                            message={reportingYearError}
                         />
                     </label>
                 </div>
@@ -267,16 +356,35 @@ export default function ReportDetailsStep(props: UploadWizardStepProps) {
                 <label className="block">
                     <span className="text-sm font-semibold text-[#344054]">
                         Agency
+                        <RequiredIndicator />
                     </span>
-                    <div className="mt-2 flex h-11 items-center justify-between rounded-[10px] border border-[#bfdbfe] bg-[#eff6ff] px-3 text-sm font-semibold text-[#1e3a8a]">
+                    <div
+                        role="textbox"
+                        aria-readonly="true"
+                        aria-invalid={!agencyValid}
+                        aria-describedby={
+                            agencyError ? 'agency-error' : undefined
+                        }
+                        data-validation-field="agency"
+                        tabIndex={-1}
+                        className={cn(
+                            'mt-2 flex h-11 items-center justify-between rounded-[10px] border bg-[#eff6ff] px-3 text-sm font-semibold text-[#1e3a8a] outline-none focus:ring-2 focus:ring-[#1e3a8a]/20',
+                            agencyValid
+                                ? 'border-[#bfdbfe]'
+                                : 'border-[#fb2c36]',
+                        )}
+                    >
                         <span className="inline-flex items-center gap-2">
                             <Zap className="size-4" />
-                            {data.agency}
+                            {data.agency || 'Agency unavailable'}
                         </span>
-                        <span className="rounded-full bg-[#dbeafe] px-2 py-0.5 text-[10px]">
-                            Auto-filled
-                        </span>
+                        {agencyValid ? (
+                            <span className="rounded-full bg-[#dbeafe] px-2 py-0.5 text-[10px]">
+                                Auto-filled
+                            </span>
+                        ) : null}
                     </div>
+                    <InlineFieldError id="agency-error" message={agencyError} />
                 </label>
             </div>
         </ReportStepLayout>
