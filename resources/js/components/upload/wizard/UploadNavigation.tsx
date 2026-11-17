@@ -1,5 +1,5 @@
-import { ArrowLeft, ArrowRight, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ArrowLeft, ArrowRight, Save } from 'lucide-react';
 
 type UploadNavigationProps = {
     currentStepNumber: number;
@@ -46,7 +46,7 @@ export default function UploadNavigation({
             <Button
                 type="button"
                 variant="outline"
-                className="h-10 rounded-[10px] border-[#d1d5dc] text-[#4a5565]"
+                className="h-10 rounded-[10px] border-[#d1d5dc] bg-[#1e3a8a] text-white hover:bg-[#172f70]"
                 disabled={!canGoBack}
                 onClick={onBack}
             >
@@ -64,8 +64,8 @@ export default function UploadNavigation({
                 </span>
                 <Button
                     type="button"
-                    variant="outline"
-                    className="h-10 rounded-[10px] border-[#d1d5dc]"
+                    // variant="outline"
+                    className="h-10 rounded-[10px] border-[#d1d5dc] bg-[#1e3a8a] text-white hover:bg-[#172f70]"
                     disabled={
                         draftStatus === 'saving' || draftStatus === 'loading'
                     }
